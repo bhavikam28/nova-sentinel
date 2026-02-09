@@ -1,19 +1,12 @@
 /**
- * Wiz.io-Inspired Attack Path Diagram
- * Clean network graph with grid background and professional styling
+ * Attack Path Diagram - Analysis View
+ * Clean SVG-based network graph with Wiz.io-style grid background
  */
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-  Shield,
-  AlertTriangle,
-  Key,
-  Globe,
-  Network,
-  Wifi,
-  Server,
-  User,
-  Database,
+  Shield, AlertTriangle, Key, Globe, Network,
+  Wifi, Server, User, Database
 } from 'lucide-react';
 
 interface SecurityNodeProps {
@@ -28,14 +21,7 @@ interface SecurityNodeProps {
 }
 
 const SecurityNode: React.FC<SecurityNodeProps> = ({ 
-  icon: Icon, 
-  label, 
-  subLabel,
-  color, 
-  delay,
-  severity = 'medium',
-  x,
-  y
+  icon: Icon, label, subLabel, color, delay, severity = 'medium', x, y
 }) => (
   <motion.g
     initial={{ scale: 0, opacity: 0 }}
@@ -43,70 +29,26 @@ const SecurityNode: React.FC<SecurityNodeProps> = ({
     transition={{ delay, duration: 0.4 }}
     className="cursor-pointer"
   >
-    {/* Severity indicator ring */}
     {severity === 'critical' && (
-      <circle
-        cx={x}
-        cy={y}
-        r="38"
-        fill="none"
-        stroke="#EF4444"
-        strokeWidth="2"
-        opacity="0.4"
-      />
+      <circle cx={x} cy={y} r="36" fill="none" stroke="#EF4444" strokeWidth="2" opacity="0.3" strokeDasharray="4 4" />
     )}
     {severity === 'high' && (
-      <circle
-        cx={x}
-        cy={y}
-        r="38"
-        fill="none"
-        stroke="#F97316"
-        strokeWidth="2"
-        opacity="0.4"
-      />
+      <circle cx={x} cy={y} r="36" fill="none" stroke="#F97316" strokeWidth="1.5" opacity="0.3" strokeDasharray="4 4" />
     )}
     
-    {/* Node circle */}
-    <circle
-      cx={x}
-      cy={y}
-      r="24"
-      fill={color}
-      stroke="white"
-      strokeWidth="3"
-      className="drop-shadow-lg"
-    />
+    <circle cx={x} cy={y} r="22" fill={color} stroke="white" strokeWidth="3" className="drop-shadow-lg" />
     
-    {/* Icon using foreignObject */}
-    <foreignObject x={x - 12} y={y - 12} width="24" height="24">
+    <foreignObject x={x - 10} y={y - 10} width="20" height="20">
       <div className="flex items-center justify-center h-full w-full" style={{ color: 'white' }}>
-        <Icon className="w-6 h-6" strokeWidth={2} />
+        <Icon className="w-5 h-5" strokeWidth={2} />
       </div>
     </foreignObject>
     
-    {/* Label */}
-    <text
-      x={x}
-      y={y + 45}
-      textAnchor="middle"
-      className="text-sm font-semibold"
-      fill="#1e293b"
-      fontSize="14"
-    >
+    <text x={x} y={y + 38} textAnchor="middle" fill="#1e293b" fontSize="12" fontWeight="700" fontFamily="Inter, sans-serif">
       {label}
     </text>
-    
-    {/* Sub Label */}
     {subLabel && (
-      <text
-        x={x}
-        y={y + 60}
-        textAnchor="middle"
-        className="text-xs"
-        fill="#64748b"
-        fontSize="12"
-      >
+      <text x={x} y={y + 52} textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="Inter, sans-serif">
         {subLabel}
       </text>
     )}
@@ -114,17 +56,16 @@ const SecurityNode: React.FC<SecurityNodeProps> = ({
 );
 
 const AttackPathDiagram: React.FC = () => {
-  // Node positions (centered layout)
   const nodes = {
-    internet: { x: 120, y: 350, icon: Globe, label: 'Internet', subLabel: 'External Source', color: '#8B5CF6', severity: 'high' as const },
-    gateway: { x: 280, y: 350, icon: Network, label: 'Gateway', subLabel: 'Network Gateway', color: '#6366F1', severity: 'high' as const },
-    network: { x: 440, y: 350, icon: Wifi, label: 'Network', subLabel: 'VPC Network', color: '#6366F1', severity: 'high' as const },
-    ec2: { x: 600, y: 350, icon: Server, label: 'EC2 Instance', subLabel: 'Compute Resource', color: '#EF4444', severity: 'critical' as const },
-    iam: { x: 760, y: 350, icon: User, label: 'IAM Role', subLabel: 'Identity & Access', color: '#EF4444', severity: 'critical' as const },
-    database: { x: 920, y: 350, icon: Database, label: 'Database', subLabel: 'Data Store', color: '#F97316', severity: 'high' as const },
-    sg: { x: 440, y: 180, icon: Shield, label: 'Security Group', subLabel: 'Network Security', color: '#EF4444', severity: 'critical' as const },
-    ssh: { x: 600, y: 180, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Vulnerability', color: '#EF4444', severity: 'critical' as const },
-    secret: { x: 760, y: 180, icon: Key, label: 'Secret', subLabel: 'Credentials', color: '#F97316', severity: 'high' as const },
+    internet: { x: 100, y: 300, icon: Globe, label: 'Internet', subLabel: 'External', color: '#8B5CF6', severity: 'high' as const },
+    gateway: { x: 260, y: 300, icon: Network, label: 'Gateway', subLabel: 'Network', color: '#6366F1', severity: 'high' as const },
+    network: { x: 420, y: 300, icon: Wifi, label: 'VPC', subLabel: 'Network', color: '#6366F1', severity: 'high' as const },
+    ec2: { x: 580, y: 300, icon: Server, label: 'EC2', subLabel: 'Compute', color: '#EF4444', severity: 'critical' as const },
+    iam: { x: 740, y: 300, icon: User, label: 'IAM Role', subLabel: 'Identity', color: '#EF4444', severity: 'critical' as const },
+    database: { x: 900, y: 300, icon: Database, label: 'Database', subLabel: 'Data Store', color: '#F97316', severity: 'high' as const },
+    sg: { x: 420, y: 140, icon: Shield, label: 'Sec Group', subLabel: 'Firewall', color: '#EF4444', severity: 'critical' as const },
+    ssh: { x: 580, y: 140, icon: AlertTriangle, label: 'SSH Open', subLabel: 'Vuln', color: '#EF4444', severity: 'critical' as const },
+    secret: { x: 740, y: 140, icon: Key, label: 'Secrets', subLabel: 'Creds', color: '#F97316', severity: 'high' as const },
   };
 
   const connections = [
@@ -141,98 +82,69 @@ const AttackPathDiagram: React.FC = () => {
   ];
 
   return (
-    <div className="w-full bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-        <h2 className="text-xl font-bold text-slate-900">
-          Security Attack Path
-        </h2>
-        <p className="text-sm text-slate-600 mt-1">
-          Visual representation of the critical attack chain
-        </p>
+    <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Security Attack Path</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Critical attack chain visualization</p>
+        </div>
+        <div className="flex gap-4">
+          {[
+            { color: 'bg-red-500', label: 'Critical' },
+            { color: 'bg-indigo-500', label: 'Attack Path' },
+            { color: 'bg-orange-500', label: 'High' },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <div className={`w-2 h-2 rounded-full ${item.color}`} />
+              <span className="text-[10px] font-medium text-slate-500">{item.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Diagram Container with Grid Background */}
-      <div className="relative bg-white p-8 overflow-x-auto">
-        <svg width="1100" height="500" className="w-full" viewBox="0 0 1100 500" preserveAspectRatio="xMidYMid meet">
-          {/* Grid Background (like Wiz.io) */}
+      <div className="relative bg-white p-4 overflow-x-auto">
+        <svg width="1000" height="420" className="w-full" viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid meet">
           <defs>
-            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="1" opacity="0.3" />
+            <pattern id="attackGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f1f5f9" strokeWidth="1" />
             </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-
-          {/* Arrow marker definition */}
-          <defs>
-            {connections.map((conn, i) => (
-              <marker
-                key={`arrow-${i}`}
-                id={`arrowhead-${i}`}
-                markerWidth="10"
-                markerHeight="10"
-                refX="9"
-                refY="3"
-                orient="auto"
-              >
-                <polygon points="0 0, 10 3, 0 6" fill={conn.color} />
+            {connections.map((_, i) => (
+              <marker key={`arrow-${i}`} id={`ah-${i}`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill={connections[i].color} opacity="0.8" />
               </marker>
             ))}
           </defs>
+          <rect width="100%" height="100%" fill="url(#attackGrid)" />
 
-          {/* Connection Lines */}
           {connections.map((conn, i) => (
             <motion.line
               key={`line-${i}`}
-              x1={conn.from.x}
-              y1={conn.from.y}
-              x2={conn.to.x}
-              y2={conn.to.y}
+              x1={conn.from.x} y1={conn.from.y}
+              x2={conn.to.x} y2={conn.to.y}
               stroke={conn.color}
-              strokeWidth="2"
-              markerEnd={`url(#arrowhead-${i})`}
+              strokeWidth="1.5"
+              opacity="0.6"
+              markerEnd={`url(#ah-${i})`}
               initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 1 }}
+              animate={{ pathLength: 1, opacity: 0.6 }}
               transition={{ delay: conn.delay, duration: 0.8, ease: "easeInOut" }}
             />
           ))}
 
-          {/* Nodes */}
-          {Object.entries(nodes).map(([key, node], i) => {
-            const Icon = node.icon;
-            return (
-              <SecurityNode
-                key={key}
-                icon={Icon}
-                label={node.label}
-                subLabel={node.subLabel}
-                color={node.color}
-                delay={0.1 + i * 0.05}
-                severity={node.severity}
-                x={node.x}
-                y={node.y}
-              />
-            );
-          })}
+          {Object.entries(nodes).map(([key, node], i) => (
+            <SecurityNode
+              key={key}
+              icon={node.icon}
+              label={node.label}
+              subLabel={node.subLabel}
+              color={node.color}
+              delay={0.1 + i * 0.05}
+              severity={node.severity}
+              x={node.x}
+              y={node.y}
+            />
+          ))}
         </svg>
-      </div>
-
-      {/* Legend */}
-      <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
-        <div className="flex gap-6 justify-center flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <span className="text-xs font-medium text-slate-700">Critical Path</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-indigo-500" />
-            <span className="text-xs font-medium text-slate-700">Attack Path</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
-            <span className="text-xs font-medium text-slate-700">High Severity</span>
-          </div>
-        </div>
       </div>
     </div>
   );

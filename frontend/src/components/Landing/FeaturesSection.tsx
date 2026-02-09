@@ -1,170 +1,135 @@
 /**
- * Professional Features Section - Modern SaaS Design with Gradients
+ * Features Section - Bento Grid Layout with Premium Design
+ * Wiz.io inspired with modern SaaS aesthetics
  */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   Eye, Brain, Zap, Mic, FileText, Shield, 
-  Clock, Target, Database, Network, Lock, GitBranch 
+  Clock, Target, Network, Lock, ArrowRight,
+  Workflow, Cpu
 } from 'lucide-react';
 import NovaFlowDiagram from '../Visualizations/NovaFlowDiagram';
 
-interface Feature {
-  icon: any;
-  title: string;
-  description: string;
-  badge?: string;
-  gradientFrom: string;
-  gradientTo: string;
-  badgeColor: string;
-  badgeBg: string;
-}
-
-const features: Feature[] = [
-  {
-    icon: Eye,
-    title: 'Multimodal Visual Analysis',
-    description: 'Analyze architecture diagrams and screenshots to detect configuration drift and security gaps in real-time.',
-    badge: 'Nova Pro',
-    gradientFrom: 'from-blue-500',
-    gradientTo: 'to-indigo-600',
-    badgeColor: 'text-blue-700',
-    badgeBg: 'bg-blue-50',
-  },
-  {
-    icon: Clock,
-    title: 'Temporal Intelligence',
-    description: 'Build comprehensive attack timelines from 90 days of CloudTrail logs with automated root cause identification.',
-    badge: 'Nova 2 Lite',
-    gradientFrom: 'from-purple-500',
-    gradientTo: 'to-pink-600',
-    badgeColor: 'text-purple-700',
-    badgeBg: 'bg-purple-50',
-  },
-  {
-    icon: Zap,
-    title: 'Real-Time Risk Scoring',
-    description: 'Classify security configurations in under 1 second with AI-powered confidence scoring and actionable insights.',
-    badge: 'Nova Micro',
-    gradientFrom: 'from-amber-500',
-    gradientTo: 'to-orange-600',
-    badgeColor: 'text-amber-700',
-    badgeBg: 'bg-amber-50',
-  },
-  {
-    icon: Mic,
-    title: 'Voice-Powered Investigation',
-    description: 'Hands-free incident investigation with natural language commands and instant voice responses.',
-    badge: 'Nova 2 Sonic',
-    gradientFrom: 'from-emerald-500',
-    gradientTo: 'to-teal-600',
-    badgeColor: 'text-emerald-700',
-    badgeBg: 'bg-emerald-50',
-  },
-  {
-    icon: FileText,
-    title: 'Intelligent Documentation',
-    description: 'Automated JIRA tickets, Slack notifications, and Confluence post-mortems with complete context. (Nova 2 Lite for content generation)',
-    badge: 'Nova 2 Lite',
-    gradientFrom: 'from-violet-500',
-    gradientTo: 'to-purple-600',
-    badgeColor: 'text-violet-700',
-    badgeBg: 'bg-violet-50',
-  },
-  {
-    icon: Shield,
-    title: 'Autonomous Remediation',
-    description: 'Generate and execute remediation plans validated against AWS best practices with approval gates.',
-    badge: 'Automated',
-    gradientFrom: 'from-rose-500',
-    gradientTo: 'to-red-600',
-    badgeColor: 'text-rose-700',
-    badgeBg: 'bg-rose-50',
-  },
-  {
-    icon: Database,
-    title: 'Knowledge-Augmented AI',
-    description: 'RAG-powered access to CIS Benchmarks, NIST 800-53, and AWS Security Best Practices.',
-    badge: 'RAG Enabled',
-    gradientFrom: 'from-cyan-500',
-    gradientTo: 'to-blue-600',
-    badgeColor: 'text-cyan-700',
-    badgeBg: 'bg-cyan-50',
-  },
-  {
-    icon: Lock,
-    title: 'Safety Guardrails',
-    description: 'Ensure compliance with security policies, prevent destructive operations, and detect sensitive data.',
-    badge: 'Compliant',
-    gradientFrom: 'from-indigo-500',
-    gradientTo: 'to-blue-600',
-    badgeColor: 'text-indigo-700',
-    badgeBg: 'bg-indigo-50',
-  },
-  {
-    icon: Network,
-    title: 'Multi-Agent Orchestration',
-    description: 'Coordinate multiple specialized agents with state management and automatic error recovery.',
-    badge: 'Agentic AI',
-    gradientFrom: 'from-sky-500',
-    gradientTo: 'to-cyan-600',
-    badgeColor: 'text-sky-700',
-    badgeBg: 'bg-sky-50',
-  },
-  {
-    icon: Target,
-    title: 'Drift Detection',
-    description: 'Compare intended architecture against actual AWS state to identify configuration drift automatically.',
-    badge: 'Visual AI',
-    gradientFrom: 'from-fuchsia-500',
-    gradientTo: 'to-pink-600',
-    badgeColor: 'text-fuchsia-700',
-    badgeBg: 'bg-fuchsia-50',
-  },
-  {
-    icon: GitBranch,
-    title: 'Attack Pattern Recognition',
-    description: 'Identify privilege escalation, lateral movement, data exfiltration, and persistence mechanisms.',
-    badge: 'Intelligent',
-    gradientFrom: 'from-orange-500',
-    gradientTo: 'to-amber-600',
-    badgeColor: 'text-orange-700',
-    badgeBg: 'bg-orange-50',
-  },
-  {
-    icon: Brain,
-    title: 'Root Cause Analysis',
-    description: 'Trace incidents back to their origin across complex multi-step attack chains with deep reasoning.',
-    badge: 'Advanced',
-    gradientFrom: 'from-slate-500',
-    gradientTo: 'to-gray-600',
-    badgeColor: 'text-slate-700',
-    badgeBg: 'bg-slate-50',
-  },
-];
-
 const FeaturesSection: React.FC = () => {
+  // Primary features (large cards)
+  const primaryFeatures = [
+    {
+      icon: Eye,
+      title: 'Visual Architecture Analysis',
+      description: 'Upload architecture diagrams and Nova Pro identifies security misconfigurations, drift from intended state, and missing controls in real-time.',
+      badge: 'Nova Pro',
+      badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+      gradient: 'from-blue-500 to-indigo-600',
+      accentColor: 'blue',
+    },
+    {
+      icon: Brain,
+      title: 'Temporal Intelligence & Root Cause',
+      description: 'Build comprehensive attack timelines from 90 days of CloudTrail logs. Automatically trace the kill chain back to the initial compromise.',
+      badge: 'Nova 2 Lite',
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+      gradient: 'from-purple-500 to-pink-600',
+      accentColor: 'purple',
+    },
+    {
+      icon: Zap,
+      title: 'Real-Time Risk Classification',
+      description: 'Classify every security event in under 1 second. Nova Micro provides instant confidence scores and severity ratings across your entire environment.',
+      badge: 'Nova Micro',
+      badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+      gradient: 'from-amber-500 to-orange-600',
+      accentColor: 'amber',
+    },
+  ];
+
+  // Secondary features (smaller cards)
+  const secondaryFeatures = [
+    {
+      icon: Mic,
+      title: 'Voice-Powered Investigation',
+      description: 'Hands-free incident analysis with natural language.',
+      badge: 'Nova 2 Sonic',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      gradient: 'from-emerald-500 to-teal-600',
+    },
+    {
+      icon: FileText,
+      title: 'Automated Documentation',
+      description: 'JIRA tickets, Slack alerts, and Confluence post-mortems.',
+      badge: 'Nova 2 Lite',
+      badgeColor: 'bg-violet-50 text-violet-700 border-violet-200',
+      gradient: 'from-violet-500 to-purple-600',
+    },
+    {
+      icon: Shield,
+      title: 'Autonomous Remediation',
+      description: 'AI-generated remediation plans with approval gates.',
+      badge: 'Automated',
+      badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
+      gradient: 'from-rose-500 to-red-600',
+    },
+    {
+      icon: Network,
+      title: 'Multi-Agent Orchestration',
+      description: 'Coordinate specialized agents with state management.',
+      badge: 'Agentic AI',
+      badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
+      gradient: 'from-sky-500 to-cyan-600',
+    },
+    {
+      icon: Target,
+      title: 'Configuration Drift Detection',
+      description: 'Compare intended vs actual AWS security posture.',
+      badge: 'Visual AI',
+      badgeColor: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+      gradient: 'from-fuchsia-500 to-pink-600',
+    },
+    {
+      icon: Lock,
+      title: 'Compliance Guardrails',
+      description: 'CIS Benchmarks, NIST 800-53, and AWS best practices.',
+      badge: 'RAG Enabled',
+      badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      gradient: 'from-indigo-500 to-blue-600',
+    },
+  ];
+
   return (
-    <section className="py-20 bg-slate-50" id="features">
+    <section className="py-24 bg-white relative" id="features">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-slate-900 mb-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-20"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 mb-6">
+            <Cpu className="w-4 h-4 text-indigo-600" />
+            <span className="text-sm font-semibold text-indigo-700">5 Nova Models</span>
+          </div>
+          <h2 className="text-4xl lg:text-5xl font-black text-slate-900 mb-4 tracking-tight">
             Complete Security Automation
           </h2>
-          <p className="text-xl text-slate-600">
-            Five Nova models working together in perfect harmony
+          <p className="text-xl text-slate-500 max-w-2xl mx-auto">
+            Every model chosen for a specific purpose. Every agent optimized for its task.
           </p>
-        </div>
+        </motion.div>
 
         {/* Nova Flow Diagram */}
-        <div className="mb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mb-24"
+        >
           <NovaFlowDiagram />
-        </div>
+        </motion.div>
 
-        {/* Features Grid with Gradients */}
-        <div className="grid md:grid-cols-3 gap-6">
-          {features.map((feature, index) => {
+        {/* Primary Features - Large Bento Cards */}
+        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+          {primaryFeatures.map((feature, index) => {
             const Icon = feature.icon;
             return (
               <motion.div
@@ -172,32 +137,62 @@ const FeaturesSection: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="group relative bg-white rounded-2xl p-6 border border-slate-200 hover:border-indigo-300 hover:shadow-xl transition-all cursor-pointer overflow-hidden"
+                transition={{ delay: index * 0.1 }}
+                className="group card-premium p-8 relative overflow-hidden"
               >
-                {/* Gradient background on hover */}
-                <div 
-                  className={`absolute inset-0 bg-gradient-to-br ${feature.gradientFrom} ${feature.gradientTo} opacity-0 group-hover:opacity-5 transition-opacity`}
-                />
+                {/* Hover gradient overlay */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-[0.03] transition-opacity duration-500`} />
                 
-                <div className="relative">
-                  {/* Icon with gradient background */}
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.gradientFrom} ${feature.gradientTo} flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
+                <div className="relative z-10">
+                  {/* Icon */}
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
                     <Icon className="w-7 h-7 text-white" />
                   </div>
                   
                   {/* Badge */}
-                  <div className={`inline-block px-3 py-1 ${feature.badgeBg} ${feature.badgeColor} text-xs font-semibold rounded-full mb-3`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border mb-4 ${feature.badgeColor}`}>
                     {feature.badge}
-                  </div>
+                  </span>
                   
+                  {/* Title */}
                   <h3 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-indigo-600 transition-colors">
                     {feature.title}
                   </h3>
                   
-                  <p className="text-slate-600 leading-relaxed text-sm">
+                  {/* Description */}
+                  <p className="text-slate-500 leading-relaxed text-sm">
                     {feature.description}
                   </p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Secondary Features - Smaller Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {secondaryFeatures.map((feature, index) => {
+            const Icon = feature.icon;
+            return (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 + index * 0.05 }}
+                className="group flex items-start gap-4 p-5 rounded-xl border border-slate-200 bg-white hover:border-indigo-200 hover:shadow-card-hover transition-all duration-300"
+              >
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-bold text-slate-900 text-sm">{feature.title}</h4>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">{feature.description}</p>
+                  <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-bold border ${feature.badgeColor}`}>
+                    {feature.badge}
+                  </span>
                 </div>
               </motion.div>
             );

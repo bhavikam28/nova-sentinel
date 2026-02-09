@@ -1,18 +1,12 @@
 /**
- * Agent Progress Component - Shows real-time progress of multi-agent analysis
+ * Agent Progress - Animated Pipeline with Status Indicators
+ * Shows real-time multi-agent analysis progress
  */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
-  CheckCircle2, 
-  Loader2, 
-  XCircle, 
-  Clock, 
-  Brain, 
-  Eye, 
-  Zap, 
-  Shield,
-  SkipForward
+  CheckCircle2, Loader2, XCircle, Clock, 
+  Brain, Eye, Zap, Shield, SkipForward, ArrowRight
 } from 'lucide-react';
 import type { AgentStatus } from '../../types/incident';
 
@@ -30,137 +24,114 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
     {
       id: 'temporal',
       name: 'Temporal Analysis',
-      description: 'Nova 2 Lite - Building timeline and identifying root cause',
+      model: 'Nova 2 Lite',
       icon: Brain,
-      color: 'indigo',
+      gradient: 'from-purple-500 to-indigo-600',
+      lightBg: 'bg-purple-50',
       status: agents.temporal?.status || 'PENDING',
     },
     {
       id: 'visual',
       name: 'Visual Analysis',
-      description: 'Nova Pro - Analyzing architecture diagrams',
+      model: 'Nova Pro',
       icon: Eye,
-      color: 'blue',
+      gradient: 'from-blue-500 to-cyan-600',
+      lightBg: 'bg-blue-50',
       status: agents.visual?.status || 'PENDING',
     },
     {
       id: 'risk_scorer',
       name: 'Risk Scoring',
-      description: 'Nova Micro - Assessing security risk levels',
+      model: 'Nova Micro',
       icon: Zap,
-      color: 'yellow',
+      gradient: 'from-amber-500 to-orange-600',
+      lightBg: 'bg-amber-50',
       status: agents.risk_scorer?.status || 'PENDING',
     },
     {
       id: 'remediation',
-      name: 'Remediation Planning',
-      description: 'Nova 2 Lite - Generating remediation plan',
+      name: 'Remediation',
+      model: 'Nova 2 Lite',
       icon: Shield,
-      color: 'green',
+      gradient: 'from-emerald-500 to-green-600',
+      lightBg: 'bg-emerald-50',
       status: agents.remediation?.status || 'PENDING',
     },
   ];
 
   const getStatusIcon = (status: AgentStatus) => {
     switch (status) {
-      case 'COMPLETED':
-        return <CheckCircle2 className="w-5 h-5 text-green-600" />;
-      case 'RUNNING':
-        return <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />;
-      case 'FAILED':
-        return <XCircle className="w-5 h-5 text-red-600" />;
-      case 'SKIPPED':
-        return <SkipForward className="w-5 h-5 text-slate-400" />;
-      default:
-        return <Clock className="w-5 h-5 text-slate-400" />;
+      case 'COMPLETED': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+      case 'RUNNING': return <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />;
+      case 'FAILED': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'SKIPPED': return <SkipForward className="w-4 h-4 text-slate-400" />;
+      default: return <Clock className="w-4 h-4 text-slate-300" />;
     }
   };
 
-  const getStatusText = (status: AgentStatus) => {
-    switch (status) {
-      case 'COMPLETED':
-        return 'Completed';
-      case 'RUNNING':
-        return 'Running...';
-      case 'FAILED':
-        return 'Failed';
-      case 'SKIPPED':
-        return 'Skipped';
-      default:
-        return 'Pending';
-    }
-  };
-
-  const getStatusColor = (status: AgentStatus, color: string) => {
-    switch (status) {
-      case 'COMPLETED':
-        return 'bg-green-50 border-green-200';
-      case 'RUNNING':
-        return `bg-${color}-50 border-${color}-300`;
-      case 'FAILED':
-        return 'bg-red-50 border-red-200';
-      case 'SKIPPED':
-        return 'bg-slate-50 border-slate-200';
-      default:
-        return 'bg-slate-50 border-slate-200';
-    }
-  };
+  const completedCount = agentConfig.filter(a => a.status === 'COMPLETED').length;
+  const progressPercent = (completedCount / agentConfig.length) * 100;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
-      <h3 className="text-lg font-semibold text-slate-900 mb-4">
-        Multi-Agent Analysis Progress
-      </h3>
-      <div className="space-y-3">
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card">
+      {/* Header with progress bar */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-base font-bold text-slate-900">Multi-Agent Pipeline</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {completedCount}/{agentConfig.length} agents completed
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPercent}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+            />
+          </div>
+          <span className="text-xs font-bold text-slate-600">{Math.round(progressPercent)}%</span>
+        </div>
+      </div>
+
+      {/* Agent Pipeline */}
+      <div className="grid grid-cols-4 gap-3">
         {agentConfig.map((agent, index) => {
           const Icon = agent.icon;
-          const status = agent.status;
+          const isRunning = agent.status === 'RUNNING';
+          const isCompleted = agent.status === 'COMPLETED';
+          const isFailed = agent.status === 'FAILED';
           
           return (
             <motion.div
               key={agent.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.1 }}
-              className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all ${getStatusColor(status, agent.color)}`}
+              className={`relative p-4 rounded-xl border-2 transition-all duration-300 ${
+                isRunning ? 'border-indigo-300 bg-indigo-50/50 shadow-glow-sm animate-border-glow' :
+                isCompleted ? 'border-emerald-200 bg-emerald-50/30' :
+                isFailed ? 'border-red-200 bg-red-50/30' :
+                'border-slate-200 bg-slate-50/50'
+              }`}
             >
-              <div className="flex items-center gap-4 flex-1">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  agent.color === 'indigo' ? 'bg-gradient-to-br from-indigo-100 to-indigo-200' :
-                  agent.color === 'blue' ? 'bg-gradient-to-br from-blue-100 to-blue-200' :
-                  agent.color === 'yellow' ? 'bg-gradient-to-br from-yellow-100 to-yellow-200' :
-                  'bg-gradient-to-br from-green-100 to-green-200'
-                }`}>
-                  <Icon className={`w-5 h-5 ${
-                    agent.color === 'indigo' ? 'text-indigo-600' :
-                    agent.color === 'blue' ? 'text-blue-600' :
-                    agent.color === 'yellow' ? 'text-yellow-600' :
-                    'text-green-600'
-                  }`} />
+              <div className="flex items-center justify-between mb-3">
+                <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${agent.gradient} flex items-center justify-center ${isCompleted ? 'opacity-100' : isRunning ? 'opacity-100' : 'opacity-40'}`}>
+                  <Icon className="w-4.5 h-4.5 text-white" />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold text-slate-900">{agent.name}</h4>
-                    {getStatusIcon(status)}
-                  </div>
-                  <p className="text-sm text-slate-600">{agent.description}</p>
+                {getStatusIcon(agent.status)}
+              </div>
+              
+              <h4 className="text-sm font-bold text-slate-900 mb-0.5">{agent.name}</h4>
+              <p className="text-[10px] text-slate-500 font-medium">{agent.model}</p>
+
+              {/* Running shimmer effect */}
+              {isRunning && (
+                <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+                  <div className="absolute inset-0 shimmer" />
                 </div>
-              </div>
-              <div className="ml-4">
-                <span className={`text-sm font-medium ${
-                  status === 'COMPLETED' ? 'text-green-700' :
-                  status === 'RUNNING' ? (
-                    agent.color === 'indigo' ? 'text-indigo-700' :
-                    agent.color === 'blue' ? 'text-blue-700' :
-                    agent.color === 'yellow' ? 'text-yellow-700' :
-                    'text-green-700'
-                  ) :
-                  status === 'FAILED' ? 'text-red-700' :
-                  'text-slate-500'
-                }`}>
-                  {getStatusText(status)}
-                </span>
-              </div>
+              )}
             </motion.div>
           );
         })}

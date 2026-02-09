@@ -1,12 +1,12 @@
 /**
- * AWS Authentication Tab Component
- * Secure method for judges to connect their AWS accounts
+ * AWS Authentication Tab - Premium card-based auth selector
+ * Secure connection for judges to link their AWS accounts
  */
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Cloud, Key, Shield, CheckCircle2, AlertCircle, 
-  Info, ExternalLink, Copy, Loader2 
+  Info, Copy, Loader2, Terminal, Lock
 } from 'lucide-react';
 
 interface AWSAuthTabProps {
@@ -58,225 +58,175 @@ const AWSAuthTab: React.FC<AWSAuthTabProps> = ({
     navigator.clipboard.writeText(text);
   };
 
+  const methods = [
+    {
+      id: 'profile' as const,
+      icon: Terminal,
+      title: 'AWS CLI Profile',
+      subtitle: 'Recommended',
+      description: 'Use your existing AWS CLI profile stored locally.',
+    },
+    {
+      id: 'sso' as const,
+      icon: Lock,
+      title: 'AWS SSO',
+      subtitle: 'Enterprise',
+      description: 'Single Sign-On via AWS IAM Identity Center.',
+    },
+    {
+      id: 'credentials' as const,
+      icon: Key,
+      title: 'Temporary Credentials',
+      subtitle: 'Advanced',
+      description: 'Enter temporary AWS Access Key + Session Token.',
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h3 className="text-2xl font-bold text-slate-900 mb-2">
-          Secure AWS Authentication
+        <h3 className="text-xl font-bold text-slate-900 mb-1">
+          Connect Your AWS Account
         </h3>
-        <p className="text-slate-600">
-          Choose a secure method to connect your AWS account. Your credentials are never stored on our servers.
+        <p className="text-sm text-slate-500">
+          Choose a secure method. Credentials are <span className="font-semibold text-slate-700">never stored</span> on our servers.
         </p>
       </div>
 
-      {/* Authentication Methods */}
-      <div className="grid md:grid-cols-3 gap-4">
-        {/* Method 1: AWS CLI Profile (Recommended) */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          onClick={() => handleMethodChange('profile')}
-          className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-            selectedMethod === 'profile'
-              ? 'border-indigo-500 bg-indigo-50'
-              : 'border-slate-200 bg-white hover:border-indigo-300'
-          }`}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-              selectedMethod === 'profile' ? 'bg-indigo-500' : 'bg-slate-100'
-            }`}>
-              <Key className={`w-6 h-6 ${selectedMethod === 'profile' ? 'text-white' : 'text-slate-600'}`} />
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900">AWS CLI Profile</h4>
-              <p className="text-xs text-slate-500">Recommended</p>
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 mb-4">
-            Use your existing AWS CLI profile. Credentials stored locally on your machine.
-          </p>
-          {selectedMethod === 'profile' && (
-            <div className="space-y-3 mt-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Profile Name
-                </label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  placeholder="default"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Profile name from <code className="bg-slate-100 px-1 rounded">~/.aws/credentials</code>
-                </p>
+      {/* Auth Methods */}
+      <div className="grid md:grid-cols-3 gap-3">
+        {methods.map((method) => {
+          const Icon = method.icon;
+          const isSelected = selectedMethod === method.id;
+          return (
+            <motion.button
+              key={method.id}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleMethodChange(method.id)}
+              className={`text-left p-5 rounded-xl border-2 transition-all duration-200 ${
+                isSelected
+                  ? 'border-indigo-500 bg-indigo-50/50 shadow-glow-sm'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                  isSelected ? 'bg-indigo-600' : 'bg-slate-100'
+                }`}>
+                  <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-slate-500'}`} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">{method.title}</h4>
+                  <p className="text-[10px] text-slate-500 font-medium">{method.subtitle}</p>
+                </div>
               </div>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Method 2: AWS SSO */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          onClick={() => handleMethodChange('sso')}
-          className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-            selectedMethod === 'sso'
-              ? 'border-indigo-500 bg-indigo-50'
-              : 'border-slate-200 bg-white hover:border-indigo-300'
-          }`}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-              selectedMethod === 'sso' ? 'bg-indigo-500' : 'bg-slate-100'
-            }`}>
-              <Shield className={`w-6 h-6 ${selectedMethod === 'sso' ? 'text-white' : 'text-slate-600'}`} />
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900">AWS SSO</h4>
-              <p className="text-xs text-slate-500">Enterprise</p>
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 mb-4">
-            Single Sign-On via AWS IAM Identity Center. Browser-based login.
-          </p>
-          {selectedMethod === 'sso' && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs text-blue-700">
-                <strong>Coming Soon:</strong> AWS SSO login will open in a new browser window for secure authentication.
-              </p>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Method 3: Temporary Credentials */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          onClick={() => handleMethodChange('credentials')}
-          className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-            selectedMethod === 'credentials'
-              ? 'border-indigo-500 bg-indigo-50'
-              : 'border-slate-200 bg-white hover:border-indigo-300'
-          }`}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-              selectedMethod === 'credentials' ? 'bg-indigo-500' : 'bg-slate-100'
-            }`}>
-              <Cloud className={`w-6 h-6 ${selectedMethod === 'credentials' ? 'text-white' : 'text-slate-600'}`} />
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900">Temporary Credentials</h4>
-              <p className="text-xs text-slate-500">Advanced</p>
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 mb-4">
-            Enter temporary AWS credentials (Access Key, Secret Key, Session Token).
-          </p>
-          {selectedMethod === 'credentials' && (
-            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-xs text-amber-700">
-                <strong>Note:</strong> Credentials are used in-memory only and never stored.
-              </p>
-            </div>
-          )}
-        </motion.div>
+              <p className="text-xs text-slate-500">{method.description}</p>
+            </motion.button>
+          );
+        })}
       </div>
 
-      {/* Setup Instructions */}
+      {/* Profile Configuration */}
       {selectedMethod === 'profile' && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          className="bg-slate-50 border border-slate-200 rounded-xl p-6"
+          className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-5"
         >
-          <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Info className="w-5 h-5 text-indigo-600" />
-            Setup Instructions
-          </h4>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-700 mb-2">1. Configure AWS CLI Profile</p>
-              <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <span># Run this command in your terminal:</span>
-                  <button
-                    onClick={() => copyToClipboard('aws configure --profile secops-lens')}
-                    className="text-xs text-slate-400 hover:text-white"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-                <div>aws configure --profile {profileName}</div>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-700 mb-2">2. Required Permissions</p>
-              <div className="bg-white border border-slate-200 rounded-lg p-3">
-                <ul className="text-sm text-slate-600 space-y-1">
-                  <li>• <code className="bg-slate-100 px-1 rounded">cloudtrail:LookupEvents</code> - Read CloudTrail events</li>
-                  <li>• <code className="bg-slate-100 px-1 rounded">bedrock:InvokeModel</code> - Use Nova AI models</li>
-                  <li>• <code className="bg-slate-100 px-1 rounded">dynamodb:PutItem</code> - Store analysis results (optional)</li>
-                </ul>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-700 mb-2">3. Verify Connection</p>
+          {/* Profile Input */}
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Profile Name</label>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="default"
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+              />
               <button
                 onClick={handleTestConnection}
                 disabled={testing || loading}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                className="btn-nova px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
               >
                 {testing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Testing...
-                  </>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Testing...</>
                 ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Test AWS Connection
-                  </>
+                  <><CheckCircle2 className="w-4 h-4" /> Test Connection</>
                 )}
               </button>
-              {testResult && (
-                <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${
-                  testResult.success 
-                    ? 'bg-green-50 border border-green-200' 
-                    : 'bg-red-50 border border-red-200'
-                }`}>
-                  {testResult.success ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <AlertCircle className="w-5 h-5 text-red-600" />
-                  )}
-                  <span className={`text-sm font-medium ${
-                    testResult.success ? 'text-green-700' : 'text-red-700'
-                  }`}>
-                    {testResult.message}
-                  </span>
-                </div>
-              )}
             </div>
+            <p className="text-xs text-slate-400 mt-1.5">
+              Profile from <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">~/.aws/credentials</code>
+            </p>
+          </div>
+
+          {/* Test Result */}
+          {testResult && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-4 rounded-lg flex items-center gap-3 ${
+                testResult.success 
+                  ? 'bg-emerald-50 border border-emerald-200' 
+                  : 'bg-red-50 border border-red-200'
+              }`}
+            >
+              {testResult.success ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              )}
+              <span className={`text-sm font-medium ${testResult.success ? 'text-emerald-700' : 'text-red-700'}`}>
+                {testResult.message}
+              </span>
+            </motion.div>
+          )}
+
+          {/* Quick Setup */}
+          <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-400 font-mono">Quick Setup</span>
+              <button
+                onClick={() => copyToClipboard(`aws configure --profile ${profileName}`)}
+                className="text-xs text-slate-500 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+            </div>
+            <code className="text-sm text-green-400 font-mono">
+              aws configure --profile {profileName}
+            </code>
           </div>
         </motion.div>
       )}
 
+      {/* SSO Coming Soon */}
+      {selectedMethod === 'sso' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+          <p className="text-sm text-blue-700 font-medium">
+            <strong>Coming Soon:</strong> AWS SSO integration will open a browser window for secure authentication via IAM Identity Center.
+          </p>
+        </motion.div>
+      )}
+
+      {/* Temp Credentials Note */}
+      {selectedMethod === 'credentials' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+          <p className="text-sm text-amber-700 font-medium">
+            <strong>Note:</strong> Temporary credentials are used in-memory only and are never persisted or transmitted.
+          </p>
+        </motion.div>
+      )}
+
       {/* Security Notice */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <Shield className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-indigo-900 mb-1">Security & Privacy</p>
-            <ul className="text-xs text-indigo-700 space-y-1">
-              <li>• Your AWS credentials are never transmitted to our servers</li>
-              <li>• All AWS API calls are made directly from your browser/backend using your local credentials</li>
-              <li>• Analysis results are stored in your AWS account (DynamoDB) or temporarily in memory</li>
-              <li>• You can revoke access at any time by removing the AWS profile</li>
-            </ul>
-          </div>
-        </div>
+      <div className="flex items-start gap-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+        <Shield className="w-4 h-4 text-indigo-500 mt-0.5 flex-shrink-0" />
+        <p className="text-xs text-indigo-600 leading-relaxed">
+          <strong>Security:</strong> All AWS API calls use your local credentials. Nothing is stored server-side. 
+          Revoke access anytime by removing the AWS profile.
+        </p>
       </div>
     </div>
   );

@@ -1,9 +1,8 @@
 /**
- * Premium Demo Scenarios Component - Stunning Modern SaaS Design
- * Interactive, animated, and visually engaging
+ * Premium Demo Scenarios - Enterprise card design with severity indicators
  */
 import React from 'react';
-import { Database, Zap, ArrowRight, Brain, Shield, TrendingUp, AlertCircle } from 'lucide-react';
+import { Database, Zap, ArrowRight, Brain, Shield, TrendingUp, AlertCircle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { DemoScenario } from '../../types/incident';
 
@@ -20,179 +19,127 @@ const DemoScenarios: React.FC<DemoScenariosProps> = ({
 }) => {
   const getScenarioIcon = (id: string) => {
     switch (id) {
-      case 'crypto-mining':
-        return Zap;
-      case 'data-exfiltration':
-        return Database;
-      case 'privilege-escalation':
-        return TrendingUp;
-      case 'unauthorized-access':
-        return AlertCircle;
-      default:
-        return Shield;
+      case 'crypto-mining': return Zap;
+      case 'data-exfiltration': return Database;
+      case 'privilege-escalation': return TrendingUp;
+      case 'unauthorized-access': return AlertCircle;
+      default: return Shield;
     }
   };
 
   const getScenarioConfig = (scenario: DemoScenario) => {
-    if (scenario.severity === 'CRITICAL') {
-      return {
-        gradientFrom: 'from-red-50',
-        gradientVia: 'via-pink-50',
-        gradientTo: 'to-purple-50',
-        borderColor: 'border-red-300',
-        buttonGradient: 'from-red-500 to-pink-600',
-        iconGradient: 'from-red-500 to-pink-600',
-        badgeBg: 'bg-red-100',
-        badgeText: 'text-red-700',
-        badgeBorder: 'border-red-200',
-        emoji: '🚨',
-      };
-    } else if (scenario.severity === 'HIGH') {
-      return {
-        gradientFrom: 'from-orange-50',
-        gradientVia: 'via-amber-50',
-        gradientTo: 'to-yellow-50',
-        borderColor: 'border-orange-300',
-        buttonGradient: 'from-orange-500 to-amber-600',
-        iconGradient: 'from-orange-500 to-amber-600',
-        badgeBg: 'bg-orange-100',
-        badgeText: 'text-orange-700',
-        badgeBorder: 'border-orange-200',
-        emoji: '⚠️',
-      };
-    }
-    return {
-      gradientFrom: 'from-blue-50',
-      gradientVia: 'via-indigo-50',
-      gradientTo: 'to-purple-50',
-      borderColor: 'border-blue-300',
-      buttonGradient: 'from-blue-500 to-indigo-600',
-      iconGradient: 'from-blue-500 to-indigo-600',
-      badgeBg: 'bg-blue-100',
-      badgeText: 'text-blue-700',
-      badgeBorder: 'border-blue-200',
-      emoji: 'ℹ️',
+    const configs: Record<string, any> = {
+      CRITICAL: {
+        gradient: 'from-red-500 to-rose-600',
+        lightBg: 'bg-red-50',
+        border: 'border-red-200 hover:border-red-300',
+        badge: 'bg-red-100 text-red-700 border-red-200',
+        ring: 'ring-red-500/20',
+        dot: 'bg-red-500',
+      },
+      HIGH: {
+        gradient: 'from-orange-500 to-amber-600',
+        lightBg: 'bg-orange-50',
+        border: 'border-orange-200 hover:border-orange-300',
+        badge: 'bg-orange-100 text-orange-700 border-orange-200',
+        ring: 'ring-orange-500/20',
+        dot: 'bg-orange-500',
+      },
+    };
+    return configs[scenario.severity] || {
+      gradient: 'from-blue-500 to-indigo-600',
+      lightBg: 'bg-blue-50',
+      border: 'border-blue-200 hover:border-blue-300',
+      badge: 'bg-blue-100 text-blue-700 border-blue-200',
+      ring: 'ring-blue-500/20',
+      dot: 'bg-blue-500',
     };
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-white">
-      <div className="max-w-7xl mx-auto px-6 py-20">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
-        >
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-full border border-indigo-200 mb-6">
-            <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-            <span className="text-sm font-medium text-indigo-700">
-              Live Demo
-            </span>
-          </div>
+    <div className="space-y-8">
+      {/* Scenario Cards */}
+      <div className="grid md:grid-cols-2 gap-5">
+        {scenarios.map((scenario, index) => {
+          const Icon = getScenarioIcon(scenario.id);
+          const config = getScenarioConfig(scenario);
           
-          <h1 className="text-5xl font-bold text-slate-900 mb-4">
-            Experience Nova Sentinel
-            <br />
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-              In Action
-            </span>
-          </h1>
-          
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Select a real-world security scenario and watch Nova Sentinel 
-            analyze, investigate, and resolve it autonomously in under 1 minute.
-          </p>
-        </motion.div>
-
-                {/* Scenario Cards */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {scenarios.map((scenario, index) => {
-            const Icon = getScenarioIcon(scenario.id);
-            const config = getScenarioConfig(scenario);
-            
-            return (
-              <motion.div
-                key={scenario.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2 + index * 0.1 }}
-                onClick={() => !loading && onSelectScenario(scenario.id)}
-                className={`group relative bg-white rounded-3xl p-8 border-2 border-slate-200 hover:${config.borderColor} hover:shadow-2xl transition-all cursor-pointer overflow-hidden ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {/* Animated gradient background */}
-                <motion.div
-                  className={`absolute inset-0 bg-gradient-to-br ${config.gradientFrom} ${config.gradientVia} ${config.gradientTo}`}
-                  initial={{ opacity: 0 }}
-                  whileHover={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                />
+          return (
+            <motion.button
+              key={scenario.id}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.08 }}
+              onClick={() => !loading && onSelectScenario(scenario.id)}
+              disabled={loading}
+              className={`group relative text-left bg-white rounded-2xl p-6 border ${config.border} hover:shadow-card-hover transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <div className="flex items-start gap-4">
+                {/* Icon */}
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-200`}>
+                  <Icon className="w-6 h-6 text-white" strokeWidth={2.5} />
+                </div>
                 
-                <div className="relative">
-                  {/* Severity Badge */}
-                  <div className="flex items-center justify-between mb-6">
-                    <div className={`px-4 py-2 ${config.badgeBg} ${config.badgeText} text-sm font-bold rounded-full border-2 ${config.badgeBorder}`}>
-                      {config.emoji} {scenario.severity}
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {scenario.event_count} CloudTrail events
-                    </div>
+                <div className="flex-1 min-w-0">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                      {scenario.name}
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${config.badge} flex-shrink-0`}>
+                      {scenario.severity}
+                    </span>
                   </div>
                   
-                  {/* Icon */}
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${config.iconGradient} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-8 h-8 text-white" strokeWidth={2.5} />
-                  </div>
-                  
-                  {/* Content */}
-                  <h3 className="text-2xl font-bold text-slate-900 mb-3">
-                    {scenario.name}
-                  </h3>
-                  
-                  <p className="text-slate-600 mb-6 leading-relaxed">
+                  {/* Description */}
+                  <p className="text-sm text-slate-500 mb-3 line-clamp-2">
                     {scenario.description}
                   </p>
                   
-                  {/* CTA Button */}
-                  <button 
-                    disabled={loading}
-                    className={`w-full px-6 py-4 bg-gradient-to-r ${config.buttonGradient} text-white font-semibold rounded-xl hover:shadow-xl transition-all flex items-center justify-between group ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <span>Analyze This Incident</span>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
-                  </button>
+                  {/* Footer */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400 font-medium">
+                      {scenario.event_count} CloudTrail events
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Analyze
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </span>
+                  </div>
                 </div>
-              </motion.div>
-            );
-          })}
-        </div>
+              </div>
 
-        {/* Value Props */}
-        <div className="grid md:grid-cols-4 gap-6">
-          {[
-            { icon: Zap, label: 'Under 1 Minute', value: 'Resolution Time' },
-            { icon: Brain, label: '5 Nova Models', value: 'Working Together' },
-            { icon: Shield, label: '100% Automated', value: 'No Manual Work' },
-            { icon: TrendingUp, label: '95% Confidence', value: 'AI Accuracy' },
-          ].map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 + i * 0.1 }}
-              className="bg-white rounded-2xl p-6 border border-slate-200 text-center hover:shadow-lg transition-all"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center mx-auto mb-4">
-                <item.icon className="w-6 h-6 text-indigo-600" />
-              </div>
-              <div className="text-2xl font-bold text-slate-900 mb-1">
-                {item.label}
-              </div>
-              <div className="text-sm text-slate-600">{item.value}</div>
-            </motion.div>
-          ))}
-        </div>
+              {/* Loading overlay */}
+              {loading && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                </div>
+              )}
+            </motion.button>
+          );
+        })}
       </div>
+
+      {/* Bottom Stats */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="grid grid-cols-4 gap-3"
+      >
+        {[
+          { icon: Zap, value: '<60s', label: 'Resolution' },
+          { icon: Brain, value: '5 Models', label: 'Nova AI' },
+          { icon: Shield, value: '100%', label: 'Automated' },
+          { icon: TrendingUp, value: '95%+', label: 'Accuracy' },
+        ].map((stat, i) => (
+          <div key={i} className="text-center p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <stat.icon className="w-4 h-4 text-indigo-500 mx-auto mb-1.5" />
+            <div className="text-sm font-bold text-slate-900 metric-value">{stat.value}</div>
+            <div className="text-[10px] text-slate-500 font-medium">{stat.label}</div>
+          </div>
+        ))}
+      </motion.div>
     </div>
   );
 };
