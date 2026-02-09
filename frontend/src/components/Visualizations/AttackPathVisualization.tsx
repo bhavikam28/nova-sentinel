@@ -1,36 +1,36 @@
 /**
  * Attack Path Visualization - Landing Page
- * Light background, Wiz.io/Orca-inspired clean security graph
- * Professional enterprise aesthetic with subtle dot grid
+ * Premium enterprise security graph with enhanced detail
+ * Inspired by Wiz.io, CrowdStrike, Orca Security
  */
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-  Globe, Network, Server, User, Database, Shield
+  Globe, Network, Shield, Server, User, Database
 } from 'lucide-react';
 
 const NODES = [
-  { x: 80, y: 120, icon: Globe, label: 'Internet', color: '#8B5CF6', bg: '#F5F3FF', delay: 0 },
-  { x: 240, y: 120, icon: Network, label: 'API Gateway', color: '#6366F1', bg: '#EEF2FF', delay: 0.1 },
-  { x: 400, y: 120, icon: Shield, label: 'Firewall', color: '#3B82F6', bg: '#EFF6FF', delay: 0.15 },
-  { x: 560, y: 120, icon: Server, label: 'EC2', color: '#EF4444', bg: '#FEF2F2', delay: 0.2 },
-  { x: 720, y: 120, icon: User, label: 'IAM Role', color: '#EF4444', bg: '#FEF2F2', delay: 0.25 },
-  { x: 880, y: 120, icon: Database, label: 'Database', color: '#F97316', bg: '#FFF7ED', delay: 0.3 },
+  { x: 80, y: 120, icon: Globe, label: 'Internet', sub: 'External', color: '#8B5CF6', bg: '#F5F3FF', severity: 'entry', delay: 0 },
+  { x: 240, y: 120, icon: Network, label: 'API Gateway', sub: 'Entry Point', color: '#6366F1', bg: '#EEF2FF', severity: 'entry', delay: 0.1 },
+  { x: 400, y: 120, icon: Shield, label: 'Firewall', sub: 'WAF Rules', color: '#3B82F6', bg: '#EFF6FF', severity: 'medium', delay: 0.15 },
+  { x: 560, y: 120, icon: Server, label: 'EC2', sub: 'Compromised', color: '#EF4444', bg: '#FEF2F2', severity: 'critical', delay: 0.2 },
+  { x: 720, y: 120, icon: User, label: 'IAM Role', sub: 'Escalated', color: '#EF4444', bg: '#FEF2F2', severity: 'critical', delay: 0.25 },
+  { x: 880, y: 120, icon: Database, label: 'Database', sub: 'Data Target', color: '#F97316', bg: '#FFF7ED', severity: 'high', delay: 0.3 },
 ];
 
 const EDGES = [
-  { from: 0, to: 1, color: '#8B5CF6', delay: 0.4 },
-  { from: 1, to: 2, color: '#6366F1', delay: 0.55 },
-  { from: 2, to: 3, color: '#EF4444', delay: 0.7 },
-  { from: 3, to: 4, color: '#EF4444', delay: 0.85 },
-  { from: 4, to: 5, color: '#F97316', delay: 1.0 },
+  { from: 0, to: 1, color: '#8B5CF6', label: 'HTTPS', delay: 0.4 },
+  { from: 1, to: 2, color: '#6366F1', label: 'Route', delay: 0.55 },
+  { from: 2, to: 3, color: '#EF4444', label: 'SSH:22', delay: 0.7 },
+  { from: 3, to: 4, color: '#EF4444', label: 'AssumeRole', delay: 0.85 },
+  { from: 4, to: 5, color: '#F97316', label: 'Query', delay: 1.0 },
 ];
 
 const AttackPathVisualization: React.FC = () => {
   return (
     <div className="w-full rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-card">
       {/* Header */}
-      <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-100">
+      <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-slate-50 to-red-50/20">
         <div>
           <h3 className="text-sm font-bold text-slate-900">Attack Path Analysis</h3>
           <p className="text-[11px] text-slate-400 mt-0.5">Real-time threat chain visualization</p>
@@ -49,29 +49,36 @@ const AttackPathVisualization: React.FC = () => {
         </div>
       </div>
 
-      {/* Graph - Light Background */}
+      {/* Graph */}
       <div className="relative px-4 py-8">
         {/* Subtle dot grid */}
         <div className="absolute inset-0" style={{
-          backgroundImage: 'radial-gradient(circle, #e2e8f0 0.8px, transparent 0.8px)',
-          backgroundSize: '24px 24px',
+          backgroundImage: 'radial-gradient(circle, #e2e8f0 0.6px, transparent 0.6px)',
+          backgroundSize: '20px 20px',
         }} />
 
-        <svg width="960" height="200" viewBox="0 0 960 200" className="w-full relative z-10" preserveAspectRatio="xMidYMid meet">
+        <svg width="960" height="210" viewBox="0 0 960 210" className="w-full relative z-10" preserveAspectRatio="xMidYMid meet">
           <defs>
-            {/* Arrow markers */}
             {EDGES.map((edge, i) => (
               <marker key={`lm-${i}`} id={`lp-arrow-${i}`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill={edge.color} opacity="0.7" />
+                <polygon points="0 0, 8 3, 0 6" fill={edge.color} opacity="0.6" />
               </marker>
             ))}
-            {/* Drop shadow filter */}
             <filter id="node-shadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.08" />
+              <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000" floodOpacity="0.1" />
+            </filter>
+            <filter id="lp-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
+              <feFlood floodColor="#EF4444" floodOpacity="0.12" />
+              <feComposite in2="blur" operator="in" />
+              <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
             </filter>
           </defs>
 
-          {/* Edges with flowing particles */}
+          {/* Edges with labels and particles */}
           {EDGES.map((edge, i) => {
             const from = NODES[edge.from];
             const to = NODES[edge.to];
@@ -79,26 +86,38 @@ const AttackPathVisualization: React.FC = () => {
 
             return (
               <g key={`e-${i}`}>
-                {/* Subtle shadow line */}
+                {/* Glow */}
                 <motion.line
                   x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                  stroke={edge.color} strokeWidth="3" opacity="0.06"
+                  stroke={edge.color} strokeWidth="4" opacity="0.06"
                   initial={{ pathLength: 0 }}
                   whileInView={{ pathLength: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: edge.delay, duration: 0.5 }}
                 />
-                {/* Main dashed line */}
+                {/* Dashed line */}
                 <motion.line
                   x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                  stroke={edge.color} strokeWidth="1.5" opacity="0.4"
+                  stroke={edge.color} strokeWidth="1.5" opacity="0.45"
                   strokeDasharray="6 4"
                   markerEnd={`url(#lp-arrow-${i})`}
                   initial={{ pathLength: 0, opacity: 0 }}
-                  whileInView={{ pathLength: 1, opacity: 0.4 }}
+                  whileInView={{ pathLength: 1, opacity: 0.45 }}
                   viewport={{ once: true }}
                   transition={{ delay: edge.delay, duration: 0.5 }}
                 />
+                {/* Edge label */}
+                <motion.text
+                  x={mx} y={from.y - 12}
+                  textAnchor="middle" fill={edge.color} fontSize="8" fontWeight="700" fontFamily="Inter, sans-serif"
+                  opacity="0"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 0.6 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: edge.delay + 0.3 }}
+                >
+                  {edge.label}
+                </motion.text>
                 {/* Flowing particle */}
                 <motion.circle
                   r="3" fill={edge.color}
@@ -116,7 +135,7 @@ const AttackPathVisualization: React.FC = () => {
           {/* Nodes */}
           {NODES.map((node, i) => {
             const Icon = node.icon;
-            const isCritical = node.color === '#EF4444';
+            const isCritical = node.severity === 'critical';
 
             return (
               <motion.g
@@ -126,18 +145,22 @@ const AttackPathVisualization: React.FC = () => {
                 viewport={{ once: true }}
                 transition={{ delay: node.delay, duration: 0.4, type: 'spring', stiffness: 200 }}
               >
-                {/* Pulse ring for critical nodes */}
+                {/* Pulse ring for critical */}
                 {isCritical && (
                   <motion.circle
                     cx={node.x} cy={node.y} r="30"
-                    fill="none" stroke={node.color} strokeWidth="1"
-                    animate={{ opacity: [0.08, 0.2, 0.08], r: [28, 33, 28] }}
+                    fill="none" stroke={node.color} strokeWidth="1.5"
+                    animate={{ opacity: [0.1, 0.25, 0.1], r: [28, 34, 28] }}
                     transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
                   />
                 )}
 
-                {/* Node circle - white fill with colored border */}
-                <circle cx={node.x} cy={node.y} r="24" fill={node.bg} stroke={node.color} strokeWidth="2" filter="url(#node-shadow)" />
+                {/* Node circle */}
+                <circle
+                  cx={node.x} cy={node.y} r="24"
+                  fill={node.bg} stroke={node.color} strokeWidth="2"
+                  filter={isCritical ? 'url(#lp-glow)' : 'url(#node-shadow)'}
+                />
 
                 {/* Icon */}
                 <foreignObject x={node.x - 10} y={node.y - 10} width="20" height="20">
@@ -147,8 +170,12 @@ const AttackPathVisualization: React.FC = () => {
                 </foreignObject>
 
                 {/* Label */}
-                <text x={node.x} y={node.y + 38} textAnchor="middle" fill="#334155" fontSize="11" fontWeight="600" fontFamily="Inter, sans-serif">
+                <text x={node.x} y={node.y + 38} textAnchor="middle" fill="#334155" fontSize="11" fontWeight="700" fontFamily="Inter, sans-serif">
                   {node.label}
+                </text>
+                {/* Sub label */}
+                <text x={node.x} y={node.y + 51} textAnchor="middle" fill="#94a3b8" fontSize="9" fontWeight="500" fontFamily="Inter, sans-serif">
+                  {node.sub}
                 </text>
               </motion.g>
             );
@@ -161,9 +188,9 @@ const AttackPathVisualization: React.FC = () => {
             viewport={{ once: true }}
             transition={{ delay: 1.3, duration: 0.4 }}
           >
-            <rect x="380" y="172" width="200" height="26" rx="13" fill="#ECFDF5" stroke="#10B981" strokeWidth="1" />
-            <text x="480" y="189" textAnchor="middle" fill="#059669" fontSize="10" fontWeight="700" fontFamily="Inter, sans-serif">
-              ✓ Nova Sentinel — Threat Detected
+            <rect x="360" y="178" width="240" height="26" rx="13" fill="#ECFDF5" stroke="#10B981" strokeWidth="1.5" />
+            <text x="480" y="195" textAnchor="middle" fill="#059669" fontSize="10" fontWeight="700" fontFamily="Inter, sans-serif">
+              Nova Sentinel — Threat Detected in &lt;60s
             </text>
           </motion.g>
         </svg>

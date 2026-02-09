@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, AlertCircle, CheckCircle2, Menu, X, 
   ArrowLeft, Clock, ChevronRight,
-  Loader2, Sparkles
+  Loader2, Sparkles, Eye, Brain, Zap, Shield, FileText
 } from 'lucide-react';
 import NovaSentinelLogo from './components/Logo';
 import LandingHero from './components/Landing/LandingHero';
@@ -348,11 +348,11 @@ function App() {
                     {/* Animated Agent Pipeline */}
                     <div className="grid grid-cols-5 gap-3 mb-8">
                       {[
-                        { name: 'Detect', model: 'Nova Pro', icon: '🔍', color: 'from-blue-500 to-cyan-500', delay: 0 },
-                        { name: 'Investigate', model: 'Nova 2 Lite', icon: '🧠', color: 'from-purple-500 to-violet-500', delay: 3 },
-                        { name: 'Classify', model: 'Nova Micro', icon: '⚡', color: 'from-amber-500 to-orange-500', delay: 6 },
-                        { name: 'Remediate', model: 'Orchestrator', icon: '🛡️', color: 'from-emerald-500 to-teal-500', delay: 9 },
-                        { name: 'Document', model: 'Nova 2 Lite', icon: '📄', color: 'from-violet-500 to-purple-500', delay: 12 },
+                        { name: 'Detect', model: 'Nova Pro', Icon: Eye, color: 'from-blue-500 to-cyan-500', delay: 0 },
+                        { name: 'Investigate', model: 'Nova 2 Lite', Icon: Brain, color: 'from-purple-500 to-violet-500', delay: 3 },
+                        { name: 'Classify', model: 'Nova Micro', Icon: Zap, color: 'from-amber-500 to-orange-500', delay: 6 },
+                        { name: 'Remediate', model: 'Orchestrator', Icon: Shield, color: 'from-emerald-500 to-teal-500', delay: 9 },
+                        { name: 'Document', model: 'Nova 2 Lite', Icon: FileText, color: 'from-violet-500 to-purple-500', delay: 12 },
                       ].map((agent, i) => (
                         <motion.div
                           key={agent.name}
@@ -368,7 +368,7 @@ function App() {
                               animate={{ scale: [1, 1.1, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity, delay: agent.delay * 0.1 }}
                             >
-                              <span className="text-lg">{agent.icon}</span>
+                              <agent.Icon className="w-5 h-5 text-white" />
                             </motion.div>
                             <p className="text-xs font-bold text-slate-900">{agent.name}</p>
                             <p className="text-[10px] text-slate-400 mt-0.5">{agent.model}</p>

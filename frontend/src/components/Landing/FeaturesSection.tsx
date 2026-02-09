@@ -16,7 +16,7 @@ const FeaturesSection: React.FC = () => {
   return (
     <section className="relative" id="features">
       {/* ============ ATTACK PATH SHOWCASE ============ */}
-      <div className="py-20 bg-white border-b border-slate-100">
+      <div className="py-20 bg-gradient-to-b from-white via-red-50/20 to-slate-50/50 border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -80,7 +80,7 @@ const FeaturesSection: React.FC = () => {
       </div>
 
       {/* ============ CAPABILITIES BENTO GRID ============ */}
-      <div className="py-20 bg-slate-50 border-t border-slate-100">
+      <div className="py-20 bg-gradient-to-b from-slate-50 via-white to-indigo-50/20 border-t border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

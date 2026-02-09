@@ -1,11 +1,10 @@
 /**
  * Cost Impact Estimation - Financial impact analysis of security incidents
- * Estimates compute costs, breach fines, downtime costs, remediation costs
- * Based on industry benchmarks: IBM Cost of Data Breach Report, Gartner, AWS Pricing
+ * Based on industry benchmarks with clickable source links
  */
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, TrendingUp, Clock, AlertTriangle, Server, Database, Scale, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, AlertTriangle, Server, Database, Scale, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
 
 interface CostImpactProps {
@@ -21,6 +20,7 @@ interface CostCategory {
   description: string;
   methodology: string;
   source: string;
+  sourceUrl: string;
   color: string;
   bg: string;
 }
@@ -48,6 +48,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
       description: 'Estimated cost of unauthorized EC2 instances running crypto mining workloads over the incident duration.',
       methodology: `Based on ${eventCount} events detected × $180/event + $2,400 baseline. Assumes p3.2xlarge instances ($3.06/hr) commonly used for crypto mining, running for estimated incident duration.`,
       source: 'AWS EC2 On-Demand Pricing (us-east-1)',
+      sourceUrl: 'https://aws.amazon.com/ec2/pricing/on-demand/',
       color: 'text-red-700',
       bg: 'bg-red-50',
     });
@@ -60,7 +61,8 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
       amount,
       description: 'Estimated cost of compromised cloud resources during the incident window.',
       methodology: `Based on ${eventCount} events × $45/event + $350 baseline. Estimates include compute, storage, and network costs for compromised resources during the incident window.`,
-      source: 'AWS resource pricing estimates',
+      source: 'AWS Resource Pricing Estimates',
+      sourceUrl: 'https://aws.amazon.com/pricing/',
       color: 'text-orange-700',
       bg: 'bg-orange-50',
     });
@@ -75,7 +77,8 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
       amount,
       description: 'Potential liability based on industry breach cost data for the scope observed.',
       methodology: `Estimated from IBM CODB 2025: avg $4.88M per breach, scaled to observed scope. ${hasCritical ? 'Critical severity detected (+$25K exposure)' : 'Standard severity (+$5K exposure)'}. Includes notification costs, legal fees, and regulatory penalties.`,
-      source: 'IBM Cost of Data Breach Report 2025 ($4.88M avg)',
+      source: 'IBM Cost of Data Breach Report 2025',
+      sourceUrl: 'https://www.ibm.com/reports/data-breach',
       color: 'text-red-700',
       bg: 'bg-red-50',
     });
@@ -87,8 +90,9 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
     icon: Clock,
     amount: hasCritical ? 8500 : 2200,
     description: 'Estimated revenue impact from service disruption during investigation and remediation.',
-    methodology: `${hasCritical ? 'Critical incident: ~2hr MTTR × $4,250/hr' : 'Standard incident: ~1hr MTTR × $2,200/hr'}. Based on average downtime costs for mid-size organizations. Gartner estimates $5,600/min for large enterprises.`,
-    source: 'Gartner IT Downtime Survey 2024',
+    methodology: `${hasCritical ? 'Critical incident: ~2hr MTTR × $4,250/hr' : 'Standard incident: ~1hr MTTR × $2,200/hr'}. Based on average downtime costs for mid-size organizations.`,
+    source: 'Gartner IT Downtime Research 2024',
+    sourceUrl: 'https://www.gartner.com/en/information-technology',
     color: 'text-amber-700',
     bg: 'bg-amber-50',
   });
@@ -99,8 +103,9 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
     icon: AlertTriangle,
     amount: hasCritical ? 12000 : 4500,
     description: 'Estimated cost of security team labor for manual incident response without Nova Sentinel.',
-    methodology: `${hasCritical ? '3 security engineers × 20hrs × $200/hr' : '2 security engineers × 15hrs × $150/hr'}. Includes investigation, containment, eradication, recovery, and post-incident review. Average SOC analyst salary: $120K-180K/yr.`,
-    source: 'Bureau of Labor Statistics / Glassdoor SOC Analyst Compensation',
+    methodology: `${hasCritical ? '3 security engineers × 20hrs × $200/hr' : '2 security engineers × 15hrs × $150/hr'}. Includes investigation, containment, eradication, recovery, and post-incident review.`,
+    source: 'Bureau of Labor Statistics / Glassdoor',
+    sourceUrl: 'https://www.bls.gov/ooh/computer-and-information-technology/information-security-analysts.htm',
     color: 'text-purple-700',
     bg: 'bg-purple-50',
   });
@@ -112,8 +117,9 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
       icon: Scale,
       amount: 50000,
       description: 'Potential regulatory fines for non-compliance with GDPR, CCPA, HIPAA, or PCI-DSS.',
-      methodology: 'GDPR: up to 4% annual revenue or €20M. CCPA: $2,500-$7,500 per violation. PCI-DSS: $5,000-$100,000/month. HIPAA: $100-$50,000 per violation. Estimate assumes moderate exposure based on observed data access patterns.',
-      source: 'GDPR Art. 83, CCPA §1798.155, PCI-DSS SAQ Guidelines, HIPAA Enforcement',
+      methodology: 'GDPR: up to 4% annual revenue or €20M. CCPA: $2,500-$7,500 per violation. PCI-DSS: $5,000-$100,000/month. HIPAA: $100-$50,000 per violation. Estimate assumes moderate exposure.',
+      source: 'GDPR Art. 83, PCI-DSS SAQ Guidelines',
+      sourceUrl: 'https://gdpr.eu/fines/',
       color: 'text-indigo-700',
       bg: 'bg-indigo-50',
     });
@@ -192,7 +198,7 @@ const CostImpact: React.FC<CostImpactProps> = ({ timeline, incidentType }) => {
             >
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700 leading-relaxed">
                 <p className="font-bold mb-1">How are these numbers calculated?</p>
-                <p>Cost estimates are derived from industry-standard benchmarks including the IBM Cost of Data Breach Report 2025, Gartner IT Downtime Research, AWS EC2 pricing, and Bureau of Labor Statistics data for security analyst compensation. Estimates are scaled based on the number of events detected, severity level, and incident type. Click any cost category below to see its specific methodology.</p>
+                <p>Cost estimates are derived from industry-standard benchmarks including the IBM Cost of Data Breach Report 2025, Gartner IT Downtime Research, AWS EC2 pricing, and Bureau of Labor Statistics data. Estimates are scaled based on the number of events detected, severity level, and incident type. Click any cost category to see its specific methodology and source.</p>
               </div>
             </motion.div>
           )}
@@ -233,7 +239,6 @@ const CostImpact: React.FC<CostImpactProps> = ({ timeline, incidentType }) => {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="group"
             >
               <div
                 className={`rounded-xl border transition-all cursor-pointer ${
@@ -274,10 +279,16 @@ const CostImpact: React.FC<CostImpactProps> = ({ timeline, incidentType }) => {
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Calculation Methodology</p>
                           <p className="text-[11px] text-slate-600 leading-relaxed">{cost.methodology}</p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Info className="w-3 h-3 text-slate-400" />
-                          <p className="text-[10px] text-slate-400 italic">Source: {cost.source}</p>
-                        </div>
+                        <a
+                          href={cost.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Source: {cost.source}
+                        </a>
                       </div>
                     </motion.div>
                   )}
