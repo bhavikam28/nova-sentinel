@@ -157,6 +157,10 @@ function App() {
                 onClick={() => { 
                   setShowDemo(false); 
                   setAnalysisResult(null);
+                  setOrchestrationResult(null);
+                  setVisualAnalysisResult(null);
+                  setRemediationPlan(null);
+                  setDocumentationResult(null);
                   window.location.hash = '';
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
@@ -171,7 +175,8 @@ function App() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="space-y-8">
             {/* Tabbed Interface */}
-            <AnalysisTabs>
+            {scenarios.length > 0 ? (
+              <AnalysisTabs>
               {{
                 realAWS: (
                   <div className="space-y-6">
