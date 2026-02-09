@@ -22,7 +22,7 @@ from agents.remediation_agent import RemediationAgent
 from agents.voice_agent import VoiceAgent
 from agents.documentation_agent import DocumentationAgent
 from utils.logger import logger
-from utils.mock_data import get_crypto_mining_events, get_data_exfiltration_events
+from utils.mock_data import generate_crypto_mining_scenario, generate_data_exfiltration_scenario
 
 # Initialize agents
 temporal_agent = TemporalAgent()
@@ -228,11 +228,11 @@ async def handle_get_demo_events(args: Dict[str, Any]) -> Dict[str, Any]:
     """Handle get_demo_events tool call"""
     scenario = args.get("scenario", "crypto-mining")
     if scenario == "crypto-mining":
-        events = get_crypto_mining_events()
+        events = generate_crypto_mining_scenario()
     elif scenario == "data-exfiltration":
-        events = get_data_exfiltration_events()
+        events = generate_data_exfiltration_scenario()
     else:
-        events = get_crypto_mining_events()
+        events = generate_crypto_mining_scenario()
     
     return {"scenario": scenario, "events": events}
 
