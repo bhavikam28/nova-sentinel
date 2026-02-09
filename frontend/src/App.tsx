@@ -177,8 +177,8 @@ function App() {
             {/* Tabbed Interface */}
             {scenarios.length > 0 ? (
               <AnalysisTabs>
-              {{
-                realAWS: (
+                {{
+                  realAWS: (
                   <div className="space-y-6">
                     {/* AWS Authentication */}
                     <AWSAuthTab
@@ -314,11 +314,29 @@ function App() {
                       loading={loading}
                     />
                   </div>
-                )
-              }}
-            </AnalysisTabs>
+                  )
+                }}
+              </AnalysisTabs>
+            ) : (
+              <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-16 text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-full mb-6">
+                  <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-3">
+                  Loading Demo...
+                </h3>
+                <p className="text-slate-600 max-w-md mx-auto">
+                  Connecting to backend server. Please ensure the backend is running on port 8000.
+                </p>
+                {error && (
+                  <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+              </div>
+            )}
 
-            {error && (
+            {error && scenarios.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm">
                 <div className="flex">
                   <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
@@ -330,7 +348,7 @@ function App() {
               </div>
             )}
 
-            {loading && (
+            {loading && scenarios.length > 0 && (
               <div className="space-y-6">
                 <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-lg">
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-full mb-6">
