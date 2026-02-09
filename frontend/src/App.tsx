@@ -22,6 +22,8 @@ import AttackPathDiagram from './components/Visualizations/AttackPathDiagram';
 import VisualAnalysisUpload from './components/Analysis/VisualAnalysisUpload';
 import RemediationPlan from './components/Analysis/RemediationPlan';
 import DocumentationDisplay from './components/Analysis/DocumentationDisplay';
+import ComplianceMapping from './components/Analysis/ComplianceMapping';
+import CostImpact from './components/Analysis/CostImpact';
 import { analysisAPI, demoAPI, orchestrationAPI, visualAPI, documentationAPI, authAPI } from './services/api';
 import type { AnalysisResponse, DemoScenario, OrchestrationResponse } from './types/incident';
 import { formatAnalysisTime } from './utils/formatting';
@@ -424,6 +426,18 @@ function App() {
 
                 {/* Attack Path */}
                 <AttackPathDiagram />
+
+                {/* Compliance Mapping */}
+                <ComplianceMapping 
+                  timeline={analysisResult.timeline} 
+                  incidentType={orchestrationResult?.metadata?.incident_type}
+                />
+
+                {/* Cost Impact Estimation */}
+                <CostImpact 
+                  timeline={analysisResult.timeline}
+                  incidentType={orchestrationResult?.metadata?.incident_type}
+                />
 
                 {/* Remediation Plan */}
                 {remediationPlan && (

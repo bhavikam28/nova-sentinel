@@ -64,12 +64,18 @@ export interface OrchestrationResponse {
     visual?: AgentState;
     risk_scorer?: AgentState;
     remediation?: AgentState;
+    documentation?: AgentState;
   };
   results: {
     timeline?: Timeline;
     visual?: any;
     risk_scores?: Array<{ event: string; risk: any }>;
     remediation_plan?: any;
+    documentation?: any;
+  };
+  metadata?: {
+    incident_type?: string;
+    [key: string]: any;
   };
 }
 

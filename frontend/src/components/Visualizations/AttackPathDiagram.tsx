@@ -1,7 +1,7 @@
 /**
- * Attack Path Diagram - Analysis Dashboard View
- * Premium Wiz.io-inspired network graph with animated flowing connections
- * Dark background, colorful nodes, particle-animated edges
+ * Attack Path Diagram - Dashboard Analysis View
+ * Light background, clean professional graph
+ * Wiz.io/Orca-inspired enterprise security graph
  */
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -18,9 +18,8 @@ interface NodeDef {
   label: string;
   subLabel: string;
   color: string;
-  borderColor: string;
+  bg: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
-  glowColor: string;
 }
 
 interface EdgeDef {
@@ -31,15 +30,15 @@ interface EdgeDef {
 }
 
 const NODES: NodeDef[] = [
-  { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', color: '#7C3AED', borderColor: '#8B5CF6', severity: 'high', glowColor: 'rgba(124,58,237,0.4)' },
-  { id: 'gateway', x: 240, y: 200, icon: Network, label: 'API Gateway', subLabel: 'Entry Point', color: '#6366F1', borderColor: '#818CF8', severity: 'high', glowColor: 'rgba(99,102,241,0.4)' },
-  { id: 'vpc', x: 400, y: 200, icon: Wifi, label: 'VPC', subLabel: 'Network Layer', color: '#3B82F6', borderColor: '#60A5FA', severity: 'medium', glowColor: 'rgba(59,130,246,0.3)' },
-  { id: 'ec2', x: 560, y: 200, icon: Server, label: 'EC2 Instance', subLabel: 'Compromised', color: '#EF4444', borderColor: '#F87171', severity: 'critical', glowColor: 'rgba(239,68,68,0.5)' },
-  { id: 'iam', x: 720, y: 200, icon: User, label: 'IAM Role', subLabel: 'Escalated', color: '#EF4444', borderColor: '#F87171', severity: 'critical', glowColor: 'rgba(239,68,68,0.5)' },
-  { id: 'database', x: 880, y: 200, icon: Database, label: 'RDS Database', subLabel: 'Data Target', color: '#F97316', borderColor: '#FB923C', severity: 'high', glowColor: 'rgba(249,115,22,0.4)' },
-  { id: 'sg', x: 320, y: 80, icon: Shield, label: 'Security Group', subLabel: 'Misconfigured', color: '#EF4444', borderColor: '#F87171', severity: 'critical', glowColor: 'rgba(239,68,68,0.5)' },
-  { id: 'ssh', x: 560, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', color: '#DC2626', borderColor: '#EF4444', severity: 'critical', glowColor: 'rgba(220,38,38,0.5)' },
-  { id: 'secrets', x: 760, y: 80, icon: Key, label: 'Secrets Mgr', subLabel: 'Accessed', color: '#F97316', borderColor: '#FB923C', severity: 'high', glowColor: 'rgba(249,115,22,0.4)' },
+  { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', color: '#7C3AED', bg: '#F5F3FF', severity: 'high' },
+  { id: 'gateway', x: 240, y: 200, icon: Network, label: 'API Gateway', subLabel: 'Entry Point', color: '#6366F1', bg: '#EEF2FF', severity: 'high' },
+  { id: 'vpc', x: 400, y: 200, icon: Wifi, label: 'VPC', subLabel: 'Network Layer', color: '#3B82F6', bg: '#EFF6FF', severity: 'medium' },
+  { id: 'ec2', x: 560, y: 200, icon: Server, label: 'EC2 Instance', subLabel: 'Compromised', color: '#EF4444', bg: '#FEF2F2', severity: 'critical' },
+  { id: 'iam', x: 720, y: 200, icon: User, label: 'IAM Role', subLabel: 'Escalated', color: '#EF4444', bg: '#FEF2F2', severity: 'critical' },
+  { id: 'database', x: 880, y: 200, icon: Database, label: 'RDS Database', subLabel: 'Data Target', color: '#F97316', bg: '#FFF7ED', severity: 'high' },
+  { id: 'sg', x: 320, y: 80, icon: Shield, label: 'Security Group', subLabel: 'Misconfigured', color: '#EF4444', bg: '#FEF2F2', severity: 'critical' },
+  { id: 'ssh', x: 560, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', color: '#DC2626', bg: '#FEF2F2', severity: 'critical' },
+  { id: 'secrets', x: 760, y: 80, icon: Key, label: 'Secrets Mgr', subLabel: 'Accessed', color: '#F97316', bg: '#FFF7ED', severity: 'high' },
 ];
 
 const EDGES: EdgeDef[] = [
@@ -61,10 +60,10 @@ const AttackPathDiagram: React.FC = () => {
   return (
     <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-card bg-white">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
         <div>
           <h2 className="text-base font-bold text-slate-900">Attack Path Graph</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Interactive security graph with real-time threat flow</p>
+          <p className="text-xs text-slate-500 mt-0.5">Interactive security graph — threat flow analysis</p>
         </div>
         <div className="flex gap-4">
           {[
@@ -81,110 +80,68 @@ const AttackPathDiagram: React.FC = () => {
         </div>
       </div>
 
-      {/* Graph */}
-      <div className="relative overflow-x-auto" style={{ background: 'linear-gradient(135deg, #0a0e1a 0%, #111827 50%, #0f172a 100%)' }}>
-        {/* Subtle grid */}
-        <div className="absolute inset-0 hero-grid-dark opacity-40" />
+      {/* Graph - Light Background */}
+      <div className="relative overflow-x-auto py-4">
+        {/* Subtle dot grid */}
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle, #e2e8f0 0.8px, transparent 0.8px)',
+          backgroundSize: '24px 24px',
+        }} />
         
-        <svg width="960" height="320" viewBox="0 0 960 320" className="w-full relative z-10" preserveAspectRatio="xMidYMid meet">
+        <svg width="960" height="310" viewBox="0 0 960 310" className="w-full relative z-10" preserveAspectRatio="xMidYMid meet">
           <defs>
-            {/* Glow filters for each severity */}
-            <filter id="glow-critical" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feFlood floodColor="#EF4444" floodOpacity="0.4" />
-              <feComposite in2="blur" operator="in" />
-              <feMerge>
-                <feMergeNode />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <filter id="glow-high" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feFlood floodColor="#F97316" floodOpacity="0.3" />
-              <feComposite in2="blur" operator="in" />
-              <feMerge>
-                <feMergeNode />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <filter id="glow-medium" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="blur" />
-              <feFlood floodColor="#3B82F6" floodOpacity="0.25" />
-              <feComposite in2="blur" operator="in" />
-              <feMerge>
-                <feMergeNode />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-
             {/* Arrow markers */}
             {EDGES.map((edge, i) => (
-              <marker key={`m-${i}`} id={`arrow-${i}`} markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-                <polygon points="0 0, 10 3, 0 6" fill={edge.color} opacity="0.9" />
+              <marker key={`m-${i}`} id={`arrow-${i}`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill={edge.color} opacity="0.7" />
               </marker>
             ))}
+            {/* Drop shadow */}
+            <filter id="dash-node-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.08" />
+            </filter>
           </defs>
 
-          {/* ===== EDGES with flowing animation ===== */}
+          {/* ===== EDGES ===== */}
           {EDGES.map((edge, i) => {
             const from = nodeMap[edge.from];
             const to = nodeMap[edge.to];
             if (!from || !to) return null;
 
-            // Calculate midpoint for curved paths
             const dx = to.x - from.x;
             const dy = to.y - from.y;
             const mx = (from.x + to.x) / 2;
             const my = (from.y + to.y) / 2;
             const curveOffset = Math.abs(dy) > 50 ? 0 : (dx > 0 ? -15 : 15);
-            
             const pathD = `M ${from.x} ${from.y} Q ${mx} ${my + curveOffset} ${to.x} ${to.y}`;
 
             return (
               <g key={`edge-${i}`}>
-                {/* Background glow line */}
+                {/* Shadow */}
                 <motion.path
-                  d={pathD}
-                  stroke={edge.color}
-                  strokeWidth="3"
-                  fill="none"
-                  opacity="0.08"
+                  d={pathD} stroke={edge.color} strokeWidth="3" fill="none" opacity="0.06"
                   initial={{ pathLength: 0 }}
                   animate={{ pathLength: 1 }}
-                  transition={{ delay: edge.delay, duration: 0.8, ease: 'easeInOut' }}
+                  transition={{ delay: edge.delay, duration: 0.8 }}
                 />
-                {/* Animated dashed line */}
+                {/* Dashed line */}
                 <motion.path
-                  d={pathD}
-                  stroke={edge.color}
-                  strokeWidth="2"
-                  fill="none"
-                  opacity="0.7"
-                  strokeDasharray="8 6"
-                  className="attack-path-line"
+                  d={pathD} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.4"
+                  strokeDasharray="6 4"
                   markerEnd={`url(#arrow-${i})`}
                   initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 0.7 }}
-                  transition={{ delay: edge.delay, duration: 0.8, ease: 'easeInOut' }}
+                  animate={{ pathLength: 1, opacity: 0.4 }}
+                  transition={{ delay: edge.delay, duration: 0.8 }}
                 />
-                {/* Moving particle dot */}
+                {/* Flowing particle */}
                 <motion.circle
-                  r="3"
-                  fill={edge.color}
-                  opacity="0"
-                  initial={{ opacity: 0 }}
+                  r="3" fill={edge.color}
                   animate={{
-                    opacity: [0, 1, 1, 0],
+                    opacity: [0, 0.8, 0.8, 0],
                     cx: [from.x, mx, to.x],
                     cy: [from.y, my + curveOffset, to.y],
                   }}
-                  transition={{
-                    delay: edge.delay + 0.8,
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: 'linear',
-                    repeatDelay: 1,
-                  }}
+                  transition={{ delay: edge.delay + 0.8, duration: 2, repeat: Infinity, ease: 'linear', repeatDelay: 1 }}
                 />
               </g>
             );
@@ -193,9 +150,6 @@ const AttackPathDiagram: React.FC = () => {
           {/* ===== NODES ===== */}
           {NODES.map((node, i) => {
             const Icon = node.icon;
-            const filterName = node.severity === 'critical' ? 'glow-critical' 
-              : node.severity === 'high' ? 'glow-high' 
-              : 'glow-medium';
 
             return (
               <motion.g
@@ -205,50 +159,31 @@ const AttackPathDiagram: React.FC = () => {
                 transition={{ delay: 0.1 + i * 0.08, duration: 0.4, type: 'spring', stiffness: 200 }}
                 className="cursor-pointer"
               >
-                {/* Outer glow ring for critical */}
+                {/* Pulse ring for critical */}
                 {node.severity === 'critical' && (
                   <motion.circle
                     cx={node.x} cy={node.y} r="30"
-                    fill="none"
-                    stroke={node.color}
-                    strokeWidth="1"
-                    opacity="0.3"
-                    animate={{ opacity: [0.15, 0.35, 0.15], r: [28, 32, 28] }}
+                    fill="none" stroke={node.color} strokeWidth="1"
+                    animate={{ opacity: [0.08, 0.2, 0.08], r: [28, 33, 28] }}
                     transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
                   />
                 )}
 
-                {/* Node circle with glow */}
-                <circle
-                  cx={node.x} cy={node.y} r="24"
-                  fill={node.color}
-                  opacity="0.15"
-                  filter={`url(#${filterName})`}
-                />
-                <circle
-                  cx={node.x} cy={node.y} r="22"
-                  fill="#111827"
-                  stroke={node.borderColor}
-                  strokeWidth="2"
-                />
-                <circle
-                  cx={node.x} cy={node.y} r="22"
-                  fill={node.color}
-                  opacity="0.1"
-                />
+                {/* Node circle */}
+                <circle cx={node.x} cy={node.y} r="22" fill={node.bg} stroke={node.color} strokeWidth="2" filter="url(#dash-node-shadow)" />
 
                 {/* Icon */}
                 <foreignObject x={node.x - 11} y={node.y - 11} width="22" height="22">
                   <div className="flex items-center justify-center h-full w-full">
-                    <Icon className="w-5 h-5" strokeWidth={1.8} style={{ color: node.borderColor }} />
+                    <Icon className="w-5 h-5" strokeWidth={1.8} style={{ color: node.color }} />
                   </div>
                 </foreignObject>
 
                 {/* Label */}
-                <text x={node.x} y={node.y + 38} textAnchor="middle" fill="#e2e8f0" fontSize="11" fontWeight="700" fontFamily="Inter, sans-serif">
+                <text x={node.x} y={node.y + 36} textAnchor="middle" fill="#334155" fontSize="11" fontWeight="700" fontFamily="Inter, sans-serif">
                   {node.label}
                 </text>
-                <text x={node.x} y={node.y + 52} textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="500" fontFamily="Inter, sans-serif">
+                <text x={node.x} y={node.y + 50} textAnchor="middle" fill="#94a3b8" fontSize="9" fontWeight="500" fontFamily="Inter, sans-serif">
                   {node.subLabel}
                 </text>
               </motion.g>

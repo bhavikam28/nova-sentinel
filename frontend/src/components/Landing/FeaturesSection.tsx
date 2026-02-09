@@ -255,12 +255,65 @@ const FeaturesSection: React.FC = () => {
               </div>
             </motion.div>
 
-            {/* Multi-Agent */}
+            {/* Compliance Mapping - wide card */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.3 }}
+              className="lg:col-span-2 group relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white"
+            >
+              <div className="flex items-start gap-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
+                      <Lock className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="px-2 py-0.5 bg-white/10 border border-white/20 rounded-full text-[10px] font-bold">NEW</span>
+                  </div>
+                  <h4 className="font-bold text-lg mb-1">Compliance Mapping</h4>
+                  <p className="text-indigo-100 text-sm leading-relaxed">
+                    Auto-maps every finding to CIS Benchmarks, NIST 800-53, SOC 2, and PCI-DSS. 
+                    No more manual compliance auditing.
+                  </p>
+                </div>
+                <div className="hidden sm:flex flex-col gap-2 text-right">
+                  <div className="px-4 py-2 bg-white/10 rounded-lg border border-white/20">
+                    <div className="text-xl font-black">4</div>
+                    <div className="text-[10px] text-indigo-200">Frameworks</div>
+                  </div>
+                  <div className="px-4 py-2 bg-white/10 rounded-lg border border-white/20">
+                    <div className="text-xl font-black">Auto</div>
+                    <div className="text-[10px] text-indigo-200">Mapped</div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Cost Impact */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.35 }}
+              className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-6 hover:border-emerald-200 hover:shadow-card-hover transition-all"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+                  <BarChart3 className="w-5 h-5 text-white" />
+                </div>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-bold">NEW</span>
+              </div>
+              <h4 className="font-bold text-slate-900 text-sm mb-1">Cost Impact Estimation</h4>
+              <p className="text-xs text-slate-500">Financial exposure analysis with ROI metrics for every incident</p>
+            </motion.div>
+
+            {/* Multi-Agent */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.4 }}
               className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-6 hover:border-sky-200 hover:shadow-card-hover transition-all"
             >
               <div className="flex items-center gap-3 mb-3">
@@ -270,23 +323,6 @@ const FeaturesSection: React.FC = () => {
               </div>
               <h4 className="font-bold text-slate-900 text-sm mb-1">Multi-Agent Orchestration</h4>
               <p className="text-xs text-slate-500">5 specialized agents coordinate with shared state management</p>
-            </motion.div>
-
-            {/* Compliance */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.35 }}
-              className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-6 hover:border-indigo-200 hover:shadow-card-hover transition-all"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-sm">
-                  <Lock className="w-5 h-5 text-white" />
-                </div>
-              </div>
-              <h4 className="font-bold text-slate-900 text-sm mb-1">Compliance Guardrails</h4>
-              <p className="text-xs text-slate-500">CIS Benchmarks, NIST 800-53 & AWS Well-Architected alignment</p>
             </motion.div>
 
           </div>

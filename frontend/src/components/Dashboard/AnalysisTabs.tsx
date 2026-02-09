@@ -1,9 +1,8 @@
 /**
- * Premium Analysis Tabs - Pill-style navigation with animations
+ * Analysis Tabs - Clean pill navigation without bulky icons
  */
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Cloud, PlayCircle, Shield, Zap } from 'lucide-react';
 
 interface AnalysisTabsProps {
   children: {
@@ -16,51 +15,34 @@ const AnalysisTabs: React.FC<AnalysisTabsProps> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<'real' | 'demo'>('demo');
 
   const tabs = [
-    { 
-      id: 'real' as const, 
-      label: 'Real AWS Account', 
-      icon: Cloud,
-      description: 'Analyze live CloudTrail events',
-      accent: 'indigo'
-    },
-    { 
-      id: 'demo' as const, 
-      label: 'Demo Scenarios', 
-      icon: PlayCircle,
-      description: 'Pre-built attack simulations',
-      accent: 'violet'
-    },
+    { id: 'real' as const, label: 'Real AWS Account', live: true },
+    { id: 'demo' as const, label: 'Demo Scenarios', live: false },
   ];
 
   return (
     <div className="w-full">
-      {/* Tab Navigation - Premium Pill Design */}
-      <div className="bg-slate-100 rounded-2xl p-1.5 flex mb-8">
+      <div className="bg-slate-100 rounded-xl p-1 flex mb-6">
         {tabs.map((tab) => {
-          const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 relative px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2.5 ${
-                isActive
-                  ? 'text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
+              className={`flex-1 relative px-5 py-3 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                isActive ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeTabBg"
-                  className="absolute inset-0 bg-white rounded-xl shadow-card"
+                  className="absolute inset-0 bg-white rounded-lg shadow-sm"
                   transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
                 />
               )}
-              <span className="relative z-10 flex items-center gap-2.5">
-                <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
-                {tab.id === 'real' && (
-                  <span className="hidden sm:inline-flex px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full border border-indigo-200">
+              <span className="relative z-10 flex items-center gap-2">
+                {tab.label}
+                {tab.live && (
+                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded border border-emerald-200">
                     LIVE
                   </span>
                 )}
@@ -70,12 +52,11 @@ const AnalysisTabs: React.FC<AnalysisTabsProps> = ({ children }) => {
         })}
       </div>
 
-      {/* Tab Content with Animation */}
       <motion.div
         key={activeTab}
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+        transition={{ duration: 0.2 }}
       >
         {activeTab === 'real' ? children.realAWS : children.demo}
       </motion.div>
