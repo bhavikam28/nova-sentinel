@@ -55,11 +55,11 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
         id: 'welcome',
         role: 'assistant',
         text: isAnalysisComplete
-          ? `I'm Nova Sentinel's AI assistant, powered by Amazon Nova Sonic. I can answer questions about incident ${incidentId || 'analysis'}, explain attack patterns, compliance impacts, or help with remediation. Try asking "What's the root cause?" or "Explain the blast radius."`
-          : "I'm Nova Sentinel's AI assistant. Start an analysis to ask me questions about security incidents, or ask me about AWS security best practices.",
+          ? `Hi, I'm Aria — Nova Sentinel's security intelligence assistant. I'm here to help you understand incident ${incidentId || 'analysis'}. Ask me about the root cause, attack patterns, compliance impacts, cost estimates, or remediation steps.`
+          : "Hi, I'm Aria — Nova Sentinel's AI-powered security assistant. Start an analysis, and I can walk you through findings, explain threats, or recommend next steps. You can also ask me about AWS security best practices.",
         timestamp: new Date(),
         suggestions: isAnalysisComplete 
-          ? ['What is the root cause?', 'Show compliance impact', 'Estimate cost impact', 'Explain remediation steps']
+          ? ['What is the root cause?', 'Explain the attack path', 'Show compliance impact', 'Estimate cost impact']
           : ['How does Nova Sentinel work?', 'What scenarios can you analyze?', 'Explain multi-agent architecture']
       }]);
     }
@@ -116,16 +116,69 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     }
   }, []);
 
-  // Text-to-speech
+  // Get a female voice from available voices
+  const getFemaleVoice = useCallback(() => {
+    const voices = window.speechSynthesis.getVoices();
+    // Prefer these female voices (ordered by quality/naturalness)
+    const preferredFemale = [
+      'Microsoft Aria Online (Natural)',
+      'Microsoft Jenny Online (Natural)',
+      'Google UK English Female',
+      'Google US English',
+      'Samantha',
+      'Karen',
+      'Moira',
+      'Tessa',
+      'Victoria',
+      'Microsoft Zira',
+      'Microsoft Aria',
+      'Microsoft Jenny',
+    ];
+    
+    for (const name of preferredFemale) {
+      const voice = voices.find(v => v.name.includes(name));
+      if (voice) return voice;
+    }
+    
+    // Fallback: find any female-sounding voice
+    const femaleVoice = voices.find(v => 
+      v.name.toLowerCase().includes('female') ||
+      v.name.includes('Zira') ||
+      v.name.includes('Hazel') ||
+      v.name.includes('Susan') ||
+      v.name.includes('Aria')
+    );
+    if (femaleVoice) return femaleVoice;
+    
+    // Final fallback: second voice (often female on most systems)
+    return voices.length > 1 ? voices[1] : voices[0] || null;
+  }, []);
+
+  // Preload voices (Chrome loads them async)
+  useEffect(() => {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+  }, []);
+
+  // Text-to-speech with female voice
   const speak = useCallback((text: string) => {
     if (!speechEnabled) return;
     
     window.speechSynthesis.cancel();
     
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 0.8;
+    
+    // Select a female voice
+    const femaleVoice = getFemaleVoice();
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
+    }
+    
+    utterance.rate = 0.95;
+    utterance.pitch = 1.1;
+    utterance.volume = 0.85;
     
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -133,7 +186,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     
     synthRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [speechEnabled]);
+  }, [speechEnabled, getFemaleVoice]);
 
   const stopSpeaking = useCallback(() => {
     window.speechSynthesis.cancel();
@@ -156,46 +209,69 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     setInputText('');
     setIsProcessing(true);
 
-    try {
-      const response = await fetch('http://localhost:8000/api/voice/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: query.trim(),
-          incident_context: incidentContext || null
-        })
-      });
+    const maxRetries = 2;
+    let lastError: any = null;
 
-      const data = await response.json();
-      
-      const assistantMessage: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        text: data.response_text || data.detail || 'I encountered an issue processing your query.',
-        action: data.action,
-        severity: data.severity_assessment,
-        suggestions: data.follow_up_suggestions,
-        timestamp: new Date(),
-        processingTime: data.processing_time_ms
-      };
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch('http://localhost:8000/api/voice/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query.trim(),
+            incident_context: incidentContext || null
+          })
+        });
 
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Speak the response
-      if (speechEnabled && data.response_text) {
-        speak(data.response_text);
+        const data = await response.json();
+        
+        // Check if response indicates an error/empty response — retry if so
+        const responseText = data.response_text || '';
+        if (attempt < maxRetries && (
+          responseText.includes('encountered an error') || 
+          responseText.includes('encountered an issue') ||
+          responseText.length < 10 ||
+          data.error
+        )) {
+          lastError = data;
+          continue; // Retry
+        }
+        
+        const assistantMessage: ChatMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          text: responseText || data.detail || 'Let me try to help with that. Could you rephrase your question?',
+          action: data.action,
+          severity: data.severity_assessment,
+          suggestions: data.follow_up_suggestions,
+          timestamp: new Date(),
+          processingTime: data.processing_time_ms
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        
+        // Speak the response
+        if (speechEnabled && responseText) {
+          speak(responseText);
+        }
+        setIsProcessing(false);
+        return; // Success — exit
+      } catch (err) {
+        lastError = err;
+        if (attempt < maxRetries) continue; // Retry on network error
       }
-    } catch (err) {
-      const errorMessage: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        text: 'Unable to reach Nova Sonic backend. Make sure the server is running on port 8000.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
     }
+
+    // All retries exhausted
+    const errorMessage: ChatMessage = {
+      id: `error-${Date.now()}`,
+      role: 'assistant',
+      text: 'I had trouble processing that. Could you try rephrasing your question? For example, ask about "the attack pattern" or "remediation steps".',
+      timestamp: new Date(),
+      suggestions: ['What is the root cause?', 'Explain the attack pattern', 'Show remediation steps']
+    };
+    setMessages(prev => [...prev, errorMessage]);
+    setIsProcessing(false);
   };
 
   // Handle suggestion click
@@ -272,8 +348,8 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                   <Volume2 className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Nova Sonic Assistant</h3>
-                  <p className="text-[10px] text-white/70">Powered by Amazon Nova Sonic</p>
+                  <h3 className="text-sm font-bold text-white">Aria</h3>
+                  <p className="text-[10px] text-white/70">Security Intelligence by Nova Sonic</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -352,7 +428,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                     {/* Processing time */}
                     {msg.processingTime && (
                       <p className="text-[9px] text-slate-400 mt-1.5">
-                        Nova Sonic | {msg.processingTime}ms
+                        Aria via Nova Sonic | {msg.processingTime}ms
                       </p>
                     )}
                   </div>
@@ -459,7 +535,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
               </div>
               
               <p className="text-[9px] text-slate-400 text-center mt-2">
-                Nova Sonic Voice AI | Click mic to speak or type your question
+                Aria | Powered by Amazon Nova Sonic
               </p>
             </div>
           </motion.div>
