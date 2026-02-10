@@ -3,10 +3,11 @@ Nova Sentinel — FastAPI Application
 AI-Powered Security Incident Response using Amazon Nova
 
 Architecture:
-- Framework: FastAPI + Strands Agents SDK + MCP Server
+- Framework: FastAPI + Strands Agents SDK + MCP Server (FastMCP)
 - Models: Nova 2 Lite, Nova Pro, Nova Micro, Nova 2 Sonic, Nova Canvas, Nova Act
 - Protocol: Model Context Protocol (MCP) via FastMCP
 - Orchestration: Strands Agents SDK with @tool decorators
+- AWS MCP Servers: CloudTrail, IAM, CloudWatch, Nova Canvas
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,14 +39,18 @@ async def lifespan(app: FastAPI):
     logger.info(f"Nova 2 Sonic: {settings.nova_sonic_model_id}")
     logger.info(f"Nova Canvas: {settings.nova_canvas_model_id}")
     logger.info("Frameworks: Strands Agents SDK (real) + MCP Server (FastMCP)")
+    logger.info("AWS MCP Servers: CloudTrail, IAM, CloudWatch, Nova Canvas")
     yield
 
 # Create FastAPI app
 app = FastAPI(
     title="Nova Sentinel",
-    description="AI-Powered Security Incident Response using Amazon Nova — "
-                "Strands Agents SDK + MCP Server + 6 Nova Models",
-    version="2.0.0",
+    description=(
+        "AI-Powered Security Incident Response using Amazon Nova — "
+        "Strands Agents SDK + MCP Server + 6 Nova Models + "
+        "4 AWS MCP Servers (CloudTrail, IAM, CloudWatch, Nova Canvas)"
+    ),
+    version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
@@ -88,9 +93,9 @@ async def root():
     """Root endpoint"""
     return {
         "service": "Nova Sentinel",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "status": "running",
-        "description": "AI-Powered Security Incident Response",
+        "description": "AI-Powered Security Incident Response — Multi-MCP Orchestration Platform",
         "frameworks": {
             "strands": "strands-agents SDK (real)",
             "mcp": "MCP Server via FastMCP (real)",
@@ -103,7 +108,13 @@ async def root():
             "nova_2_sonic": settings.nova_sonic_model_id,
             "nova_canvas": settings.nova_canvas_model_id,
             "nova_act": "nova-act SDK (browser automation)",
-        }
+        },
+        "mcp_servers": [
+            "cloudtrail-mcp-server — CloudTrail event analysis & anomaly detection",
+            "iam-mcp-server — IAM security auditing & policy analysis",
+            "cloudwatch-mcp-server — Security monitoring & billing anomalies",
+            "nova-canvas-mcp-server — Visual report generation (awslabs/mcp)",
+        ],
     }
 
 
@@ -121,10 +132,16 @@ async def health_check():
             "nova_canvas": settings.nova_canvas_model_id,
         },
         "frameworks": {
-            "mcp": "MCP Server (FastMCP) — standards-compliant",
-            "strands": "Strands Agents SDK — real @tool decorators",
+            "mcp": "MCP Server (FastMCP) — 22 tools, 4 AWS MCP servers",
+            "strands": "Strands Agents SDK — 12 @tool decorators",
             "nova_act": "Nova Act SDK — browser automation",
-        }
+        },
+        "mcp_servers": {
+            "cloudtrail": "cloudtrail-mcp-server (awslabs/mcp pattern)",
+            "iam": "iam-mcp-server (awslabs/mcp pattern)",
+            "cloudwatch": "cloudwatch-mcp-server (awslabs/mcp pattern)",
+            "nova_canvas": "nova-canvas-mcp-server (awslabs/mcp official)",
+        },
     }
 
 

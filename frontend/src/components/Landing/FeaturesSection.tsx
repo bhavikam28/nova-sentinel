@@ -79,6 +79,116 @@ const FeaturesSection: React.FC = () => {
         </div>
       </div>
 
+      {/* ============ MCP SERVER ARCHITECTURE ============ */}
+      <div className="py-20 bg-gradient-to-b from-slate-50 via-violet-50/30 to-indigo-50/20 border-y border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-50 border border-violet-100 mb-5">
+              <Network className="w-4 h-4 text-violet-600" />
+              <span className="text-sm font-semibold text-violet-700">Multi-MCP Orchestration</span>
+            </div>
+            <h2 className="text-3xl lg:text-4xl font-black text-slate-900 mb-3 tracking-tight">
+              4 AWS MCP Servers, Unified Pipeline
+            </h2>
+            <p className="text-base text-slate-500 max-w-2xl mx-auto">
+              Orchestrates official AWS MCP servers through Strands Agents SDK — 
+              CloudTrail for detection, IAM for remediation, CloudWatch for monitoring, Nova Canvas for visuals.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                name: 'CloudTrail MCP',
+                source: 'awslabs/mcp pattern',
+                tools: ['Event Lookup', 'Trail Status', 'Anomaly Scan'],
+                color: 'from-orange-500 to-amber-600',
+                bgColor: 'bg-orange-50 border-orange-200',
+                textColor: 'text-orange-700',
+                description: 'Security event analysis and real-time anomaly detection across your AWS environment',
+              },
+              {
+                name: 'IAM MCP',
+                source: 'awslabs/mcp pattern',
+                tools: ['User Audit', 'Role Audit', 'Policy Analysis', 'Account Summary'],
+                color: 'from-blue-500 to-indigo-600',
+                bgColor: 'bg-blue-50 border-blue-200',
+                textColor: 'text-blue-700',
+                description: 'IAM security auditing — MFA compliance, access key rotation, admin access detection',
+              },
+              {
+                name: 'CloudWatch MCP',
+                source: 'awslabs/mcp pattern',
+                tools: ['Security Alarms', 'API Metrics', 'EC2 Security', 'Billing Anomalies'],
+                color: 'from-emerald-500 to-teal-600',
+                bgColor: 'bg-emerald-50 border-emerald-200',
+                textColor: 'text-emerald-700',
+                description: 'Monitoring crypto-mining, data exfiltration, and billing anomalies via CloudWatch metrics',
+              },
+              {
+                name: 'Nova Canvas MCP',
+                source: 'awslabs/mcp official',
+                tools: ['Image Generation', 'Report Covers', 'Attack Path Visuals'],
+                color: 'from-violet-500 to-purple-600',
+                bgColor: 'bg-violet-50 border-violet-200',
+                textColor: 'text-violet-700',
+                description: 'Visual report generation using Amazon Nova Canvas — incident covers and diagrams',
+              },
+            ].map((server, i) => (
+              <motion.div
+                key={server.name}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className="relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-5 hover:shadow-card-hover transition-all group"
+              >
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${server.color} flex items-center justify-center shadow-sm mb-3`}>
+                  <Network className="w-5 h-5 text-white" />
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm mb-0.5">{server.name}</h4>
+                <p className={`text-[10px] font-semibold ${server.textColor} mb-2`}>{server.source}</p>
+                <p className="text-xs text-slate-500 mb-3 leading-relaxed">{server.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {server.tools.map((tool) => (
+                    <span key={tool} className={`px-2 py-0.5 text-[9px] font-semibold rounded-full border ${server.bgColor}`}>
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Architecture stats */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
+            className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
+          >
+            {[
+              { label: 'MCP Tools', value: '22', sub: 'Registered' },
+              { label: 'Strands Tools', value: '12', sub: '@tool decorated' },
+              { label: 'Nova Models', value: '6', sub: 'Integrated' },
+              { label: 'AWS Services', value: '7+', sub: 'Connected' },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center px-4 py-4 bg-white/60 rounded-xl border border-slate-100">
+                <div className="text-2xl font-black text-slate-900">{stat.value}</div>
+                <div className="text-xs font-bold text-slate-600">{stat.label}</div>
+                <div className="text-[10px] text-slate-400">{stat.sub}</div>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      </div>
+
       {/* ============ CAPABILITIES BENTO GRID ============ */}
       <div className="py-20 bg-gradient-to-b from-slate-50/70 via-blue-50/20 to-slate-50 border-t border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

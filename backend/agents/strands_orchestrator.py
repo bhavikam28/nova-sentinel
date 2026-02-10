@@ -6,6 +6,12 @@ Each security capability is registered as a Strands @tool.
 The Strands Agent uses Amazon Nova 2 Lite to plan and execute
 the optimal sequence of tools based on the incident context.
 
+Integrates AWS MCP server tools alongside core Nova agent tools:
+- CloudTrail MCP — event lookup, anomaly scanning
+- IAM MCP — user/role auditing, policy analysis
+- CloudWatch MCP — security metrics, billing anomalies
+- Nova Canvas MCP — visual report generation
+
 pip install strands-agents strands-agents-tools
 """
 import json
@@ -24,6 +30,10 @@ from agents.risk_scorer_agent import RiskScorerAgent
 from agents.remediation_agent import RemediationAgent
 from agents.voice_agent import VoiceAgent
 from agents.documentation_agent import DocumentationAgent
+from mcp_servers.cloudtrail_mcp import get_cloudtrail_mcp
+from mcp_servers.iam_mcp import get_iam_mcp
+from mcp_servers.cloudwatch_mcp import get_cloudwatch_mcp
+from mcp_servers.nova_canvas_mcp import get_nova_canvas_mcp
 from utils.logger import logger
 
 
@@ -74,9 +84,9 @@ def _get_agents():
     }
 
 
-# ========== STRANDS TOOLS ==========
-# Each tool is decorated with @tool from the real strands-agents SDK.
-# These tools wrap our existing Nova-powered agents.
+# ================================================================
+# CORE STRANDS TOOLS — Nova Agent Wrappers
+# ================================================================
 
 @tool
 def analyze_security_timeline(events_json: str, incident_type: str = "Unknown") -> str:
@@ -208,33 +218,191 @@ def query_security_incident(query: str, incident_context_json: str = "{}") -> st
     return json.dumps(result)
 
 
+# ================================================================
+# AWS MCP SERVER TOOLS — Strands-registered wrappers
+# ================================================================
+
+@tool
+def cloudtrail_lookup(event_category: str = "all", days_back: int = 7, max_results: int = 50) -> str:
+    """Lookup CloudTrail events using the official CloudTrail MCP server pattern.
+    
+    Filters events by security category and classifies severity.
+    Categories: iam, network, data, compute, or all.
+    
+    Args:
+        event_category: Filter category
+        days_back: Days to look back
+        max_results: Maximum events
+    
+    Returns:
+        JSON with events, severity summary, and risk indicators.
+    """
+    ct = get_cloudtrail_mcp()
+    result = _run_async(ct.lookup_security_events(event_category, days_back, max_results))
+    return json.dumps(result)
+
+
+@tool
+def cloudtrail_anomaly_scan(days_back: int = 1) -> str:
+    """Scan CloudTrail for security anomalies using the CloudTrail MCP server.
+    
+    Detects root account usage, console logins without MFA,
+    access key creation, security group changes, and evasion attempts.
+    
+    Args:
+        days_back: Days to scan
+    
+    Returns:
+        JSON with anomalies found and risk assessment.
+    """
+    ct = get_cloudtrail_mcp()
+    result = _run_async(ct.scan_for_anomalies(days_back))
+    return json.dumps(result)
+
+
+@tool
+def iam_audit(audit_type: str = "users") -> str:
+    """Audit IAM users or roles using the official IAM MCP server pattern.
+    
+    Checks MFA compliance, access key age, admin access,
+    trust policies, and cross-account configurations.
+    
+    Args:
+        audit_type: "users" or "roles"
+    
+    Returns:
+        JSON with findings, risk scores, and remediation commands.
+    """
+    iam = get_iam_mcp()
+    if audit_type == "roles":
+        result = _run_async(iam.audit_iam_roles())
+    else:
+        result = _run_async(iam.audit_iam_users())
+    return json.dumps(result)
+
+
+@tool
+def iam_policy_analysis(policy_arn: str) -> str:
+    """Analyze a specific IAM policy using the IAM MCP server.
+    
+    Examines policy for wildcard actions, wildcard resources,
+    overly broad permissions, and security violations.
+    
+    Args:
+        policy_arn: ARN of the policy to analyze
+    
+    Returns:
+        JSON with permissions, findings, and risk level.
+    """
+    iam = get_iam_mcp()
+    result = _run_async(iam.analyze_policy(policy_arn))
+    return json.dumps(result)
+
+
+@tool
+def cloudwatch_security_check() -> str:
+    """Check CloudWatch for security alarms and EC2 anomalies.
+    
+    Uses the CloudWatch MCP server to monitor security alarms
+    and detect crypto-mining or data exfiltration via metrics.
+    
+    Returns:
+        JSON with alarm status, EC2 metrics, and risk assessment.
+    """
+    cw = get_cloudwatch_mcp()
+    alarms = _run_async(cw.get_security_alarms())
+    ec2 = _run_async(cw.get_ec2_security_metrics())
+    return json.dumps({"alarms": alarms, "ec2_security": ec2})
+
+
+@tool
+def cloudwatch_billing_check(days_back: int = 7) -> str:
+    """Check for billing anomalies using the CloudWatch MCP server.
+    
+    Monitors estimated charges for unusual cost increases
+    that may indicate unauthorized resource usage.
+    
+    Args:
+        days_back: Days to analyze
+    
+    Returns:
+        JSON with billing metrics and anomaly detection.
+    """
+    cw = get_cloudwatch_mcp()
+    result = _run_async(cw.get_billing_anomalies(days_back))
+    return json.dumps(result)
+
+
+@tool
+def nova_canvas_generate_report_cover(incident_type: str, severity: str = "CRITICAL", incident_id: str = "INC-000000") -> str:
+    """Generate a visual security report cover using the Nova Canvas MCP server.
+    
+    Creates a professional incident report cover image using
+    Amazon Nova Canvas (following awslabs/mcp pattern).
+    
+    Args:
+        incident_type: Type of incident
+        severity: Severity level
+        incident_id: Incident identifier
+    
+    Returns:
+        JSON with base64-encoded image and metadata.
+    """
+    nc = get_nova_canvas_mcp()
+    result = _run_async(nc.generate_security_report_cover(incident_type, severity, incident_id))
+    return json.dumps(result)
+
+
 # ========== ALL STRANDS TOOLS ==========
 STRANDS_TOOLS = [
+    # Core Nova agent tools
     analyze_security_timeline,
     score_event_risk,
     generate_remediation,
     generate_incident_documentation,
     query_security_incident,
+    # AWS MCP server tools
+    cloudtrail_lookup,
+    cloudtrail_anomaly_scan,
+    iam_audit,
+    iam_policy_analysis,
+    cloudwatch_security_check,
+    cloudwatch_billing_check,
+    nova_canvas_generate_report_cover,
 ]
 
 
 # ========== STRANDS AGENT ==========
 
-SYSTEM_PROMPT = """You are Nova Sentinel's security orchestrator, powered by Amazon Nova 2 Lite.
+SYSTEM_PROMPT = """You are Nova Sentinel's security orchestrator, powered by Amazon Nova 2 Lite
+and coordinating multiple AWS MCP servers through the Strands Agents SDK.
 
-You coordinate multiple AI-powered security tools to analyze AWS CloudTrail incidents:
+You have access to these tool categories:
 
-1. **analyze_security_timeline** — Build attack timeline from CloudTrail events (Nova 2 Lite)
-2. **score_event_risk** — Fast risk scoring per event (Nova Micro)
-3. **generate_remediation** — Step-by-step remediation plans (Nova 2 Lite)
-4. **generate_incident_documentation** — JIRA/Slack/Confluence docs (Nova 2 Lite)
-5. **query_security_incident** — Answer questions about incidents (Nova 2 Lite)
+CORE ANALYSIS (Nova AI Models):
+1. analyze_security_timeline — Build attack timeline from CloudTrail events (Nova 2 Lite)
+2. score_event_risk — Fast risk scoring per event (Nova Micro)
+3. generate_remediation — Step-by-step remediation plans (Nova 2 Lite)
+4. generate_incident_documentation — JIRA/Slack/Confluence docs (Nova 2 Lite)
+5. query_security_incident — Answer questions about incidents (Nova 2 Lite)
+
+AWS MCP SERVER TOOLS:
+6. cloudtrail_lookup — Lookup CloudTrail events by category (cloudtrail-mcp-server)
+7. cloudtrail_anomaly_scan — Scan for security anomalies (cloudtrail-mcp-server)
+8. iam_audit — Audit IAM users/roles for issues (iam-mcp-server)
+9. iam_policy_analysis — Analyze specific IAM policies (iam-mcp-server)
+10. cloudwatch_security_check — Monitor security alarms and EC2 metrics (cloudwatch-mcp-server)
+11. cloudwatch_billing_check — Detect billing anomalies (cloudwatch-mcp-server)
+12. nova_canvas_generate_report_cover — Generate visual report covers (nova-canvas-mcp-server)
 
 When analyzing an incident:
-- Always start with analyze_security_timeline to understand the attack
-- Then score individual high-risk events with score_event_risk
-- Generate remediation based on the timeline findings
+- Start with cloudtrail_lookup or analyze_security_timeline to understand the attack
+- Use iam_audit to check for IAM-related vulnerabilities
+- Score individual high-risk events with score_event_risk
+- Check cloudwatch_security_check for monitoring gaps
+- Generate remediation based on findings
 - Create documentation for the incident response team
+- Use nova_canvas_generate_report_cover for visual reports
 
 Be concise, actionable, and security-focused in your responses."""
 
@@ -258,12 +426,15 @@ class StrandsOrchestrator:
     Provides two modes:
     1. Pipeline mode — deterministic tool execution for the demo
     2. Agent mode — let the Strands Agent plan and execute autonomously
+    
+    Integrates AWS MCP server tools alongside core Nova agent tools.
     """
     
     def __init__(self):
         self.execution_history: List[Dict[str, Any]] = []
         self._agent = None
-        logger.info("StrandsOrchestrator initialized with real strands-agents SDK")
+        logger.info(f"StrandsOrchestrator initialized with {len(STRANDS_TOOLS)} Strands tools "
+                     f"(5 core + 7 AWS MCP server tools)")
     
     @property
     def agent(self) -> Agent:
@@ -271,7 +442,7 @@ class StrandsOrchestrator:
         if self._agent is None:
             self._agent = create_strands_agent()
             logger.info("Strands Agent created with tools: " + 
-                        ", ".join(t.tool_name if hasattr(t, 'tool_name') else str(t) for t in STRANDS_TOOLS))
+                        ", ".join(t.tool_name if hasattr(t, 'tool_name') else t.__name__ for t in STRANDS_TOOLS))
         return self._agent
     
     async def plan_and_execute(
@@ -399,6 +570,12 @@ class StrandsOrchestrator:
                 "incident_type": incident_type,
                 "tools_used": list(state["tools"].keys()),
                 "framework": "strands-agents",
+                "mcp_servers": [
+                    "cloudtrail-mcp-server",
+                    "iam-mcp-server",
+                    "cloudwatch-mcp-server",
+                    "nova-canvas-mcp-server",
+                ],
                 "sdk_version": "real",
             }
         }
@@ -424,10 +601,23 @@ class StrandsOrchestrator:
         for t in STRANDS_TOOLS:
             name = t.tool_name if hasattr(t, 'tool_name') else t.__name__
             doc = t.__doc__ or ""
+            # Determine source
+            if name.startswith("cloudtrail_"):
+                source = "cloudtrail-mcp-server"
+            elif name.startswith("iam_"):
+                source = "iam-mcp-server"
+            elif name.startswith("cloudwatch_"):
+                source = "cloudwatch-mcp-server"
+            elif name.startswith("nova_canvas_"):
+                source = "nova-canvas-mcp-server"
+            else:
+                source = "nova-agent"
+            
             tools_info.append({
                 "name": name,
                 "description": doc.strip().split("\n")[0] if doc else "",
                 "framework": "strands-agents",
+                "source": source,
             })
         return tools_info
     

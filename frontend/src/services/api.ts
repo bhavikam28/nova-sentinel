@@ -277,7 +277,7 @@ export const mcpAPI = {
   },
 
   /**
-   * List MCP tools
+   * List MCP tools (includes all AWS MCP server tools)
    */
   listTools: async (): Promise<any> => {
     const response = await api.get('/api/mcp/tools');
@@ -285,7 +285,7 @@ export const mcpAPI = {
   },
 
   /**
-   * Call an MCP tool
+   * Call an MCP tool by name
    */
   callTool: async (toolName: string, args: any): Promise<any> => {
     const response = await api.post('/api/mcp/call-tool', {
@@ -320,6 +320,166 @@ export const mcpAPI = {
    */
   healthCheck: async (): Promise<any> => {
     const response = await api.get('/api/mcp/health');
+    return response.data;
+  },
+};
+
+// ================================================================
+// AWS MCP SERVER APIs
+// ================================================================
+
+export const cloudtrailMCPAPI = {
+  /**
+   * Lookup CloudTrail events using the CloudTrail MCP server
+   */
+  lookupEvents: async (category: string = 'all', daysBack: number = 7, maxResults: number = 50): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudtrail/events', {
+      params: { category, days_back: daysBack, max_results: maxResults },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get CloudTrail trail status
+   */
+  getTrailStatus: async (): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudtrail/trail-status');
+    return response.data;
+  },
+
+  /**
+   * Scan for CloudTrail anomalies
+   */
+  scanAnomalies: async (daysBack: number = 1): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudtrail/anomalies', {
+      params: { days_back: daysBack },
+    });
+    return response.data;
+  },
+};
+
+export const iamMCPAPI = {
+  /**
+   * Audit IAM users
+   */
+  auditUsers: async (): Promise<any> => {
+    const response = await api.get('/api/mcp/iam/audit-users');
+    return response.data;
+  },
+
+  /**
+   * Audit IAM roles
+   */
+  auditRoles: async (): Promise<any> => {
+    const response = await api.get('/api/mcp/iam/audit-roles');
+    return response.data;
+  },
+
+  /**
+   * Get IAM account summary
+   */
+  getAccountSummary: async (): Promise<any> => {
+    const response = await api.get('/api/mcp/iam/account-summary');
+    return response.data;
+  },
+
+  /**
+   * Analyze a specific IAM policy
+   */
+  analyzePolicy: async (policyArn: string): Promise<any> => {
+    const response = await api.post('/api/mcp/iam/analyze-policy', null, {
+      params: { policy_arn: policyArn },
+    });
+    return response.data;
+  },
+};
+
+export const cloudwatchMCPAPI = {
+  /**
+   * Get CloudWatch security alarms
+   */
+  getAlarms: async (): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudwatch/alarms');
+    return response.data;
+  },
+
+  /**
+   * Get API call volume metrics
+   */
+  getApiMetrics: async (hoursBack: number = 24): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudwatch/api-metrics', {
+      params: { hours_back: hoursBack },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get EC2 security metrics (crypto-mining, exfiltration detection)
+   */
+  getEC2Security: async (hoursBack: number = 6): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudwatch/ec2-security', {
+      params: { hours_back: hoursBack },
+    });
+    return response.data;
+  },
+
+  /**
+   * Check for billing anomalies
+   */
+  getBillingAnomalies: async (daysBack: number = 7): Promise<any> => {
+    const response = await api.get('/api/mcp/cloudwatch/billing', {
+      params: { days_back: daysBack },
+    });
+    return response.data;
+  },
+};
+
+export const novaCanvasMCPAPI = {
+  /**
+   * Generate an image using Nova Canvas MCP server
+   */
+  generateImage: async (prompt: string, options?: {
+    negativePrompt?: string;
+    width?: number;
+    height?: number;
+    quality?: string;
+    cfgScale?: number;
+    seed?: number;
+    numImages?: number;
+  }): Promise<any> => {
+    const response = await api.post('/api/mcp/nova-canvas/generate', {
+      prompt,
+      negative_prompt: options?.negativePrompt || '',
+      width: options?.width || 1024,
+      height: options?.height || 1024,
+      quality: options?.quality || 'standard',
+      cfg_scale: options?.cfgScale || 8.0,
+      seed: options?.seed || 0,
+      num_images: options?.numImages || 1,
+    });
+    return response.data;
+  },
+
+  /**
+   * Generate security report cover using Nova Canvas
+   */
+  generateReportCover: async (incidentType: string, severity: string = 'CRITICAL', incidentId: string = 'INC-000000'): Promise<any> => {
+    const response = await api.post('/api/mcp/nova-canvas/report-cover', {
+      incident_type: incidentType,
+      severity,
+      incident_id: incidentId,
+    });
+    return response.data;
+  },
+
+  /**
+   * Generate attack path visualization using Nova Canvas
+   */
+  generateAttackPathVisual: async (attackStages: string[], severity: string = 'CRITICAL'): Promise<any> => {
+    const response = await api.post('/api/mcp/nova-canvas/attack-path', {
+      attack_stages: attackStages,
+      severity,
+    });
     return response.data;
   },
 };
