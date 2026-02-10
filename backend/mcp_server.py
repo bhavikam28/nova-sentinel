@@ -1,20 +1,20 @@
 """
 Nova Sentinel MCP Server
-Model Context Protocol server exposing security analysis tools.
+Standards-compliant Model Context Protocol server using the real mcp package.
+
+Uses FastMCP from the official mcp Python SDK to expose security analysis tools
+as MCP-compatible services that any MCP client can discover and invoke.
+
+pip install mcp
 
 Run standalone: python mcp_server.py
-Or import tools for use with Strands agents.
-
-This MCP server exposes Nova Sentinel's security capabilities as
-standardized tools that any MCP-compatible client can use.
+Or mount the SSE app into FastAPI for web access.
 """
 import json
 import asyncio
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 
-# MCP Server implementation using FastAPI-compatible approach
-# This can be used standalone or integrated with strands-agents
+from mcp.server.fastmcp import FastMCP
 
 from agents.temporal_agent import TemporalAgent
 from agents.risk_scorer_agent import RiskScorerAgent
@@ -24,209 +24,176 @@ from agents.documentation_agent import DocumentationAgent
 from utils.logger import logger
 from utils.mock_data import generate_crypto_mining_scenario, generate_data_exfiltration_scenario
 
-# Initialize agents
-temporal_agent = TemporalAgent()
-risk_scorer = RiskScorerAgent()
-remediation_agent = RemediationAgent()
-voice_agent = VoiceAgent()
-documentation_agent = DocumentationAgent()
+
+# ========== CREATE MCP SERVER ==========
+# Using the official MCP Python SDK (mcp>=1.11.0)
+
+mcp_server = FastMCP(
+    "nova-sentinel-security",
+    instructions="Nova Sentinel — AI-powered AWS security analysis via Model Context Protocol. "
+                 "Exposes CloudTrail analysis, risk scoring, remediation planning, and documentation generation.",
+)
+
+# ========== LAZY AGENT INITIALIZATION ==========
+
+_agents = {}
+
+def _get_agent(name: str):
+    """Lazy-initialize agents to avoid startup overhead."""
+    if name not in _agents:
+        if name == "temporal":
+            _agents[name] = TemporalAgent()
+        elif name == "risk_scorer":
+            _agents[name] = RiskScorerAgent()
+        elif name == "remediation":
+            _agents[name] = RemediationAgent()
+        elif name == "voice":
+            _agents[name] = VoiceAgent()
+        elif name == "documentation":
+            _agents[name] = DocumentationAgent()
+    return _agents[name]
 
 
-# ========== MCP TOOL DEFINITIONS ==========
-# These define the tools available through the MCP protocol
+# ========== MCP TOOLS ==========
+# Each tool is registered with @mcp_server.tool() from the real MCP SDK.
 
-MCP_TOOLS = [
-    {
-        "name": "analyze_security_events",
-        "description": "Analyze CloudTrail security events to build an attack timeline, identify root cause, attack pattern, and blast radius. Uses Nova 2 Lite for temporal reasoning.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "events": {
-                    "type": "array",
-                    "description": "List of CloudTrail event objects to analyze",
-                    "items": {"type": "object"}
-                },
-                "incident_type": {
-                    "type": "string",
-                    "description": "Type of incident (e.g., crypto-mining, data-exfiltration, privilege-escalation)",
-                    "default": "Unknown"
-                }
-            },
-            "required": ["events"]
-        }
-    },
-    {
-        "name": "score_event_risk",
-        "description": "Score the risk level of a single security event using Nova Micro for ultra-fast classification. Returns severity, confidence, and MITRE ATT&CK mapping.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "event": {
-                    "type": "object",
-                    "description": "CloudTrail event to score"
-                }
-            },
-            "required": ["event"]
-        }
-    },
-    {
-        "name": "generate_remediation_plan",
-        "description": "Generate a step-by-step remediation plan for a security incident. Includes AWS CLI commands, IAM policy fixes, and compliance alignment.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "root_cause": {
-                    "type": "string",
-                    "description": "Root cause of the incident"
-                },
-                "attack_pattern": {
-                    "type": "string",
-                    "description": "Identified attack pattern"
-                },
-                "blast_radius": {
-                    "type": "string",
-                    "description": "Scope of impact"
-                },
-                "timeline_events": {
-                    "type": "array",
-                    "description": "Timeline events from analysis",
-                    "items": {"type": "object"}
-                }
-            },
-            "required": ["root_cause", "attack_pattern"]
-        }
-    },
-    {
-        "name": "query_incident",
-        "description": "Ask a natural language question about a security incident. Uses Nova Sonic for conversational understanding.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Natural language question about the incident"
-                },
-                "incident_context": {
-                    "type": "object",
-                    "description": "Current incident data for context",
-                    "default": None
-                }
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "generate_documentation",
-        "description": "Generate incident documentation including JIRA tickets, Slack messages, and Confluence post-mortem pages.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "incident_id": {
-                    "type": "string",
-                    "description": "Incident identifier"
-                },
-                "timeline": {
-                    "type": "object",
-                    "description": "Analysis timeline data"
-                },
-                "remediation_plan": {
-                    "type": "object",
-                    "description": "Generated remediation plan"
-                }
-            },
-            "required": ["incident_id", "timeline"]
-        }
-    },
-    {
-        "name": "list_demo_scenarios",
-        "description": "List available demo security scenarios for testing.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {}
-        }
-    },
-    {
-        "name": "get_demo_events",
-        "description": "Get CloudTrail events for a specific demo scenario.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "scenario": {
-                    "type": "string",
-                    "enum": ["crypto-mining", "data-exfiltration"],
-                    "description": "Demo scenario name"
-                }
-            },
-            "required": ["scenario"]
-        }
-    }
-]
-
-
-# ========== TOOL HANDLERS ==========
-
-async def handle_analyze_security_events(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle analyze_security_events tool call"""
-    events = args.get("events", [])
-    incident_type = args.get("incident_type", "Unknown")
+@mcp_server.tool()
+async def analyze_security_events(events: list, incident_type: str = "Unknown") -> dict:
+    """Analyze CloudTrail security events to build an attack timeline.
     
-    result = await temporal_agent.analyze_timeline(
-        events=events,
-        incident_type=incident_type
-    )
+    Uses Nova 2 Lite for temporal reasoning. Identifies root cause,
+    attack pattern, blast radius, and builds an ordered event timeline
+    with severity classifications.
     
+    Args:
+        events: List of CloudTrail event objects to analyze
+        incident_type: Type of incident (e.g., crypto-mining, data-exfiltration)
+    """
+    agent = _get_agent("temporal")
+    result = await agent.analyze_timeline(events=events, incident_type=incident_type)
     return result.dict() if hasattr(result, 'dict') else result
 
 
-async def handle_score_event_risk(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle score_event_risk tool call"""
-    event = args.get("event", {})
-    return await risk_scorer.score_event_risk(event)
+@mcp_server.tool()
+async def score_event_risk(event: dict) -> dict:
+    """Score the risk level of a single CloudTrail event.
+    
+    Uses Nova Micro for ultra-fast (<1s) classification. Returns severity,
+    confidence, risk score, and MITRE ATT&CK technique mapping.
+    
+    Args:
+        event: A single CloudTrail event object to score
+    """
+    agent = _get_agent("risk_scorer")
+    return await agent.score_event_risk(event)
 
 
-async def handle_generate_remediation_plan(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle generate_remediation_plan tool call"""
-    return await remediation_agent.generate_remediation_plan(
+@mcp_server.tool()
+async def generate_remediation_plan(
+    root_cause: str,
+    attack_pattern: str,
+    blast_radius: str = "Unknown",
+    timeline_events: list = []
+) -> dict:
+    """Generate a step-by-step remediation plan for a security incident.
+    
+    Creates actionable steps with AWS CLI commands, IAM policy fixes,
+    security group changes, and compliance-aligned recommendations.
+    
+    Args:
+        root_cause: Root cause of the incident
+        attack_pattern: Identified attack pattern
+        blast_radius: Scope of impact
+        timeline_events: Timeline events from analysis
+    """
+    agent = _get_agent("remediation")
+    return await agent.generate_remediation_plan(
         incident_analysis={"timeline": {}},
-        root_cause=args.get("root_cause", "Unknown"),
-        attack_pattern=args.get("attack_pattern", "Unknown"),
-        blast_radius=args.get("blast_radius", "Unknown"),
-        timeline_events=args.get("timeline_events", [])
+        root_cause=root_cause,
+        attack_pattern=attack_pattern,
+        blast_radius=blast_radius,
+        timeline_events=timeline_events
     )
 
 
-async def handle_query_incident(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle query_incident tool call"""
-    return await voice_agent.process_voice_query(
-        query_text=args.get("query", ""),
-        incident_context=args.get("incident_context")
+@mcp_server.tool()
+async def query_incident(query: str, incident_context: dict = {}) -> dict:
+    """Ask a natural language question about a security incident.
+    
+    Processes conversational queries about attack patterns, timelines,
+    remediation steps, compliance impacts, and cost estimates.
+    
+    Args:
+        query: Natural language question about the incident
+        incident_context: Current incident data for context
+    """
+    agent = _get_agent("voice")
+    return await agent.process_voice_query(
+        query_text=query,
+        incident_context=incident_context if incident_context else None
     )
 
 
-async def handle_generate_documentation(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle generate_documentation tool call"""
-    return await documentation_agent.generate_documentation(
-        incident_id=args.get("incident_id", "UNKNOWN"),
-        incident_analysis={"timeline": args.get("timeline", {})},
-        timeline=args.get("timeline", {}),
-        remediation_plan=args.get("remediation_plan")
+@mcp_server.tool()
+async def generate_documentation(
+    incident_id: str,
+    timeline: dict,
+    remediation_plan: dict = {}
+) -> dict:
+    """Generate incident documentation for JIRA, Slack, and Confluence.
+    
+    Creates structured, platform-ready documentation including JIRA tickets,
+    Slack notifications, and Confluence post-mortem pages.
+    
+    Args:
+        incident_id: Incident identifier
+        timeline: Analysis timeline data
+        remediation_plan: Generated remediation plan
+    """
+    agent = _get_agent("documentation")
+    return await agent.generate_documentation(
+        incident_id=incident_id,
+        incident_analysis={"timeline": timeline},
+        timeline=timeline,
+        remediation_plan=remediation_plan if remediation_plan else None
     )
 
 
-async def handle_list_demo_scenarios(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle list_demo_scenarios tool call"""
+@mcp_server.tool()
+async def list_demo_scenarios() -> dict:
+    """List available demo security scenarios for testing.
+    
+    Returns a list of pre-built CloudTrail event scenarios that demonstrate
+    different attack types for evaluation and testing purposes.
+    """
     return {
         "scenarios": [
-            {"id": "crypto-mining", "name": "Crypto Mining Attack", "severity": "critical"},
-            {"id": "data-exfiltration", "name": "Data Exfiltration via S3", "severity": "critical"},
+            {
+                "id": "crypto-mining",
+                "name": "Crypto Mining Attack",
+                "severity": "CRITICAL",
+                "description": "Unauthorized EC2 instances running cryptocurrency miners"
+            },
+            {
+                "id": "data-exfiltration",
+                "name": "Data Exfiltration via S3",
+                "severity": "CRITICAL",
+                "description": "Sensitive data being exfiltrated through S3 bucket manipulation"
+            },
         ]
     }
 
 
-async def handle_get_demo_events(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle get_demo_events tool call"""
-    scenario = args.get("scenario", "crypto-mining")
+@mcp_server.tool()
+async def get_demo_events(scenario: str) -> dict:
+    """Get CloudTrail events for a specific demo scenario.
+    
+    Returns a set of realistic CloudTrail events that simulate the specified
+    attack scenario for demonstration and testing purposes.
+    
+    Args:
+        scenario: Demo scenario name (crypto-mining, data-exfiltration)
+    """
     if scenario == "crypto-mining":
         events = generate_crypto_mining_scenario()
     elif scenario == "data-exfiltration":
@@ -237,65 +204,66 @@ async def handle_get_demo_events(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"scenario": scenario, "events": events}
 
 
-# Tool handler mapping
-TOOL_HANDLERS = {
-    "analyze_security_events": handle_analyze_security_events,
-    "score_event_risk": handle_score_event_risk,
-    "generate_remediation_plan": handle_generate_remediation_plan,
-    "query_incident": handle_query_incident,
-    "generate_documentation": handle_generate_documentation,
-    "list_demo_scenarios": handle_list_demo_scenarios,
-    "get_demo_events": handle_get_demo_events,
-}
+# ========== MCP RESOURCES ==========
+
+@mcp_server.resource("nova-sentinel://models")
+async def get_models() -> str:
+    """List all Nova AI models used by Nova Sentinel."""
+    models = {
+        "models": [
+            {"id": "amazon.nova-2-lite-v1:0", "name": "Nova 2 Lite", "role": "Temporal Analysis, Documentation, Remediation"},
+            {"id": "amazon.nova-pro-v1:0", "name": "Nova Pro", "role": "Multimodal Visual Analysis"},
+            {"id": "amazon.nova-micro-v1:0", "name": "Nova Micro", "role": "Fast Risk Classification"},
+            {"id": "amazon.nova-2-sonic-v1:0", "name": "Nova 2 Sonic", "role": "Voice Interaction"},
+            {"id": "amazon.nova-canvas-v1:0", "name": "Nova Canvas", "role": "Visual Report Generation"},
+        ]
+    }
+    return json.dumps(models, indent=2)
 
 
-async def call_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Call an MCP tool by name.
-    
-    Args:
-        tool_name: Name of the tool to call
-        arguments: Tool arguments
-        
-    Returns:
-        Tool result
-    """
-    handler = TOOL_HANDLERS.get(tool_name)
-    if not handler:
-        raise ValueError(f"Unknown tool: {tool_name}")
-    
-    logger.info(f"MCP tool call: {tool_name}")
-    return await handler(arguments)
+@mcp_server.resource("nova-sentinel://architecture")
+async def get_architecture() -> str:
+    """Describe Nova Sentinel's multi-agent architecture."""
+    arch = {
+        "name": "Nova Sentinel",
+        "framework": "Strands Agents SDK + MCP Server",
+        "pipeline": [
+            "1. DETECT — CloudTrail event ingestion + Nova 2 Lite temporal analysis",
+            "2. INVESTIGATE — Nova Pro multimodal architecture analysis",
+            "3. CLASSIFY — Nova Micro fast risk scoring (<1s per event)",
+            "4. REMEDIATE — Nova 2 Lite remediation plans + Nova Act browser automation",
+            "5. DOCUMENT — Nova 2 Lite JIRA/Slack/Confluence documentation",
+        ]
+    }
+    return json.dumps(arch, indent=2)
 
 
-def get_tool_definitions() -> List[Dict[str, Any]]:
-    """Get all MCP tool definitions"""
-    return MCP_TOOLS
-
-
-# ========== MCP SERVER INFO ==========
+# ========== SERVER INFO (for REST API compatibility) ==========
 
 MCP_SERVER_INFO = {
     "name": "nova-sentinel-mcp",
-    "version": "1.0.0",
-    "description": "Nova Sentinel Security Analysis MCP Server - Exposes AI-powered AWS security tools via Model Context Protocol",
+    "version": "2.0.0",
+    "description": "Nova Sentinel Security Analysis MCP Server — Real MCP SDK implementation",
+    "sdk": "mcp>=1.11.0 (FastMCP)",
     "capabilities": {
         "tools": True,
         "resources": True,
     },
-    "tools": MCP_TOOLS,
     "models_used": [
-        "amazon.nova-lite-v1:0 (Temporal Analysis, Documentation)",
+        "amazon.nova-2-lite-v1:0 (Temporal Analysis, Documentation)",
         "amazon.nova-pro-v1:0 (Visual Architecture Analysis)",
         "amazon.nova-micro-v1:0 (Risk Classification)",
-        "amazon.nova-sonic-v1:0 (Voice Interaction)",
+        "amazon.nova-2-sonic-v1:0 (Voice Interaction)",
+        "amazon.nova-canvas-v1:0 (Visual Report Generation)",
     ]
 }
 
 
+# ========== STANDALONE EXECUTION ==========
+
 if __name__ == "__main__":
-    """Run MCP server info display"""
     print(json.dumps(MCP_SERVER_INFO, indent=2))
-    print(f"\nAvailable tools: {len(MCP_TOOLS)}")
-    for tool in MCP_TOOLS:
-        print(f"  - {tool['name']}: {tool['description'][:80]}...")
+    print(f"\nMCP Server: {mcp_server.name}")
+    print(f"Running with real mcp SDK (FastMCP)")
+    # Run the MCP server with stdio transport
+    mcp_server.run()

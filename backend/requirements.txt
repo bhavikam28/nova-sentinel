@@ -1,32 +1,37 @@
 # FastAPI and Server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+fastapi>=0.115.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
 
 # AWS SDK
-boto3==1.34.51
-botocore==1.34.51
+boto3>=1.42.0
+botocore>=1.42.0
+
+# Real Strands Agents SDK (AWS)
+strands-agents>=1.20.0
+strands-agents-tools>=0.2.0
+
+# Real MCP Server (Model Context Protocol)
+# Included as dependency of strands-agents, but listed explicitly
+mcp>=1.11.0
+
+# Real Nova Act SDK (Browser Automation)
+nova-act>=3.0.0
 
 # Data Validation and Serialization
-# Using Pydantic v2 with pre-built wheels (works on Python 3.13 Windows - no Rust needed!)
-pydantic>=2.12.5
+pydantic>=2.12.0
 pydantic-settings>=2.1.0
 
 # CORS and Security
-python-jose[cryptography]==3.3.0
-python-dotenv==1.0.1
+python-jose[cryptography]>=3.3.0
+python-dotenv>=1.0.1
 
 # HTTP Client
-httpx==0.26.0
+httpx>=0.26.0
 
 # Date/Time Handling
-python-dateutil==2.8.2
-
-# JSON Processing
-# orjson==3.9.15  # Disabled on Windows - requires Rust compiler
-# Using standard library json instead (minimal performance impact for Phase 1)
+python-dateutil>=2.8.2
 
 # Development
-pytest==7.4.4
-pytest-asyncio==0.23.4
-black==24.1.1
+pytest>=7.4.0
+pytest-asyncio>=0.23.0

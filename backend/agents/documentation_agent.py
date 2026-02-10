@@ -1,10 +1,9 @@
 """
-Documentation Agent - Automated documentation and notifications
-Uses Nova 2 Lite to generate JIRA tickets, Slack messages, and Confluence pages
+Documentation Agent — Automated documentation and notifications
+Uses Nova 2 Lite (amazon.nova-2-lite-v1:0) for content generation.
 
-Note: Nova Act is designed for browser automation. For documentation generation,
-we use Nova 2 Lite for content creation. Future enhancement: Use Nova Act for
-actual browser automation to post to JIRA/Slack/Confluence.
+Nova Act (nova-act SDK) is available for browser automation to post
+to JIRA/Slack/Confluence — see nova_act_agent.py for that integration.
 """
 import json
 import time
@@ -19,7 +18,7 @@ class DocumentationAgent:
     Agent for automated documentation generation using Nova 2 Lite.
     
     Generates structured content for JIRA tickets, Slack messages, and Confluence pages.
-    Future: Could use Nova Act for browser automation to actually post to these platforms.
+    For browser-based posting, see NovaActAgent.create_jira_ticket().
     """
     
     def __init__(self):
@@ -115,7 +114,7 @@ class DocumentationAgent:
                 },
                 "raw_response": documentation_text,
                 "analysis_time_ms": analysis_time,
-                "model_used": self.bedrock.settings.nova_act_model_id,
+                "model_used": self.bedrock.settings.nova_lite_model_id,
                 "platforms": ["jira", "slack", "confluence"]
             }
     

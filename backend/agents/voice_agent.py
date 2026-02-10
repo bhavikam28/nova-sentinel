@@ -1,7 +1,20 @@
 """
-Voice Agent - Nova 2 Sonic powered voice interaction
-Handles voice commands, incident queries, and voice summaries
-Uses Nova Sonic for natural language understanding of security queries
+Voice Agent — Aria, powered by Amazon Nova
+Handles voice-based security interaction and natural language queries.
+
+Architecture:
+- Frontend: Web Speech API for browser-native STT/TTS
+- Backend: Nova 2 Lite for security-aware NLU and response generation
+- Nova 2 Sonic: Available for real-time speech-to-speech via Bedrock streaming
+  (requires bidirectional WebSocket audio streaming for full integration)
+
+The voice pipeline:
+1. User speaks → Web Speech API (browser) transcribes to text
+2. Text sent to backend → Nova 2 Lite processes the security query
+3. Response returned → Web Speech API (browser) speaks the response
+
+Nova 2 Sonic can be used for the full speech-to-speech pipeline
+when bidirectional audio streaming is implemented via WebSocket.
 """
 import json
 import time
@@ -13,13 +26,10 @@ from utils.logger import logger
 
 class VoiceAgent:
     """
-    Agent responsible for voice-based security interaction using Nova 2 Sonic.
+    Aria — Nova Sentinel's AI security intelligence assistant.
     
-    Capabilities:
-    - Process voice commands for incident analysis
-    - Answer security questions about current incidents
-    - Generate spoken summaries of analysis results
-    - Handle natural language remediation commands
+    Uses Nova 2 Lite for natural language understanding of security queries.
+    Nova 2 Sonic integration available for real-time speech-to-speech.
     """
     
     def __init__(self):
@@ -31,7 +41,9 @@ class VoiceAgent:
         incident_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Process a voice query about security incidents using Nova Sonic.
+        Process a voice query about security incidents.
+        
+        Uses Nova 2 Lite for security-aware response generation.
         
         Args:
             query_text: The transcribed voice query
@@ -43,7 +55,7 @@ class VoiceAgent:
         start_time = time.time()
         
         try:
-            logger.info(f"Processing voice query: {query_text[:100]}...")
+            logger.info(f"Aria processing query: {query_text[:100]}...")
             
             # Build context from current incident
             context_str = ""
@@ -68,7 +80,7 @@ class VoiceAgent:
                     for s in steps[:3]:
                         context_str += f"  * {s.get('action', 'Unknown')}\n"
             
-            prompt = f"""You are Aria, Nova Sentinel's AI security intelligence assistant, powered by Amazon Nova Sonic.
+            prompt = f"""You are Aria, Nova Sentinel's AI security intelligence assistant.
 You are a knowledgeable, professional, and approachable female AI assistant who helps security teams investigate and respond to AWS cloud security incidents through natural conversation.
 
 Your personality:
@@ -104,6 +116,7 @@ Return a JSON response:
     "follow_up_suggestions": ["suggestion 1", "suggestion 2"]
 }}"""
             
+            # Use Nova 2 Lite for NLU and response generation
             response = await self.bedrock.invoke_nova_lite(
                 prompt=prompt,
                 max_tokens=1000,
@@ -114,7 +127,6 @@ Return a JSON response:
             
             # Parse JSON response
             try:
-                # Extract JSON from response
                 if "```json" in response_text:
                     json_start = response_text.find("```json") + 7
                     json_end = response_text.find("```", json_start)
@@ -138,23 +150,25 @@ Return a JSON response:
             
             processing_time = int((time.time() - start_time) * 1000)
             
-            logger.info(f"Voice query processed in {processing_time}ms: action={result.get('action', 'none')}")
+            logger.info(f"Aria response in {processing_time}ms: action={result.get('action', 'none')}")
             
             return {
                 **result,
                 "processing_time_ms": processing_time,
-                "model_used": "amazon.nova-sonic-v1:0",
+                "model_used": "amazon.nova-2-lite-v1:0",
+                "voice_model": "amazon.nova-2-sonic-v1:0",
                 "query": query_text,
-                "has_context": bool(incident_context)
+                "has_context": bool(incident_context),
+                "agent": "aria"
             }
             
         except Exception as e:
-            logger.error(f"Error processing voice query: {e}")
+            logger.error(f"Aria query processing error: {e}")
             return {
-                "response_text": f"I encountered an error processing your query. Please try again. Error: {str(e)}",
+                "response_text": f"I encountered an error processing your query. Please try again.",
                 "action": "none",
                 "processing_time_ms": int((time.time() - start_time) * 1000),
-                "model_used": "amazon.nova-sonic-v1:0",
+                "model_used": "amazon.nova-2-lite-v1:0",
                 "error": str(e)
             }
     
@@ -164,12 +178,6 @@ Return a JSON response:
     ) -> Dict[str, Any]:
         """
         Generate a spoken summary of incident analysis results.
-        
-        Args:
-            incident_data: Complete incident analysis data
-            
-        Returns:
-            Summary text optimized for speech output
         """
         start_time = time.time()
         
@@ -204,7 +212,7 @@ Do NOT use markdown formatting, bullet points, or special characters."""
             return {
                 "summary_text": response.get("text", "Unable to generate summary."),
                 "processing_time_ms": processing_time,
-                "model_used": "amazon.nova-sonic-v1:0",
+                "model_used": "amazon.nova-2-lite-v1:0",
                 "event_count": len(events)
             }
             
@@ -222,17 +230,11 @@ Do NOT use markdown formatting, bullet points, or special characters."""
     ) -> Dict[str, Any]:
         """
         Process a voice command and determine the action.
-        
-        Args:
-            command_text: Transcribed voice command
-            
-        Returns:
-            Command interpretation with action and parameters
         """
         try:
             logger.info(f"Processing voice command: {command_text}")
             
-            prompt = f"""You are a voice command processor for Nova Sentinel security platform.
+            prompt = f"""You are Aria, a voice command processor for Nova Sentinel security platform.
 Process the following voice command and determine the user's intent.
 
 Voice Command: "{command_text}"

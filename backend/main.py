@@ -1,5 +1,12 @@
 """
-SecOps Lens Pro - FastAPI Application
+Nova Sentinel — FastAPI Application
+AI-Powered Security Incident Response using Amazon Nova
+
+Architecture:
+- Framework: FastAPI + Strands Agents SDK + MCP Server
+- Models: Nova 2 Lite, Nova Pro, Nova Micro, Nova 2 Sonic, Nova Canvas, Nova Act
+- Protocol: Model Context Protocol (MCP) via FastMCP
+- Orchestration: Strands Agents SDK with @tool decorators
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,25 +23,29 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    # Startup
     logger.warning("=" * 70)
-    logger.warning("⚠️  AWS BILLING NOTICE")
+    logger.warning("NOVA SENTINEL — Starting Up")
     logger.warning("=" * 70)
     logger.warning("This application uses YOUR AWS account and credentials.")
     logger.warning("All AWS charges (Bedrock, DynamoDB, S3) will be billed to YOUR account.")
-    logger.warning("You are responsible for monitoring your AWS costs.")
     logger.warning("Estimated cost: ~$2-5/month for light usage.")
     logger.warning("=" * 70)
-    logger.info(f"Using AWS profile: {settings.aws_profile}")
-    logger.info(f"Using AWS region: {settings.aws_region}")
+    logger.info(f"AWS Profile: {settings.aws_profile}")
+    logger.info(f"AWS Region: {settings.aws_region}")
+    logger.info(f"Nova 2 Lite: {settings.nova_lite_model_id}")
+    logger.info(f"Nova Pro: {settings.nova_pro_model_id}")
+    logger.info(f"Nova Micro: {settings.nova_micro_model_id}")
+    logger.info(f"Nova 2 Sonic: {settings.nova_sonic_model_id}")
+    logger.info(f"Nova Canvas: {settings.nova_canvas_model_id}")
+    logger.info("Frameworks: Strands Agents SDK (real) + MCP Server (FastMCP)")
     yield
-    # Shutdown (if needed)
 
 # Create FastAPI app
 app = FastAPI(
-    title="SecOps Lens Pro",
-    description="AI-Powered Security Incident Response using Amazon Nova",
-    version="1.0.0",
+    title="Nova Sentinel",
+    description="AI-Powered Security Incident Response using Amazon Nova — "
+                "Strands Agents SDK + MCP Server + 6 Nova Models",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
@@ -43,13 +54,13 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Vite and alternative dev servers
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
+# Include REST API routers
 app.include_router(analysis.router)
 app.include_router(demo.router)
 app.include_router(visual.router)
@@ -62,15 +73,37 @@ app.include_router(auth.router)
 app.include_router(mcp.router)
 app.include_router(nova_act.router)
 
+# Mount MCP SSE endpoint for standard MCP clients
+# This provides a standards-compliant MCP interface alongside our REST API
+try:
+    from mcp_server import mcp_server as mcp_srv
+    app.mount("/mcp", mcp_srv.sse_app())
+    logger.info("MCP SSE endpoint mounted at /mcp/")
+except Exception as e:
+    logger.warning(f"Could not mount MCP SSE endpoint: {e}")
+
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "service": "SecOps Lens Pro",
-        "version": "1.0.0",
+        "service": "Nova Sentinel",
+        "version": "2.0.0",
         "status": "running",
-        "description": "AI-Powered Security Incident Response"
+        "description": "AI-Powered Security Incident Response",
+        "frameworks": {
+            "strands": "strands-agents SDK (real)",
+            "mcp": "MCP Server via FastMCP (real)",
+            "nova_act": "nova-act SDK (real)",
+        },
+        "models": {
+            "nova_2_lite": settings.nova_lite_model_id,
+            "nova_pro": settings.nova_pro_model_id,
+            "nova_micro": settings.nova_micro_model_id,
+            "nova_2_sonic": settings.nova_sonic_model_id,
+            "nova_canvas": settings.nova_canvas_model_id,
+            "nova_act": "nova-act SDK (browser automation)",
+        }
     }
 
 
@@ -81,14 +114,16 @@ async def health_check():
         "status": "healthy",
         "region": settings.aws_region,
         "models": {
-            "nova_lite": settings.nova_lite_model_id,
+            "nova_2_lite": settings.nova_lite_model_id,
             "nova_pro": settings.nova_pro_model_id,
             "nova_micro": settings.nova_micro_model_id,
-            "nova_sonic": settings.nova_sonic_model_id
+            "nova_2_sonic": settings.nova_sonic_model_id,
+            "nova_canvas": settings.nova_canvas_model_id,
         },
         "frameworks": {
-            "mcp": "Model Context Protocol v1.0",
-            "strands": "Strands Agents Framework"
+            "mcp": "MCP Server (FastMCP) — standards-compliant",
+            "strands": "Strands Agents SDK — real @tool decorators",
+            "nova_act": "Nova Act SDK — browser automation",
         }
     }
 
@@ -106,12 +141,10 @@ async def global_exception_handler(request, exc):
     )
 
 
-
-
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info(f"Starting SecOps Lens Pro on {settings.api_host}:{settings.api_port}")
+    logger.info(f"Starting Nova Sentinel on {settings.api_host}:{settings.api_port}")
     
     uvicorn.run(
         "main:app",

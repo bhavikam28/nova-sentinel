@@ -1,5 +1,6 @@
 """
 Amazon Bedrock service wrapper for Nova models
+Supports Nova 2 Lite, Nova Pro, Nova Micro, Nova 2 Sonic, and Nova Canvas
 """
 import json
 import asyncio
@@ -8,7 +9,6 @@ from typing import Dict, Any, Optional, List
 from botocore.exceptions import ClientError
 
 from utils.config import get_settings
-from utils.logger import logger
 from utils.logger import logger
 
 
@@ -40,25 +40,16 @@ class BedrockService:
         system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Invoke Nova 2 Lite model for reasoning tasks
+        Invoke Nova 2 Lite model for reasoning tasks.
         
-        Args:
-            prompt: User prompt
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (0.0 = deterministic)
-            system_prompt: Optional system prompt for context
-            
-        Returns:
-            Model response with generated text
+        Uses amazon.nova-2-lite-v1:0 — the latest Nova 2 Lite model.
         """
         try:
-            # Nova models don't support "system" role - combine system prompt with user prompt
             if system_prompt:
                 full_prompt = f"{system_prompt}\n\n{prompt}"
             else:
                 full_prompt = prompt
             
-            # Nova models use "user" role only
             messages = [{
                 "role": "user",
                 "content": [{"text": full_prompt}]
@@ -72,9 +63,8 @@ class BedrockService:
                 }
             }
             
-            logger.info(f"Invoking Nova 2 Lite with prompt length: {len(prompt)}")
+            logger.info(f"Invoking Nova 2 Lite ({self.settings.nova_lite_model_id})")
             
-            # Run blocking boto3 call in thread pool to avoid blocking event loop
             response = await asyncio.to_thread(
                 self.client.invoke_model,
                 modelId=self.settings.nova_lite_model_id,
@@ -85,8 +75,6 @@ class BedrockService:
             
             response_body = json.loads(response['body'].read())
             
-            logger.info("Nova 2 Lite invocation successful")
-            
             return {
                 "text": response_body['output']['message']['content'][0]['text'],
                 "stop_reason": response_body.get('stopReason', 'end_turn'),
@@ -94,7 +82,7 @@ class BedrockService:
             }
             
         except ClientError as e:
-            logger.error(f"Bedrock API error: {e}")
+            logger.error(f"Bedrock API error (Nova 2 Lite): {e}")
             raise
         except Exception as e:
             logger.error(f"Unexpected error invoking Nova 2 Lite: {e}")
@@ -108,21 +96,13 @@ class BedrockService:
         temperature: float = 0.1
     ) -> Dict[str, Any]:
         """
-        Invoke Nova Pro model for multimodal analysis
+        Invoke Nova Pro model for multimodal analysis.
         
-        Args:
-            prompt: User prompt
-            image_data: Optional image bytes for multimodal analysis
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature
-            
-        Returns:
-            Model response with analysis
+        Uses amazon.nova-pro-v1:0 — supports text + image input.
         """
         try:
             content = []
             
-            # Add image if provided
             if image_data:
                 content.append({
                     "image": {
@@ -133,7 +113,6 @@ class BedrockService:
                     }
                 })
             
-            # Add text prompt
             content.append({"text": prompt})
             
             request_body = {
@@ -147,9 +126,8 @@ class BedrockService:
                 }
             }
             
-            logger.info(f"Invoking Nova Pro (multimodal: {image_data is not None})")
+            logger.info(f"Invoking Nova Pro ({self.settings.nova_pro_model_id}, multimodal: {image_data is not None})")
             
-            # Run blocking boto3 call in thread pool to avoid blocking event loop
             response = await asyncio.to_thread(
                 self.client.invoke_model,
                 modelId=self.settings.nova_pro_model_id,
@@ -160,8 +138,6 @@ class BedrockService:
             
             response_body = json.loads(response['body'].read())
             
-            logger.info("Nova Pro invocation successful")
-            
             return {
                 "text": response_body['output']['message']['content'][0]['text'],
                 "stop_reason": response_body.get('stopReason', 'end_turn'),
@@ -169,7 +145,7 @@ class BedrockService:
             }
             
         except ClientError as e:
-            logger.error(f"Bedrock API error: {e}")
+            logger.error(f"Bedrock API error (Nova Pro): {e}")
             raise
         except Exception as e:
             logger.error(f"Unexpected error invoking Nova Pro: {e}")
@@ -182,15 +158,9 @@ class BedrockService:
         temperature: float = 0.0
     ) -> Dict[str, Any]:
         """
-        Invoke Nova Micro model for fast classification
+        Invoke Nova Micro model for fast classification.
         
-        Args:
-            prompt: User prompt
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (0.0 for deterministic)
-            
-        Returns:
-            Model response with classification
+        Uses amazon.nova-micro-v1:0 — ultra-fast, deterministic.
         """
         try:
             request_body = {
@@ -204,9 +174,8 @@ class BedrockService:
                 }
             }
             
-            logger.info("Invoking Nova Micro for classification")
+            logger.info(f"Invoking Nova Micro ({self.settings.nova_micro_model_id})")
             
-            # Run blocking boto3 call in thread pool to avoid blocking event loop
             response = await asyncio.to_thread(
                 self.client.invoke_model,
                 modelId=self.settings.nova_micro_model_id,
@@ -217,8 +186,6 @@ class BedrockService:
             
             response_body = json.loads(response['body'].read())
             
-            logger.info("Nova Micro invocation successful")
-            
             return {
                 "text": response_body['output']['message']['content'][0]['text'],
                 "stop_reason": response_body.get('stopReason', 'end_turn'),
@@ -226,8 +193,63 @@ class BedrockService:
             }
             
         except ClientError as e:
-            logger.error(f"Bedrock API error: {e}")
+            logger.error(f"Bedrock API error (Nova Micro): {e}")
             raise
         except Exception as e:
             logger.error(f"Unexpected error invoking Nova Micro: {e}")
+            raise
+
+    async def invoke_nova_canvas(
+        self,
+        prompt: str,
+        width: int = 1024,
+        height: int = 1024,
+        quality: str = "standard",
+        cfg_scale: float = 8.0,
+        seed: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Invoke Nova Canvas model for image generation.
+        
+        Uses amazon.nova-canvas-v1:0 — generates images from text prompts.
+        Useful for generating visual incident reports and architecture diagrams.
+        """
+        try:
+            request_body = {
+                "taskType": "TEXT_IMAGE",
+                "textToImageParams": {
+                    "text": prompt
+                },
+                "imageGenerationConfig": {
+                    "numberOfImages": 1,
+                    "height": height,
+                    "width": width,
+                    "cfgScale": cfg_scale,
+                    "seed": seed,
+                    "quality": quality
+                }
+            }
+            
+            logger.info(f"Invoking Nova Canvas ({self.settings.nova_canvas_model_id})")
+            
+            response = await asyncio.to_thread(
+                self.client.invoke_model,
+                modelId=self.settings.nova_canvas_model_id,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(request_body)
+            )
+            
+            response_body = json.loads(response['body'].read())
+            
+            return {
+                "images": response_body.get("images", []),
+                "error": response_body.get("error"),
+            }
+            
+        except ClientError as e:
+            logger.error(f"Bedrock API error (Nova Canvas): {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error invoking Nova Canvas: {e}")
             raise
