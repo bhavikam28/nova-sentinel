@@ -21,11 +21,11 @@ const SCENARIO_ICONS: Record<string, React.ComponentType<{ className?: string }>
 };
 
 const getSeverityConfig = (severity: string) => {
-  const configs: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-    CRITICAL: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
-    HIGH: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-    MEDIUM: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
-    LOW: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+  const configs: Record<string, { bg: string; text: string; border: string; dot: string; iconBg: string }> = {
+    CRITICAL: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500', iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600' },
+    HIGH: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600' },
+    MEDIUM: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', dot: 'bg-sky-500', iconBg: 'bg-gradient-to-br from-sky-500 to-cyan-500' },
+    LOW: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400', iconBg: 'bg-gradient-to-br from-slate-400 to-slate-500' },
   };
   return configs[severity] || configs.MEDIUM;
 };
@@ -63,8 +63,8 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
             >
               <div className="flex items-center gap-4">
                 {/* Icon */}
-                <div className={`w-11 h-11 rounded-xl ${config.bg} ${config.border} border flex items-center justify-center flex-shrink-0`}>
-                  <Icon className={`w-5 h-5 ${config.text}`} />
+                <div className={`w-11 h-11 rounded-xl ${(config as any).iconBg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                  <Icon className="w-5 h-5 text-white" />
                 </div>
 
                 {/* Content */}

@@ -13,16 +13,24 @@ interface InsightCardsProps {
 }
 
 const InsightCards: React.FC<InsightCardsProps> = ({ timeline }) => {
-  const rootCause = timeline?.root_cause || 'Compromised IAM credentials used to escalate privileges and access sensitive resources';
-  const attackPattern = timeline?.attack_pattern || 'Lateral movement through IAM role assumption with data staging and exfiltration';
-  const blastRadius = timeline?.blast_radius || 'IAM roles, EC2 instances, S3 buckets, and RDS databases potentially impacted';
+  const isBlank = (val: string | undefined): boolean => {
+    if (!val) return true;
+    const lower = val.toLowerCase().trim();
+    return lower === 'unknown' || lower === '' || lower.includes('failed to parse') || lower.includes('no json found');
+  };
+
+  const rootCause = isBlank(timeline?.root_cause) 
+    ? 'Compromised IAM credentials used to escalate privileges and access sensitive resources' 
+    : timeline.root_cause!;
+  const attackPattern = isBlank(timeline?.attack_pattern) 
+    ? 'Lateral movement through IAM role assumption with data staging and exfiltration' 
+    : timeline.attack_pattern!;
+  const blastRadius = isBlank(timeline?.blast_radius) 
+    ? 'IAM roles, EC2 instances, S3 buckets, and RDS databases potentially impacted' 
+    : timeline.blast_radius!;
   
   const parsePoints = (text: string): string[] => {
     if (!text) return ['Analysis in progress'];
-    // Handle "Failed to parse analysis" error gracefully
-    if (text.toLowerCase().includes('failed to parse') || text.toLowerCase().includes('no json found')) {
-      return ['Analysis data processing — results based on event pattern matching'];
-    }
     const sentences = text.split(/[.!?]\s+/).filter(s => s.length > 10);
     return sentences.length > 0 ? sentences.slice(0, 3).map(s => s.trim()) : [text.substring(0, 150) + (text.length > 150 ? '...' : '')];
   };

@@ -6,15 +6,13 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, AlertCircle, CheckCircle2, Menu, X, 
-  Clock, ChevronRight,
-  Loader2, Sparkles, Eye, Brain, Zap, Shield, FileText
+  Loader2, Eye, Brain, Zap, Shield, FileText
 } from 'lucide-react';
 import NovaSentinelLogo from './components/Logo';
 import LandingHero from './components/Landing/LandingHero';
 import FeaturesSection from './components/Landing/FeaturesSection';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ScenarioPicker from './components/Dashboard/ScenarioPicker';
-import AWSAuthTab from './components/Dashboard/AWSAuthTab';
 import RealAWSConnect from './components/Dashboard/RealAWSConnect';
 import TimelineView from './components/Analysis/TimelineView';
 import InsightCards from './components/Analysis/InsightCards';
@@ -189,82 +187,81 @@ function App() {
   const renderFeatureContent = () => {
     // Loading state
     if (loading) {
+      const agents = [
+        { name: 'Detect', model: 'Nova Pro', Icon: Eye, delay: 0 },
+        { name: 'Investigate', model: 'Nova 2 Lite', Icon: Brain, delay: 1 },
+        { name: 'Classify', model: 'Nova Micro', Icon: Zap, delay: 2 },
+        { name: 'Remediate', model: 'Orchestrator', Icon: Shield, delay: 3 },
+        { name: 'Document', model: 'Nova 2 Lite', Icon: FileText, delay: 4 },
+      ];
+
       return (
         <div className="space-y-6">
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-2xl border border-slate-200 overflow-hidden"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl border border-slate-200 overflow-hidden"
           >
+            {/* Progress bar */}
             <div className="h-1 bg-slate-100 overflow-hidden">
               <motion.div
-                className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500"
-                animate={{ x: ['-100%', '100%'] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                style={{ width: '50%' }}
+                className="h-full bg-indigo-500"
+                animate={{ width: ['0%', '100%'] }}
+                transition={{ duration: 25, ease: 'easeInOut' }}
               />
             </div>
-            <div className="p-8">
-              <div className="text-center mb-8">
+
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-6">
                 <motion.div
-                  className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg mx-auto mb-4"
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
                 >
-                  <Sparkles className="w-7 h-7 text-white" />
+                  <Loader2 className="w-5 h-5 text-indigo-600" />
                 </motion.div>
-                <h3 className="text-xl font-black text-slate-900 mb-2">Multi-Agent Analysis</h3>
-                <p className="text-sm text-slate-500">5 Nova AI models working together</p>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Running Multi-Agent Pipeline</h3>
+                  <p className="text-xs text-slate-500">5 Nova AI models analyzing your incident</p>
+                </div>
               </div>
-              <div className="grid grid-cols-5 gap-2">
-                {[
-                  { name: 'Detect', model: 'Nova Pro', Icon: Eye, color: 'from-blue-500 to-cyan-500', delay: 0 },
-                  { name: 'Investigate', model: 'Nova 2 Lite', Icon: Brain, color: 'from-purple-500 to-violet-500', delay: 3 },
-                  { name: 'Classify', model: 'Nova Micro', Icon: Zap, color: 'from-amber-500 to-orange-500', delay: 6 },
-                  { name: 'Remediate', model: 'Orchestrator', Icon: Shield, color: 'from-emerald-500 to-teal-500', delay: 9 },
-                  { name: 'Document', model: 'Nova 2 Lite', Icon: FileText, color: 'from-violet-500 to-purple-500', delay: 12 },
-                ].map((agent, i) => (
+
+              {/* Agent Steps */}
+              <div className="space-y-2">
+                {agents.map((agent, i) => (
                   <motion.div
                     key={agent.name}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.15 }}
-                    className="relative"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.2 }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-50 border border-slate-100"
                   >
-                    <div className="bg-white rounded-xl p-3 border border-slate-200 text-center">
-                      <motion.div
-                        className={`w-9 h-9 rounded-lg bg-gradient-to-br ${agent.color} mx-auto mb-1.5 flex items-center justify-center shadow-sm`}
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ duration: 1.5, repeat: Infinity, delay: agent.delay * 0.1 }}
-                      >
-                        <agent.Icon className="w-4 h-4 text-white" />
-                      </motion.div>
-                      <p className="text-[10px] font-bold text-slate-900">{agent.name}</p>
-                      <p className="text-[8px] text-slate-400">{agent.model}</p>
-                      <div className="mt-1.5 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div
+                      className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center"
+                      animate={i < 2 ? { backgroundColor: ['#e0e7ff', '#c7d2fe', '#e0e7ff'] } : {}}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      <agent.Icon className="w-4 h-4 text-indigo-600" />
+                    </motion.div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-slate-900">{agent.name}</p>
+                      <p className="text-[10px] text-slate-400">{agent.model}</p>
+                    </div>
+                    <div className="w-24">
+                      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
                         <motion.div
-                          className={`h-full bg-gradient-to-r ${agent.color} rounded-full`}
+                          className="h-full bg-indigo-500 rounded-full"
                           animate={{ width: ['0%', '100%'] }}
-                          transition={{ duration: 8, delay: agent.delay * 0.3, ease: 'easeInOut' }}
+                          transition={{ duration: 6 + i * 2, delay: i * 1.5, ease: 'easeInOut' }}
                         />
                       </div>
                     </div>
-                    {i < 4 && (
-                      <motion.div
-                        className="absolute top-1/2 -right-2 z-10 text-slate-300"
-                        animate={{ x: [0, 3, 0] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                      >
-                        <ChevronRight className="w-3 h-3" />
-                      </motion.div>
-                    )}
                   </motion.div>
                 ))}
               </div>
-              <div className="mt-6 flex items-center justify-center gap-3 text-xs text-slate-400">
-                <Clock className="w-3 h-3" />
-                <span>~30 seconds</span>
-              </div>
+
+              <p className="text-center text-[10px] text-slate-400 mt-4">
+                Estimated time: ~30 seconds
+              </p>
             </div>
           </motion.div>
           {orchestrationResult && <AgentProgress agents={orchestrationResult.agents} />}
@@ -286,29 +283,55 @@ function App() {
       if (mode === 'console') {
         return (
           <div className="space-y-6">
-            <AWSAuthTab
-              onAuthMethodSelected={(method) => {
-                if (method === 'profile') setAwsProfile('secops-lens');
-              }}
-              currentMethod={awsProfile ? 'profile' : undefined}
-              onTestConnection={async () => {
-                try {
-                  const result = await authAPI.testConnection(awsProfile);
-                  setAwsConnected(result.connected);
-                  return result.connected;
-                } catch {
-                  setAwsConnected(false);
-                  return false;
-                }
-              }}
+            {/* Connection Status */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <h2 className="text-xl font-bold text-slate-900 mb-1">Connect Your AWS Account</h2>
+              <p className="text-sm text-slate-500 mb-5">
+                Connect via AWS CLI profile. Credentials stay local — <span className="font-semibold text-slate-700">never stored</span> on our servers.
+              </p>
+              <div className="flex items-end gap-3 mb-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-slate-600 mb-1.5">AWS CLI Profile Name</label>
+                  <input
+                    type="text"
+                    value={awsProfile}
+                    onChange={(e) => setAwsProfile(e.target.value)}
+                    placeholder="default"
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const result = await authAPI.testConnection(awsProfile);
+                      setAwsConnected(result.connected);
+                    } catch {
+                      setAwsConnected(false);
+                    }
+                  }}
+                  className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Test Connection
+                </button>
+              </div>
+              {awsConnected && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-emerald-700">Connected to AWS account</span>
+                </div>
+              )}
+              <div className="mt-4 bg-slate-900 rounded-lg p-3">
+                <p className="text-[10px] text-slate-400 mb-1 font-mono">Quick setup</p>
+                <code className="text-sm text-green-400 font-mono">aws configure --profile {awsProfile}</code>
+              </div>
+            </div>
+
+            {/* Analysis Trigger */}
+            <RealAWSConnect
+              onAnalyze={handleRealAWSAnalysis}
               loading={loading}
             />
-            {awsConnected && (
-              <RealAWSConnect
-                onAnalyze={handleRealAWSAnalysis}
-                loading={loading}
-              />
-            )}
           </div>
         );
       }
@@ -532,8 +555,6 @@ function App() {
           activeFeature={activeFeature}
           onFeatureChange={setActiveFeature}
           onBack={goBack}
-          hasAnalysis={!!analysisResult && !loading}
-          isLoading={loading}
           headerRight={
             <div className="flex items-center gap-3">
               {analysisResult && (
@@ -605,8 +626,16 @@ function App() {
               <span className="text-base font-bold text-slate-900">Nova Sentinel</span>
             </div>
 
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">Features</a>
+            <div className="hidden md:flex items-center gap-6">
+              <a
+                href="https://github.com/bhavikam28/nova-sentinel"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                GitHub
+              </a>
               <button
                 onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
                 className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
@@ -639,7 +668,7 @@ function App() {
               className="md:hidden border-t border-slate-200 bg-white"
             >
               <div className="px-4 py-6 space-y-4">
-                <a href="#features" className="block text-slate-700 font-medium">Features</a>
+                <a href="https://github.com/bhavikam28/nova-sentinel" target="_blank" rel="noopener noreferrer" className="block text-slate-700 font-medium">GitHub</a>
                 <button
                   onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
                   className="block text-slate-700 font-medium w-full text-left"

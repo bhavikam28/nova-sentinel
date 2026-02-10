@@ -42,8 +42,6 @@ interface DashboardLayoutProps {
   activeFeature: string;
   onFeatureChange: (featureId: string) => void;
   onBack: () => void;
-  hasAnalysis: boolean;
-  isLoading: boolean;
   children: React.ReactNode;
   headerRight?: React.ReactNode;
 }
@@ -53,8 +51,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   activeFeature,
   onFeatureChange,
   onBack,
-  hasAnalysis,
-  isLoading,
   children,
   headerRight,
 }) => {
@@ -120,40 +116,31 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="space-y-0.5">
                 {features.map((feature) => {
                   const isActive = activeFeature === feature.id;
-                  const isLocked = !hasAnalysis && feature.id !== 'overview' && feature.id !== 'visual' && feature.id !== 'aria';
                   
                   return (
                     <button
                       key={feature.id}
                       onClick={() => {
-                        if (!isLocked) {
-                          onFeatureChange(feature.id);
-                          if (isMobile) setMobileOpen(false);
-                        }
+                        onFeatureChange(feature.id);
+                        if (isMobile) setMobileOpen(false);
                       }}
-                      disabled={isLocked && !isLoading}
                       title={collapsed ? feature.label : undefined}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
                         isActive
                           ? 'bg-indigo-600 text-white shadow-sm'
-                          : isLocked
-                            ? 'text-slate-300 cursor-not-allowed'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                       } ${collapsed ? 'justify-center' : ''}`}
                     >
-                      <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : isLocked ? 'text-slate-300' : 'text-slate-500'}`} />
+                      <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
                       {!collapsed && (
                         <>
                           <span className="flex-1 text-left truncate">{feature.label}</span>
-                          {feature.badge && !isLocked && (
+                          {feature.badge && (
                             <span className={`px-1.5 py-0.5 text-[8px] font-bold rounded-full ${
                               isActive ? 'bg-white/20 text-white' : feature.badgeColor || 'bg-slate-100 text-slate-500'
                             }`}>
                               {feature.badge}
                             </span>
-                          )}
-                          {isLocked && (
-                            <span className="text-[8px] text-slate-300">Locked</span>
                           )}
                         </>
                       )}
