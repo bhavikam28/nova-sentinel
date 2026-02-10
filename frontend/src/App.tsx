@@ -46,8 +46,9 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [awsProfile, setAwsProfile] = useState<string>('default');
   const [awsConnected, setAwsConnected] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'profile' | 'env'>('profile');
-  const [envKeys, setEnvKeys] = useState({ accessKey: '', secretKey: '', sessionToken: '' });
+  const [authMethod, setAuthMethod] = useState<'profile' | 'sso'>('profile');
+  const [ssoStartUrl, setSsoStartUrl] = useState('');
+  const [ssoRegion, setSsoRegion] = useState('us-east-1');
   const [activeFeature, setActiveFeature] = useState('overview');
 
   useEffect(() => {
@@ -312,16 +313,16 @@ function App() {
                   )}
                 </button>
                 <button
-                  onClick={() => setAuthMethod('env')}
+                  onClick={() => setAuthMethod('sso')}
                   className={`flex-1 px-4 py-3 text-xs font-bold text-center transition-colors relative ${
-                    authMethod === 'env'
+                    authMethod === 'sso'
                       ? 'text-indigo-700 bg-indigo-50/50'
                       : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  Temporary Credentials
-                  <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">Quick Access</span>
-                  {authMethod === 'env' && (
+                  AWS IAM Identity Center
+                  <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">SSO</span>
+                  {authMethod === 'sso' && (
                     <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
                   )}
                 </button>
@@ -348,46 +349,51 @@ function App() {
                       <p className="text-[10px] text-slate-400 mb-1 font-mono">Quick setup</p>
                       <code className="text-sm text-green-400 font-mono">aws configure --profile {awsProfile}</code>
                     </div>
+                    <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                      <Shield className="w-3.5 h-3.5 text-indigo-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-[10px] text-indigo-600 leading-relaxed">
+                        <strong>Zero-trust:</strong> Credentials never leave your machine. The backend reads your local AWS CLI config — nothing is transmitted or stored on any server.
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <p className="text-xs text-slate-500 mb-1">
-                      Paste temporary credentials from AWS Console → Security Credentials → Create Access Key.
+                  <div className="space-y-4">
+                    <p className="text-xs text-slate-500">
+                      Authenticate via AWS IAM Identity Center (SSO). A browser window will open for secure login — no credentials are entered here.
                     </p>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Access Key ID</label>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">SSO Start URL</label>
                       <input
                         type="text"
-                        value={envKeys.accessKey}
-                        onChange={(e) => setEnvKeys(prev => ({ ...prev, accessKey: e.target.value }))}
-                        placeholder="AKIA..."
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                        value={ssoStartUrl}
+                        onChange={(e) => setSsoStartUrl(e.target.value)}
+                        placeholder="https://my-org.awsapps.com/start"
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Secret Access Key</label>
-                      <input
-                        type="password"
-                        value={envKeys.secretKey}
-                        onChange={(e) => setEnvKeys(prev => ({ ...prev, secretKey: e.target.value }))}
-                        placeholder="••••••••"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      />
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">SSO Region</label>
+                      <select
+                        value={ssoRegion}
+                        onChange={(e) => setSsoRegion(e.target.value)}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                      >
+                        <option value="us-east-1">US East (N. Virginia)</option>
+                        <option value="us-west-2">US West (Oregon)</option>
+                        <option value="eu-west-1">EU (Ireland)</option>
+                        <option value="eu-central-1">EU (Frankfurt)</option>
+                        <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                        <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                      </select>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Session Token <span className="text-slate-400">(optional)</span></label>
-                      <input
-                        type="password"
-                        value={envKeys.sessionToken}
-                        onChange={(e) => setEnvKeys(prev => ({ ...prev, sessionToken: e.target.value }))}
-                        placeholder="Optional — for temporary credentials"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      />
+                    <div className="bg-slate-900 rounded-lg p-3">
+                      <p className="text-[10px] text-slate-400 mb-1 font-mono">CLI setup</p>
+                      <code className="text-xs text-green-400 font-mono block">aws configure sso --profile nova-sentinel</code>
                     </div>
-                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-amber-700 leading-relaxed">
-                        Credentials are used in-memory only for this session. They are <strong>never persisted</strong> to disk or sent anywhere except directly to AWS APIs.
+                    <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                      <Shield className="w-3.5 h-3.5 text-indigo-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-[10px] text-indigo-600 leading-relaxed">
+                        <strong>Enterprise-grade:</strong> SSO uses a secure browser-based OAuth flow. No secrets are ever entered in or handled by Nova Sentinel. Authentication happens directly with AWS.
                       </p>
                     </div>
                   </div>
@@ -406,8 +412,21 @@ function App() {
                     }}
                     className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Test Connection
+                    {authMethod === 'sso' ? (
+                      <>
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                        Authorize with SSO
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Test Connection
+                      </>
+                    )}
                   </button>
                   {awsConnected && (
                     <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
