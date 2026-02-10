@@ -210,7 +210,6 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     setIsProcessing(true);
 
     const maxRetries = 2;
-    let lastError: any = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -233,7 +232,6 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
           responseText.length < 10 ||
           data.error
         )) {
-          lastError = data;
           continue; // Retry
         }
         
@@ -257,7 +255,6 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
         setIsProcessing(false);
         return; // Success — exit
       } catch (err) {
-        lastError = err;
         if (attempt < maxRetries) continue; // Retry on network error
       }
     }

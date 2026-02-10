@@ -1,6 +1,6 @@
 /**
  * Nova Sentinel - Autonomous Security Intelligence Platform
- * Premium UI with Wiz.io-inspired design language
+ * Premium UI with clearly named features and tabbed analysis
  */
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,16 +14,18 @@ import LandingHero from './components/Landing/LandingHero';
 import FeaturesSection from './components/Landing/FeaturesSection';
 import TimelineView from './components/Analysis/TimelineView';
 import InsightCards from './components/Analysis/InsightCards';
-import DemoScenarios from './components/Dashboard/DemoScenarios';
-import RealAWSConnect from './components/Dashboard/RealAWSConnect';
+import FeatureShowcase from './components/Dashboard/FeatureShowcase';
 import AWSAuthTab from './components/Dashboard/AWSAuthTab';
-import AnalysisTabs from './components/Dashboard/AnalysisTabs';
+import RealAWSConnect from './components/Dashboard/RealAWSConnect';
 import AttackPathDiagram from './components/Visualizations/AttackPathDiagram';
 import VisualAnalysisUpload from './components/Analysis/VisualAnalysisUpload';
 import RemediationPlan from './components/Analysis/RemediationPlan';
 import DocumentationDisplay from './components/Analysis/DocumentationDisplay';
 import ComplianceMapping from './components/Analysis/ComplianceMapping';
 import CostImpact from './components/Analysis/CostImpact';
+import FeatureTabsNav from './components/Analysis/FeatureTabs';
+import SecurityPostureDashboard from './components/Analysis/SecurityPostureDashboard';
+import ReportExport from './components/Analysis/ReportExport';
 import { analysisAPI, demoAPI, orchestrationAPI, visualAPI, documentationAPI, authAPI } from './services/api';
 import type { AnalysisResponse, DemoScenario, OrchestrationResponse } from './types/incident';
 import { formatAnalysisTime } from './utils/formatting';
@@ -44,6 +46,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [awsProfile, setAwsProfile] = useState<string>('secops-lens');
   const [awsConnected, setAwsConnected] = useState(false);
+  const [activeResultTab, setActiveResultTab] = useState('overview');
 
   useEffect(() => {
     loadScenarios();
@@ -78,6 +81,7 @@ function App() {
     setRemediationPlan(null);
     setDocumentationResult(null);
     setError(null);
+    setActiveResultTab('overview');
   };
 
   const handleSelectScenario = async (scenarioId: string) => {
@@ -136,6 +140,139 @@ function App() {
     }
   };
 
+  // Render the active result tab content
+  const renderResultTabContent = () => {
+    if (!analysisResult) return null;
+
+    switch (activeResultTab) {
+      case 'overview':
+        return (
+          <SecurityPostureDashboard
+            timeline={analysisResult.timeline}
+            orchestrationResult={orchestrationResult}
+            analysisTime={analysisResult.analysis_time_ms}
+            incidentId={analysisResult.incident_id}
+          />
+        );
+
+      case 'timeline':
+        return <TimelineView timeline={analysisResult.timeline} />;
+
+      case 'attack-path':
+        return (
+          <div className="space-y-6">
+            <AttackPathDiagram />
+            <VisualAnalysisUpload
+              onUpload={async (file) => {
+                try {
+                  setLoading(true);
+                  setError(null);
+                  if (orchestrationResult?.incident_id) {
+                    const result = await orchestrationAPI.analyzeIncident(
+                      orchestrationResult.results.timeline?.events || [],
+                      file,
+                      orchestrationResult.metadata?.incident_type
+                    );
+                    setOrchestrationResult(result);
+                    setVisualAnalysisResult(result.results.visual);
+                  } else {
+                    const result = await visualAPI.analyzeDiagram(file);
+                    setVisualAnalysisResult(result);
+                  }
+                } catch (err: any) {
+                  console.error('Visual analysis error:', err);
+                  setError('Failed to analyze diagram: ' + (err.response?.data?.detail || err.message));
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              analysisResult={visualAnalysisResult}
+              loading={loading}
+            />
+          </div>
+        );
+
+      case 'compliance':
+        return (
+          <ComplianceMapping
+            timeline={analysisResult.timeline}
+            incidentType={orchestrationResult?.metadata?.incident_type}
+          />
+        );
+
+      case 'cost':
+        return (
+          <CostImpact
+            timeline={analysisResult.timeline}
+            incidentType={orchestrationResult?.metadata?.incident_type}
+          />
+        );
+
+      case 'remediation':
+        return remediationPlan ? (
+          <RemediationPlan
+            plan={remediationPlan}
+            onApprove={async () => {
+              try {
+                setLoading(true);
+                setError(null);
+                if (orchestrationResult?.incident_id && orchestrationResult.results.timeline && remediationPlan) {
+                  const docResult = await documentationAPI.generateDocumentation(
+                    orchestrationResult.incident_id,
+                    orchestrationResult.results.timeline,
+                    remediationPlan
+                  );
+                  setDocumentationResult(docResult);
+                  setOrchestrationResult(prev => prev ? {
+                    ...prev,
+                    agents: { ...prev.agents, documentation: { status: 'COMPLETED' } },
+                    results: { ...prev.results, documentation: docResult }
+                  } : null);
+                }
+              } catch (err: any) {
+                console.error('Documentation error:', err);
+                setError('Failed to generate documentation: ' + (err.response?.data?.detail || err.message));
+              } finally {
+                setLoading(false);
+              }
+            }}
+          />
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Remediation plan not yet generated.</p>
+          </div>
+        );
+
+      case 'documentation':
+        return (documentationResult || orchestrationResult?.results?.documentation) ? (
+          <DocumentationDisplay
+            documentation={(documentationResult || orchestrationResult?.results?.documentation)?.documentation || (documentationResult || orchestrationResult?.results?.documentation)}
+            incidentId={orchestrationResult?.incident_id || analysisResult?.incident_id || 'Unknown'}
+          />
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Approve remediation plan first to generate documentation.</p>
+          </div>
+        );
+
+      case 'export':
+        return (
+          <ReportExport
+            timeline={analysisResult.timeline}
+            orchestrationResult={orchestrationResult}
+            incidentId={analysisResult.incident_id}
+            analysisTime={analysisResult.analysis_time_ms}
+            remediationPlan={remediationPlan}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
   // ========== DEMO/ANALYSIS VIEW ==========
   if (showDemo) {
     return (
@@ -188,91 +325,81 @@ function App() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
             
-            {/* Scenario Selection Section */}
+            {/* ========== PRE-ANALYSIS: Feature Showcase ========== */}
             {!analysisResult && !loading && (
               <>
                 {scenarios.length > 0 ? (
-                  <AnalysisTabs>
-                    {{
-                      realAWS: (
-                        <div className="space-y-6">
-                          <AWSAuthTab
-                            onAuthMethodSelected={(method) => {
-                              if (method === 'profile') setAwsProfile('secops-lens');
-                            }}
-                            currentMethod={awsProfile ? 'profile' : undefined}
-                            onTestConnection={async () => {
+                  <FeatureShowcase
+                    scenarios={scenarios}
+                    onSelectScenario={handleSelectScenario}
+                    onConnectAWS={() => {}}
+                    loading={loading}
+                    awsTab={
+                      <div className="space-y-4">
+                        <AWSAuthTab
+                          onAuthMethodSelected={(method) => {
+                            if (method === 'profile') setAwsProfile('secops-lens');
+                          }}
+                          currentMethod={awsProfile ? 'profile' : undefined}
+                          onTestConnection={async () => {
+                            try {
+                              const result = await authAPI.testConnection(awsProfile);
+                              setAwsConnected(result.connected);
+                              return result.connected;
+                            } catch (err) {
+                              setAwsConnected(false);
+                              return false;
+                            }
+                          }}
+                          loading={loading}
+                        />
+                        {awsConnected && (
+                          <RealAWSConnect
+                            onAnalyze={async (daysBack, maxEvents) => {
                               try {
-                                const result = await authAPI.testConnection(awsProfile);
-                                setAwsConnected(result.connected);
-                                return result.connected;
-                              } catch (err) {
-                                setAwsConnected(false);
-                                return false;
+                                setLoading(true);
+                                setError(null);
+                                resetAnalysis();
+
+                                const realAnalysis = await analysisAPI.analyzeRealCloudTrail(daysBack, maxEvents, awsProfile);
+                                
+                                if ((realAnalysis as any).status === 'no_events') {
+                                  setError(`No security events found in the last ${daysBack} days. Try increasing the time range.`);
+                                  setLoading(false);
+                                  return;
+                                }
+
+                                const events = realAnalysis.timeline?.events || [];
+                                const cloudtrailEvents = events.map((e: any) => ({
+                                  eventTime: typeof e.timestamp === 'string' ? e.timestamp : e.timestamp.toISOString(),
+                                  eventName: e.action || 'Unknown',
+                                  userIdentity: { userName: e.actor || 'Unknown', type: 'IAMUser' },
+                                  requestParameters: { resource: e.resource || 'Unknown' },
+                                  sourceIPAddress: e.details?.sourceIP || 'Unknown',
+                                  awsRegion: 'us-east-1'
+                                }));
+
+                                const result = await orchestrationAPI.analyzeIncident(cloudtrailEvents, undefined, 'Real AWS Account Analysis');
+                                setOrchestrationResult(result);
+                                setAnalysisResult({
+                                  incident_id: result.incident_id,
+                                  timeline: result.results.timeline || realAnalysis.timeline,
+                                  analysis_time_ms: result.analysis_time_ms || realAnalysis.analysis_time_ms,
+                                  model_used: 'Multi-Agent Orchestration (Real AWS)',
+                                });
+                              } catch (err: any) {
+                                console.error('Real AWS analysis error:', err);
+                                setError('Failed to analyze: ' + (err.response?.data?.detail || err.message));
+                              } finally {
+                                setLoading(false);
                               }
                             }}
                             loading={loading}
                           />
-                          {awsConnected && (
-                            <RealAWSConnect
-                              onAnalyze={async (daysBack, maxEvents) => {
-                                try {
-                                  setLoading(true);
-                                  setError(null);
-                                  resetAnalysis();
-
-                                  const realAnalysis = await analysisAPI.analyzeRealCloudTrail(daysBack, maxEvents, awsProfile);
-                                  
-                                  if ((realAnalysis as any).status === 'no_events') {
-                                    setError(`No security events found in the last ${daysBack} days. Try increasing the time range.`);
-                                    setLoading(false);
-                                    return;
-                                  }
-
-                                  const events = realAnalysis.timeline?.events || [];
-                                  const cloudtrailEvents = events.map((e: any) => ({
-                                    eventTime: typeof e.timestamp === 'string' ? e.timestamp : e.timestamp.toISOString(),
-                                    eventName: e.action || 'Unknown',
-                                    userIdentity: { userName: e.actor || 'Unknown', type: 'IAMUser' },
-                                    requestParameters: { resource: e.resource || 'Unknown' },
-                                    sourceIPAddress: e.details?.sourceIP || 'Unknown',
-                                    awsRegion: 'us-east-1'
-                                  }));
-
-                                  const result = await orchestrationAPI.analyzeIncident(cloudtrailEvents, undefined, 'Real AWS Account Analysis');
-                                  setOrchestrationResult(result);
-                                  setAnalysisResult({
-                                    incident_id: result.incident_id,
-                                    timeline: result.results.timeline || realAnalysis.timeline,
-                                    analysis_time_ms: result.analysis_time_ms || realAnalysis.analysis_time_ms,
-                                    model_used: 'Multi-Agent Orchestration (Real AWS)',
-                                  });
-                                } catch (err: any) {
-                                  console.error('Real AWS analysis error:', err);
-                                  setError('Failed to analyze: ' + (err.response?.data?.detail || err.message));
-                                } finally {
-                                  setLoading(false);
-                                }
-                              }}
-                              loading={loading}
-                            />
-                          )}
-                          {!awsConnected && (
-                            <div className="text-center py-8 text-sm text-slate-400">
-                              Configure and test your AWS connection above to begin.
-                            </div>
-                          )}
-                        </div>
-                      ),
-                      demo: (
-                        <DemoScenarios
-                          scenarios={scenarios}
-                          onSelectScenario={handleSelectScenario}
-                          loading={loading}
-                        />
-                      )
-                    }}
-                  </AnalysisTabs>
+                        )}
+                      </div>
+                    }
+                  />
                 ) : (
                   <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
                     <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-4" />
@@ -303,7 +430,7 @@ function App() {
               </motion.div>
             )}
 
-            {/* Loading State - Premium Animated Pipeline */}
+            {/* ========== LOADING STATE ========== */}
             {loading && (
               <div className="space-y-6">
                 <motion.div
@@ -311,7 +438,6 @@ function App() {
                   animate={{ opacity: 1, scale: 1 }}
                   className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-2xl border border-slate-200 shadow-elevated overflow-hidden"
                 >
-                  {/* Animated top accent bar */}
                   <div className="h-1 bg-slate-100 overflow-hidden">
                     <motion.div
                       className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500"
@@ -322,7 +448,6 @@ function App() {
                   </div>
 
                   <div className="p-8 lg:p-10">
-                    {/* Header */}
                     <div className="text-center mb-8">
                       <div className="relative inline-flex items-center justify-center mb-4">
                         <motion.div
@@ -342,11 +467,10 @@ function App() {
                         Multi-Agent Analysis in Progress
                       </h3>
                       <p className="text-sm text-slate-500 max-w-md mx-auto">
-                        5 Nova AI models are working together to detect, analyze, classify, and remediate this incident
+                        5 Nova AI models working together to detect, analyze, classify, and remediate
                       </p>
                     </div>
 
-                    {/* Animated Agent Pipeline */}
                     <div className="grid grid-cols-5 gap-3 mb-8">
                       {[
                         { name: 'Detect', model: 'Nova Pro', Icon: Eye, color: 'from-blue-500 to-cyan-500', delay: 0 },
@@ -363,7 +487,6 @@ function App() {
                           className="relative"
                         >
                           <div className="bg-white rounded-xl p-4 border border-slate-200 text-center h-full">
-                            {/* Running indicator */}
                             <motion.div
                               className={`w-10 h-10 rounded-lg bg-gradient-to-br ${agent.color} mx-auto mb-2 flex items-center justify-center shadow-sm`}
                               animate={{ scale: [1, 1.1, 1] }}
@@ -373,7 +496,6 @@ function App() {
                             </motion.div>
                             <p className="text-xs font-bold text-slate-900">{agent.name}</p>
                             <p className="text-[10px] text-slate-400 mt-0.5">{agent.model}</p>
-                            {/* Mini progress bar */}
                             <div className="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
                               <motion.div
                                 className={`h-full bg-gradient-to-r ${agent.color} rounded-full`}
@@ -382,7 +504,6 @@ function App() {
                               />
                             </div>
                           </div>
-                          {/* Connector arrow */}
                           {i < 4 && (
                             <motion.div
                               className="absolute top-1/2 -right-2.5 z-10 text-slate-300"
@@ -396,7 +517,6 @@ function App() {
                       ))}
                     </div>
 
-                    {/* Live status ticker */}
                     <div className="bg-white/70 border border-slate-200 rounded-xl p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -405,14 +525,9 @@ function App() {
                             animate={{ opacity: [1, 0.3, 1] }}
                             transition={{ duration: 1, repeat: Infinity }}
                           />
-                          <motion.span
-                            className="text-sm font-medium text-slate-700"
-                            key={Math.floor(Date.now() / 3000)}
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                          >
+                          <span className="text-sm font-medium text-slate-700">
                             Analyzing CloudTrail events and building attack timeline...
-                          </motion.span>
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-400">
                           <Clock className="w-3 h-3" />
@@ -427,13 +542,13 @@ function App() {
               </div>
             )}
 
-            {/* ========== ANALYSIS RESULTS ========== */}
+            {/* ========== ANALYSIS RESULTS WITH FEATURE TABS ========== */}
             {analysisResult && !loading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5 }}
-                className="space-y-6"
+                className="space-y-5"
               >
                 {/* Agent Progress Summary */}
                 {orchestrationResult && <AgentProgress agents={orchestrationResult.agents} />}
@@ -466,7 +581,6 @@ function App() {
                       </button>
                     </div>
 
-                    {/* Status badges */}
                     {orchestrationResult && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {orchestrationResult.results.risk_scores && (
@@ -489,94 +603,27 @@ function App() {
                   </div>
                 </div>
 
-                {/* Insight Cards */}
+                {/* Insight Cards (always visible) */}
                 <InsightCards timeline={analysisResult.timeline} />
 
-                {/* Visual Analysis Upload */}
-                <VisualAnalysisUpload
-                  onUpload={async (file) => {
-                    try {
-                      setLoading(true);
-                      setError(null);
-                      if (orchestrationResult?.incident_id) {
-                        const result = await orchestrationAPI.analyzeIncident(
-                          orchestrationResult.results.timeline?.events || [],
-                          file,
-                          orchestrationResult.metadata?.incident_type
-                        );
-                        setOrchestrationResult(result);
-                        setVisualAnalysisResult(result.results.visual);
-                      } else {
-                        const result = await visualAPI.analyzeDiagram(file);
-                        setVisualAnalysisResult(result);
-                      }
-                    } catch (err: any) {
-                      console.error('Visual analysis error:', err);
-                      setError('Failed to analyze diagram: ' + (err.response?.data?.detail || err.message));
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  analysisResult={visualAnalysisResult}
-                  loading={loading}
+                {/* Feature Tabs Navigation */}
+                <FeatureTabsNav
+                  activeTab={activeResultTab}
+                  onTabChange={setActiveResultTab}
                 />
 
-                {/* Attack Path */}
-                <AttackPathDiagram />
-
-                {/* Compliance Mapping */}
-                <ComplianceMapping 
-                  timeline={analysisResult.timeline} 
-                  incidentType={orchestrationResult?.metadata?.incident_type}
-                />
-
-                {/* Cost Impact Estimation */}
-                <CostImpact 
-                  timeline={analysisResult.timeline}
-                  incidentType={orchestrationResult?.metadata?.incident_type}
-                />
-
-                {/* Remediation Plan */}
-                {remediationPlan && (
-                  <RemediationPlan
-                    plan={remediationPlan}
-                    onApprove={async () => {
-                      try {
-                        setLoading(true);
-                        setError(null);
-                        if (orchestrationResult?.incident_id && orchestrationResult.results.timeline && remediationPlan) {
-                          const docResult = await documentationAPI.generateDocumentation(
-                            orchestrationResult.incident_id,
-                            orchestrationResult.results.timeline,
-                            remediationPlan
-                          );
-                          setDocumentationResult(docResult);
-                          setOrchestrationResult(prev => prev ? {
-                            ...prev,
-                            agents: { ...prev.agents, documentation: { status: 'COMPLETED' } },
-                            results: { ...prev.results, documentation: docResult }
-                          } : null);
-                        }
-                      } catch (err: any) {
-                        console.error('Documentation error:', err);
-                        setError('Failed to generate documentation: ' + (err.response?.data?.detail || err.message));
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                  />
-                )}
-
-                {/* Documentation */}
-                {(documentationResult || orchestrationResult?.results?.documentation) && (
-                  <DocumentationDisplay
-                    documentation={(documentationResult || orchestrationResult?.results?.documentation)?.documentation || (documentationResult || orchestrationResult?.results?.documentation)}
-                    incidentId={orchestrationResult?.incident_id || analysisResult?.incident_id || 'Unknown'}
-                  />
-                )}
-
-                {/* Timeline */}
-                <TimelineView timeline={analysisResult.timeline} />
+                {/* Active Tab Content */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeResultTab}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {renderResultTabContent()}
+                  </motion.div>
+                </AnimatePresence>
               </motion.div>
             )}
 
@@ -584,9 +631,9 @@ function App() {
             {!analysisResult && !loading && !error && scenarios.length > 0 && (
               <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-16 text-center">
                 <Play className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Select a Scenario</h3>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Select a Feature to Begin</h3>
                 <p className="text-sm text-slate-500 max-w-md mx-auto">
-                  Choose a demo scenario or connect your AWS account to begin analysis.
+                  Expand "Threat Detection Pipeline" above and choose a demo scenario, or connect your real AWS account.
                 </p>
               </div>
             )}
@@ -601,15 +648,15 @@ function App() {
             </p>
             <div className="flex justify-center gap-4 mt-2 text-[10px] text-slate-300">
               <span>Nova 2 Lite</span>
-              <span>•</span>
+              <span>·</span>
               <span>Nova Pro</span>
-              <span>•</span>
+              <span>·</span>
               <span>Nova Micro</span>
-              <span>•</span>
+              <span>·</span>
               <span>Nova 2 Sonic</span>
-              <span>•</span>
+              <span>·</span>
               <span>MCP Server</span>
-              <span>•</span>
+              <span>·</span>
               <span>Strands Agents</span>
             </div>
           </div>
@@ -728,9 +775,9 @@ function App() {
             </p>
             <div className="flex gap-4 text-xs text-slate-400">
               <span>#AmazonNova</span>
-              <span>•</span>
+              <span>·</span>
               <span>#NovaSentinel</span>
-              <span>•</span>
+              <span>·</span>
               <span>© 2026</span>
             </div>
           </div>
