@@ -27,6 +27,7 @@ import ReportExport from './components/Analysis/ReportExport';
 import { analysisAPI, demoAPI, orchestrationAPI, visualAPI, documentationAPI, authAPI } from './services/api';
 import type { AnalysisResponse, DemoScenario, OrchestrationResponse } from './types/incident';
 import { formatAnalysisTime, formatLastAnalyzed } from './utils/formatting';
+import { hasAwsServicePrincipalInTimeline } from './utils/awsServiceDetection';
 import { demoAnalysisData } from './data/demoAnalysis';
 import { DEFAULT_DEMO_SCENARIOS } from './data/demoScenarios';
 import { getQuickDemoResult } from './data/quickDemoResult';
@@ -162,29 +163,32 @@ function App() {
         return;
       }
 
-      const events = realAnalysis.timeline?.events || [];
-      const cloudtrailEvents = events.map((e: any) => ({
-        eventTime: typeof e.timestamp === 'string' ? e.timestamp : e.timestamp.toISOString(),
-        eventName: e.action || 'Unknown',
-        userIdentity: { userName: e.actor || 'Unknown', type: 'IAMUser' },
-        requestParameters: { resource: e.resource || 'Unknown' },
-        sourceIPAddress: e.details?.sourceIP || 'Unknown',
-        awsRegion: 'us-east-1'
-      }));
+      // Use raw CloudTrail events for orchestration — dynamic analysis from actual data
+      const rawEvents = (realAnalysis as any).raw_events;
+      const cloudtrailEvents = Array.isArray(rawEvents) && rawEvents.length > 0
+        ? rawEvents
+        : (realAnalysis.timeline?.events || []).map((e: any) => ({
+            eventTime: typeof e.timestamp === 'string' ? e.timestamp : e.timestamp?.toISOString?.() || '',
+            eventName: e.action || 'Unknown',
+            userIdentity: { userName: e.actor || 'Unknown', type: 'IAMUser' },
+            requestParameters: { resource: e.resource || 'Unknown' },
+            sourceIPAddress: (e.details as any)?.sourceIP || 'Unknown',
+            awsRegion: 'us-east-1',
+          }));
 
-      const result = await orchestrationAPI.analyzeIncident(cloudtrailEvents, undefined, 'Real AWS Account Analysis');
+      const incidentLabel = `Real AWS (last ${daysBack} days, ${cloudtrailEvents.length} events)`;
+      const result = await orchestrationAPI.analyzeIncident(cloudtrailEvents, undefined, incidentLabel);
       setOrchestrationResult(result);
 
       if (result.results.remediation_plan) {
         setRemediationPlan(result.results.remediation_plan);
       }
 
-      // Derive a meaningful incident type from the orchestration results
       const derivedIncidentType =
         result.metadata?.incident_type ||
         result.results?.timeline?.attack_pattern ||
         result.results?.timeline?.root_cause ||
-        'Real AWS Account Analysis';
+        incidentLabel;
 
       setAnalysisResult({
         incident_id: result.incident_id,
@@ -192,7 +196,10 @@ function App() {
         analysis_time_ms: result.analysis_time_ms || realAnalysis.analysis_time_ms,
         model_used: 'Multi-Agent Orchestration (Real AWS)',
         incident_type: derivedIncidentType,
-      });
+        // Pass for dynamic UI (low-event warning, attack path, cost calibration)
+        events_analyzed: cloudtrailEvents.length,
+        time_range_days: daysBack,
+      } as any);
     } catch (err: any) {
       console.error('Real AWS analysis error:', err);
       setError('Failed: ' + (err.response?.data?.detail || err.message));
@@ -548,6 +555,43 @@ function App() {
             {/* Agent Progress */}
             {orchestrationResult && <AgentProgress agents={orchestrationResult.agents} />}
 
+            {/* Disclaimer: Analysis assumes potential malice — manual validation recommended */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-start gap-3">
+              <span className="text-amber-600 shrink-0 mt-0.5" title="Important notice">⚠</span>
+              <div>
+                <p className="text-xs font-semibold text-amber-800">Analysis disclaimer</p>
+                <p className="text-[11px] text-amber-700 leading-relaxed mt-0.5">
+                  This analysis assumes potential malicious activity. Legitimate admin or account owner usage may be flagged as suspicious. Always validate findings manually before treating them as confirmed breaches.
+                </p>
+              </div>
+            </div>
+
+            {/* Low event count warning — dynamic for real AWS */}
+            {typeof (analysisResult as any)?.events_analyzed === 'number' && (analysisResult as any).events_analyzed <= 5 && typeof (analysisResult as any)?.time_range_days === 'number' && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-start gap-3">
+                <span className="text-amber-600 shrink-0 mt-0.5">ℹ</span>
+                <div>
+                  <p className="text-xs font-semibold text-amber-800">Limited event data</p>
+                  <p className="text-[11px] text-amber-700 leading-relaxed mt-0.5">
+                    Analysis is based on {(analysisResult as any).events_analyzed} events from the last {(analysisResult as any).time_range_days} days. Findings may not reflect full account activity. Consider increasing time range or max events for broader coverage.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* AWS service principal — likely low suspicion */}
+            {hasAwsServicePrincipalInTimeline(analysisResult.timeline) && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3 flex items-start gap-3">
+                <span className="text-blue-600 shrink-0 mt-0.5">🔷</span>
+                <div>
+                  <p className="text-xs font-semibold text-blue-800">AWS service activity detected</p>
+                  <p className="text-[11px] text-blue-700 leading-relaxed mt-0.5">
+                    One or more actors appear to be AWS service principals (*.amazonaws.com). This is often benign automated activity (e.g. Resource Explorer, Config). Verify with your AWS service configuration before treating as malicious.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Insight Cards */}
             <InsightCards timeline={analysisResult.timeline} />
 
@@ -571,6 +615,9 @@ function App() {
             timeline={analysisResult.timeline}
             orchestrationResult={orchestrationResult}
             onNavigateToRemediation={() => setActiveFeature('remediation')}
+            useNarrativeDemoGraph={mode === 'demo' || !!orchestrationResult?.metadata?.quick_demo}
+            eventsAnalyzed={(analysisResult as any)?.events_analyzed}
+            timeRangeDays={(analysisResult as any)?.time_range_days}
           />
         );
 
@@ -591,6 +638,9 @@ function App() {
               orchestrationResult?.results?.timeline?.attack_pattern ||
               (analysisResult as any)?.incident_type
             }
+            eventsAnalyzed={(analysisResult as any)?.events_analyzed}
+            timeRangeDays={(analysisResult as any)?.time_range_days}
+            hasAwsServicePrincipal={hasAwsServicePrincipalInTimeline(analysisResult.timeline)}
           />
         );
 
@@ -767,6 +817,8 @@ function App() {
           activeFeature={activeFeature}
           onFeatureChange={setActiveFeature}
           onBack={goBack}
+          onBackToScenarios={mode === 'demo' ? resetAnalysis : undefined}
+          hasAnalysis={!!analysisResult}
           headerRight={
             <div className="flex items-center gap-3">
               {analysisResult && (

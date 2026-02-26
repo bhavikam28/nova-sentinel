@@ -378,9 +378,19 @@ aws iam enable-mfa-device --user-name <USERNAME> --serial-number <MFA_ARN> --aut
   return controls;
 }
 
+const METHODOLOGY_TEXT = `Controls are derived from incident findings using rule-based heuristics:
+
+• IAM/privilege events → CIS, NIST AC-6, SOC 2 CC6.1, PCI Req 7–8, SOX ITGC-AC, HIPAA §164.312
+• Data access (S3, etc.) → CIS 2.x, NIST SC-28, SOC 2 CC6.7, PCI Req 3–4, HIPAA encryption
+• Network/security group events → CIS 4–5, NIST SC-7, PCI Req 11, GuardDuty/IDS
+• Crypto-mining or malware → NIST SI-3, RA-5, PCI Req 11
+
+Status (violated/at-risk/compliant) is inferred from the timeline. Always verify against your actual AWS configuration—these mappings are AI-assisted, not authoritative.`;
+
 const ComplianceMapping: React.FC<ComplianceMappingProps> = ({ timeline, incidentType }) => {
   const [expandedControl, setExpandedControl] = useState<string | null>(null);
   const [activeFramework, setActiveFramework] = useState<string | null>(null);
+  const [methodologyExpanded, setMethodologyExpanded] = useState(false);
 
   const ctx = useMemo(() => extractIncidentContext(timeline), [timeline]);
   const controls = useMemo(() => generateComplianceMappings(timeline, incidentType), [timeline, incidentType]);
@@ -441,7 +451,20 @@ const ComplianceMapping: React.FC<ComplianceMappingProps> = ({ timeline, inciden
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-medium">
                 <Sparkles className="w-3 h-3 text-slate-500" /> AI-Generated
               </span>
+              <button
+                onClick={() => setMethodologyExpanded(!methodologyExpanded)}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-medium"
+                title="How controls are derived"
+              >
+                <Info className="w-3 h-3" /> Methodology
+                {methodologyExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
             </p>
+            {methodologyExpanded && (
+              <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed whitespace-pre-line">
+                {METHODOLOGY_TEXT}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-bold">

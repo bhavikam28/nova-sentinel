@@ -11,9 +11,9 @@ interface RealAWSConnectProps {
 }
 
 const RealAWSConnect: React.FC<RealAWSConnectProps> = ({ onAnalyze, loading = false }) => {
-  const [daysBack, setDaysBack] = useState(7);
-  const [maxEvents, setMaxEvents] = useState(100);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [daysBack, setDaysBack] = useState(30);
+  const [maxEvents, setMaxEvents] = useState(200);
+  const [showAdvanced, setShowAdvanced] = useState(true);
 
   return (
     <div className="bg-white rounded-2xl border-2 border-indigo-200 p-6 shadow-glow-sm">

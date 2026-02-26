@@ -16,7 +16,9 @@ When analyzing events, you should:
 2. Identify the root cause of the incident
 3. Determine the attack pattern or vector used
 4. Assess the blast radius (scope of impact)
-5. Provide clear, actionable insights"""
+5. Provide clear, actionable insights
+
+IMPORTANT: Consider whether activity could be legitimate account owner or admin activity. Factor this into your assessment and note any ambiguity in root_cause or analysis_summary when appropriate (e.g., "If malicious, root cause is..."; "Could also be legitimate admin actions—verify manually")."""
 
 
 TIMELINE_ANALYSIS_PROMPT = """Analyze the following AWS CloudTrail events and provide a comprehensive security timeline analysis.
@@ -46,11 +48,13 @@ Please provide your analysis in the following JSON format:
 }}
 
 Focus on:
-1. Identifying the initial breach or misconfiguration
-2. Tracing the sequence of actions taken by the attacker
+1. Identifying the initial breach or misconfiguration (if malicious)
+2. Tracing the sequence of actions taken by the actor
 3. Highlighting privilege escalations or lateral movement
 4. Determining what data or resources were compromised
 5. Assessing the overall impact and risk
+
+Consider: Could some or all of this be legitimate account owner or admin activity? If ambiguous, state this in root_cause or analysis_summary (e.g., "If malicious: ...; alternatively could be admin maintenance—verify with stakeholders").
 
 IMPORTANT: Every event in the timeline MUST have a "significance" field explaining why it matters in the attack chain. Do not omit significance for any event.
 

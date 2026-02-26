@@ -83,8 +83,47 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
 
   const healthConfig = getHealthColor(metrics.healthScore);
 
+  const [showMethodology, setShowMethodology] = useState(false);
+
   return (
     <div className="space-y-5">
+      {/* How we calculate — expandable, concise */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden">
+        <button
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-slate-100/50 transition-colors"
+        >
+          <span className="text-xs font-bold text-slate-600 flex items-center gap-2">
+            <HelpCircle className="w-3.5 h-3.5" />
+            How we calculate these numbers
+          </span>
+          {showMethodology ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </button>
+        {showMethodology && (
+          <div className="px-4 pb-4 pt-0">
+            <dl className="space-y-3 text-[11px]">
+              <div>
+                <dt className="font-semibold text-slate-700 mb-0.5">Security Health</dt>
+                <dd className="text-slate-600 leading-relaxed">Weights: Critical 40, High 25, Medium 10, Low 3. Score = 100 − (weighted total ÷ max).</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-700 mb-0.5">Avg Risk Score</dt>
+                <dd className="text-slate-600 leading-relaxed">CRITICAL→95, HIGH→75, MEDIUM→50, LOW→25. Mean of event scores.</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-700 mb-0.5">AI Confidence</dt>
+                <dd className="text-slate-600 leading-relaxed">TemporalAgent 0–1 from event coverage and correlation.</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-700 mb-0.5">Remediation Ready</dt>
+                <dd className="text-slate-600 leading-relaxed">Yes = step-by-step plan with AWS CLI commands exists.</dd>
+              </div>
+            </dl>
+            <p className="text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-200">Events = CloudTrail security-relevant APIs. Analysis Time = pipeline elapsed. Agents = completed steps.</p>
+          </div>
+        )}
+      </div>
+
       {/* Top Row: Health Score + Key Metrics */}
       <div className="grid lg:grid-cols-4 gap-4">
         {/* Health Score - Large */}
@@ -96,7 +135,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
           <div className="flex items-center gap-1.5 mb-3">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Security Health</p>
             <span
-              title={`Based on ${metrics.totalEvents} analyzed events weighted by severity (Critical 40, High 25, Medium 10, Low 3). Score = 100 − weighted risk.`}
+              title="Higher = healthier. Weights: Critical 40, High 25, Medium 10, Low 3."
               className="cursor-help text-slate-400 hover:text-slate-600 transition-colors"
             >
               <HelpCircle className="w-3.5 h-3.5" />
@@ -137,7 +176,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-indigo-600',
               bg: 'bg-indigo-50',
               trend: null,
-              tooltip: `Total CloudTrail events matching security-relevant API actions (IAM, EC2, S3, Bedrock, Lambda, KMS, etc.) within the selected time range.`,
+              tooltip: `CloudTrail events matching security-relevant APIs.`,
             },
             {
               label: 'Avg Risk Score',
@@ -147,7 +186,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-red-600',
               bg: 'bg-red-50',
               trend: 'high',
-              tooltip: `Average risk across top events scored by Nova Micro. Derived from risk_level: CRITICAL=95, HIGH=75, MEDIUM=50, LOW=25. Higher means more dangerous.`,
+              tooltip: `CRITICAL→95, HIGH→75, MEDIUM→50, LOW→25. Mean of event scores.`,
             },
             {
               label: 'AI Confidence',
@@ -156,7 +195,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-emerald-600',
               bg: 'bg-emerald-50',
               trend: null,
-              tooltip: `TemporalAgent's confidence in the timeline reconstruction. Based on event coverage, data quality, and correlation strength.`,
+              tooltip: `TemporalAgent confidence from event coverage and correlation.`,
             },
             {
               label: 'Analysis Time',
@@ -165,7 +204,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-violet-600',
               bg: 'bg-violet-50',
               trend: null,
-              tooltip: `Total wall-clock time for the full orchestration pipeline (temporal analysis, risk scoring, remediation, and documentation).`,
+              tooltip: `Total pipeline elapsed time.`,
             },
             {
               label: 'Agents Used',
@@ -174,7 +213,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-blue-600',
               bg: 'bg-blue-50',
               trend: null,
-              tooltip: `Number of specialized AI agents that ran: TemporalAgent (Nova 2 Lite), VisualAgent (Nova Pro), RiskScorer (Nova Micro), RemediationAgent (Nova 2 Lite), DocumentationAgent (Nova 2 Lite).`,
+              tooltip: `Number of AI analysis steps that completed.`,
             },
             {
               label: 'Remediation Ready',
@@ -183,7 +222,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-emerald-600',
               bg: 'bg-emerald-50',
               trend: null,
-              tooltip: `Whether the RemediationAgent has generated an actionable step-by-step remediation plan for this incident.`,
+              tooltip: `Yes = step-by-step remediation plan with AWS CLI exists.`,
             },
           ].map((metric, i) => (
             <motion.div
@@ -356,13 +395,28 @@ function KeyFindingsExpandable({ timeline }: { timeline: Timeline }) {
   const events = timeline?.events || [];
 
   const getSupportingEvents = (category: string) => {
+    const criticalHigh = events.filter(e =>
+      (e.severity as string)?.toUpperCase() === 'CRITICAL' || (e.severity as string)?.toUpperCase() === 'HIGH'
+    );
     if (category === 'root-cause') {
-      return events.filter(e => /CreateRole|AttachRolePolicy|AssumeRole/i.test(e.action || '')).slice(0, 3);
+      const rootCauseRelevant = events.filter(e =>
+        /CreateRole|AttachRolePolicy|AssumeRole|CreatePolicyVersion|PutCredentials|StartEnvironment|CreateSession/i.test(e.action || '')
+      );
+      return (rootCauseRelevant.length > 0 ? rootCauseRelevant : criticalHigh).slice(0, 5);
     }
     if (category === 'attack-pattern') {
-      return events.filter(e => /AuthorizeSecurityGroup|RunInstances|CreateAccessKey|GuardDuty/i.test(e.action || '')).slice(0, 3);
+      const attackRelevant = events.filter(e =>
+        /AuthorizeSecurityGroup|RunInstances|CreateAccessKey|GuardDuty|CreatePolicyVersion|DeleteSession|PutCredentials|CreateSession/i.test(e.action || '')
+      );
+      return (attackRelevant.length > 0 ? attackRelevant : criticalHigh).slice(0, 5);
     }
-    return events.filter(e => (e.severity as string)?.toUpperCase() === 'CRITICAL' || (e.severity as string)?.toUpperCase() === 'HIGH').slice(0, 3);
+    return criticalHigh.slice(0, 5);
+  };
+
+  const getSummaryText = (category: string) => {
+    if (category === 'root-cause') return timeline?.root_cause;
+    if (category === 'attack-pattern') return timeline?.attack_pattern;
+    return timeline?.blast_radius;
   };
 
   const items = [
@@ -400,17 +454,20 @@ function KeyFindingsExpandable({ timeline }: { timeline: Timeline }) {
                   transition={{ duration: 0.2 }}
                   className="bg-white border-t border-slate-100"
                 >
-                  <div className="p-4 pt-3">
+                  <div className="p-4 pt-3 space-y-3">
+                    {getSummaryText(item.id) && (
+                      <p className="text-xs text-slate-700 leading-relaxed">{getSummaryText(item.id)}</p>
+                    )}
                     {supportingEvents.length > 0 ? (
                       <ul className="space-y-2">
-                          {supportingEvents.map((e, i) => (
-                            <li key={i} className="text-xs text-slate-600 flex items-start gap-2">
-                              <span className="text-slate-400 font-mono shrink-0">{e.timestamp?.slice(0, 16) || '—'}</span>
-                              <span>{e.action} → {e.resource} ({e.severity})</span>
-                            </li>
-                          ))}
+                        {supportingEvents.map((e, i) => (
+                          <li key={i} className="text-xs text-slate-600 flex items-start gap-2">
+                            <span className="text-slate-400 font-mono shrink-0">{e.timestamp?.slice(0, 16) || '—'}</span>
+                            <span>{e.action} → {(e.resource || '').replace(/Environment\s+[a-f0-9-]{36}/gi, 'Bedrock Environment').replace(/Session\s+[\d-]+[a-z0-9]+/gi, 'Bedrock Session')} ({e.severity})</span>
+                          </li>
+                        ))}
                       </ul>
-                    ) : (
+                    ) : !getSummaryText(item.id) && (
                       <p className="text-xs text-slate-500">No timeline events for this finding.</p>
                     )}
                   </div>

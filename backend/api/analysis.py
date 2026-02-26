@@ -167,11 +167,12 @@ async def analyze_real_cloudtrail(
         
         logger.info(f"Real CloudTrail analysis complete: {incident_id} in {analysis_time}ms")
         
-        # Add metadata about real account analysis
+        # Add metadata and raw events — frontend needs raw_events for orchestration (dynamic analysis)
         response_dict = response.dict()
         response_dict['data_source'] = 'real_cloudtrail'
         response_dict['events_analyzed'] = len(formatted_events)
         response_dict['time_range_days'] = days_back
+        response_dict['raw_events'] = formatted_events  # Full CloudTrail for orchestration pipeline
         
         return response_dict
         

@@ -1,5 +1,6 @@
 """
-Amazon CloudTrail service for fetching real API events
+Amazon CloudTrail service for fetching real API events.
+Supports multi-region fetch and proper pagination to maximize event retrieval.
 """
 import asyncio
 import boto3
@@ -9,6 +10,9 @@ from botocore.exceptions import ClientError
 
 from utils.config import get_settings
 from utils.logger import logger
+
+# Common regions to query — CloudTrail LookupEvents is per-region
+DEFAULT_REGIONS = ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "eu-west-1", "eu-central-1", "ap-southeast-1"]
 
 
 class CloudTrailService:
@@ -117,27 +121,21 @@ class CloudTrailService:
             logger.error(f"Unexpected error fetching CloudTrail events: {e}")
             return []
     
-    async def get_security_events(
+    async def _fetch_region_events(
         self,
-        days_back: int = 7,
-        max_results: int = 100
+        region: str,
+        start_time: datetime,
+        end_time: datetime,
+        max_per_region: int,
     ) -> List[Dict[str, Any]]:
-        """
-        Get security-relevant CloudTrail events (write/modify/delete only).
-
-        Uses CloudTrail LookupAttributes with ReadOnly=false to fetch all write events
-        across ANY AWS service (Bedrock, SageMaker, OpenSearch, etc.) — no hardcoded
-        event allowlist. Resilient to new AWS services.
-        """
-        start_time = datetime.utcnow() - timedelta(days=days_back)
-        end_time = datetime.utcnow()
+        """Fetch write events for a single region with pagination and rate limiting."""
+        client = self.session.client('cloudtrail', region_name=region)
         all_events = []
-        max_fetch = max(max_results * 5, 500)
-        pages_fetched = 0
-        max_pages = 50
+        next_token = None
+        pages = 0
+        max_pages = 20  # 20 * 50 = 1000 per region max
         try:
-            next_token = None
-            while len(all_events) < max_fetch and pages_fetched < max_pages:
+            while len(all_events) < max_per_region and pages < max_pages:
                 params = {
                     'StartTime': start_time,
                     'EndTime': end_time,
@@ -149,34 +147,71 @@ class CloudTrailService:
                 if next_token:
                     params['NextToken'] = next_token
                 response = await asyncio.to_thread(
-                    self.client.lookup_events,
+                    client.lookup_events,
                     **params
                 )
                 events = response.get('Events', [])
-                pages_fetched += 1
+                pages += 1
                 all_events.extend(events)
                 next_token = response.get('NextToken')
                 if not next_token:
                     break
-                if len(all_events) >= max_results:
-                    break
-            logger.info(f"CloudTrail: fetched {pages_fetched} pages, {len(all_events)} write events (ReadOnly=false) from last {days_back} days")
+                # Rate limit: CloudTrail allows 2 req/sec per account per region
+                await asyncio.sleep(0.6)
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', '')
-            if error_code == 'AccessDeniedException':
+            if e.response.get('Error', {}).get('Code') == 'AccessDeniedException':
                 raise PermissionError(
                     "CloudTrail access denied. Add cloudtrail:LookupEvents to IAM user. See docs/IAM-POLICY-CLOUDTRAIL.md"
                 ) from e
-            logger.error(f"CloudTrail get_security_events failed: {e}")
-            return []
-        unique = {}
-        for e in all_events:
-            eid = e.get('EventId')
-            if eid and eid not in unique:
-                unique[eid] = e
+            logger.warning(f"CloudTrail fetch failed for {region}: {e}")
+        return all_events
+
+    async def get_security_events(
+        self,
+        days_back: int = 7,
+        max_results: int = 100,
+        regions: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get security-relevant CloudTrail events (write/modify/delete only).
+        Queries multiple regions to maximize event retrieval — CloudTrail LookupEvents
+        is regional, so a single region may miss activity in others.
+        """
+        start_time = datetime.utcnow() - timedelta(days=days_back)
+        end_time = datetime.utcnow()
+        regions_to_query = regions or DEFAULT_REGIONS
+        per_region = max(50, (max_results // len(regions_to_query)) + 20)
+        all_events = []
+        seen_ids = set()
+
+        for region in regions_to_query:
+            if len(all_events) >= max_results:
+                break
+            try:
+                region_events = await self._fetch_region_events(
+                    region, start_time, end_time, per_region
+                )
+                for e in region_events:
+                    eid = e.get('EventId')
+                    if eid and eid not in seen_ids:
+                        seen_ids.add(eid)
+                        all_events.append(e)
+                if region_events:
+                    logger.info(f"CloudTrail {region}: fetched {len(region_events)} write events")
+                await asyncio.sleep(0.5)  # Brief delay between regions
+            except PermissionError:
+                raise
+            except Exception as e:
+                logger.warning(f"CloudTrail fetch error for {region}: {e}")
+
         sorted_events = sorted(
-            unique.values(),
+            all_events,
             key=lambda x: str(x.get('EventTime', '')),
             reverse=True
         )
-        return sorted_events[:max_results]
+        result = sorted_events[:max_results]
+        logger.info(
+            f"CloudTrail: {len(result)} unique write events from {len(regions_to_query)} regions "
+            f"(last {days_back} days, ReadOnly=false)"
+        )
+        return result

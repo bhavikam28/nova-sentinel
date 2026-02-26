@@ -42,6 +42,9 @@ interface DashboardLayoutProps {
   activeFeature: string;
   onFeatureChange: (featureId: string) => void;
   onBack: () => void;
+  /** When in demo mode, clicking "Demo Scenarios" calls this to return to scenario picker */
+  onBackToScenarios?: () => void;
+  hasAnalysis?: boolean;
   children: React.ReactNode;
   headerRight?: React.ReactNode;
 }
@@ -51,6 +54,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   activeFeature,
   onFeatureChange,
   onBack,
+  onBackToScenarios,
+  hasAnalysis,
   children,
   headerRight,
 }) => {
@@ -89,16 +94,26 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
       </div>
 
-      {/* Mode Badge */}
+      {/* Mode Badge — clickable in demo mode to return to scenario picker */}
       {!collapsed && (
         <div className="px-4 py-3">
-          <div className={`px-3 py-2 rounded-lg text-xs font-bold text-center ${
-            mode === 'demo'
-              ? 'bg-violet-50 text-violet-700 border border-violet-200'
-              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-          }`}>
-            {mode === 'demo' ? 'Demo Scenarios' : 'Live AWS Console'}
-          </div>
+          {mode === 'demo' && hasAnalysis && onBackToScenarios ? (
+            <button
+              onClick={onBackToScenarios}
+              className="w-full px-3 py-2 rounded-lg text-xs font-bold text-center bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 hover:border-violet-300 transition-colors cursor-pointer"
+              title="Run a different demo scenario"
+            >
+              Demo Scenarios
+            </button>
+          ) : (
+            <div className={`px-3 py-2 rounded-lg text-xs font-bold text-center ${
+              mode === 'demo'
+                ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}>
+              {mode === 'demo' ? 'Demo Scenarios' : 'Live AWS Console'}
+            </div>
+          )}
         </div>
       )}
 

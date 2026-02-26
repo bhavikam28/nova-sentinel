@@ -24,7 +24,7 @@ class TemporalAgent:
     def __init__(self):
         self.bedrock = BedrockService()
         
-    MAX_EVENTS_FOR_ANALYSIS = 25  # Keep under Nova 2 Lite token limits
+    MAX_EVENTS_FOR_ANALYSIS = 50  # Under Nova 2 Lite token limits; supports multi-region fetch
 
     async def analyze_timeline(
         self,

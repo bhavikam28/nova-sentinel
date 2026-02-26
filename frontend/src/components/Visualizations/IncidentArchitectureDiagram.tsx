@@ -17,6 +17,7 @@ interface ResourceNode {
   type: ResourceType;
   severity: SeverityLevel;
   detail?: string;
+  fullResource?: string; // full resource ID for tooltip when label is truncated
 }
 
 /** Extract AWS service from ARN (arn:aws:SERVICE:...) or eventSource (x.amazonaws.com) */
@@ -54,14 +55,27 @@ function inferType(action: string, resource: string): ResourceType {
   return 'other';
 }
 
+/** Humanize long/cryptic resource strings for display (like demo mode) */
 function parseResource(resource: string): string {
   if (!resource?.trim()) return 'Resource';
   let r = resource.trim();
+  // Bedrock Environment + Session UUID → friendly label
+  if (/Environment\s+[a-f0-9-]{36}/i.test(r) || /Session\s+[\d-]+[a-z0-9]+/i.test(r)) {
+    if (r.toLowerCase().includes('policy') || r.toLowerCase().includes('iam')) {
+      const m = r.match(/IAM\s*Policy[:\s]+([\w-]+)/i) || r.match(/([A-Za-z][\w-]*)/);
+      return m ? m[1] : 'IAM Policy';
+    }
+    return 'Bedrock Session';
+  }
+  if (/^Environment\s+/i.test(r) && r.length > 30) return 'Bedrock Environment';
+  // IAM Policy name
+  const policyMatch = r.match(/IAM\s*Policy[:\s]+([\w-]+)/i) || r.match(/([A-Za-z][\w-]*BedrockAccess)/);
+  if (policyMatch) return policyMatch[1];
   const colon = r.indexOf(':');
   if (colon > 0) r = r.slice(colon + 1).trim();
   const slash = r.lastIndexOf('/');
   if (slash > 0 && (r.includes('role/') || r.includes('user/'))) r = r.slice(slash + 1);
-  return r || 'Resource';
+  return (r || 'Resource').length > 28 ? r.slice(0, 26) + '…' : r || 'Resource';
 }
 
 function isServiceLinkedRole(resource: string): boolean {
@@ -118,8 +132,9 @@ function extractNodes(events: TimelineEvent[]): ResourceNode[] {
     const detail = ev.significance || `${action || 'Accessed'} — ${resource || displayName}`;
 
     if (!seen.has(id)) {
+      const fullResource = resource?.trim() && resource !== displayName ? resource : undefined;
       seen.set(id, {
-        node: { id, label: displayName, subLabel: getSeverityColors(severity).label, type, severity, detail },
+        node: { id, label: displayName, subLabel: getSeverityColors(severity).label, type, severity, detail, fullResource },
         severity,
       });
     } else {
@@ -317,9 +332,14 @@ const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = 
               className="fixed z-[100] pointer-events-none -translate-x-1/2 -translate-y-full"
               style={{ left: tooltipPos.x, top: tooltipPos.y - 12 }}
             >
-              <div className="px-4 py-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-[320px]">
+              <div className="px-4 py-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-[400px]">
                 <div className="font-bold text-slate-900 text-sm">{n.label} — {n.subLabel}</div>
                 <div className="text-[11px] text-slate-600 font-mono mt-0.5">{typeName}</div>
+                {n.fullResource && (
+                  <div className="text-[10px] text-slate-500 font-mono mt-1 break-all" title="Full resource ID">
+                    {n.fullResource}
+                  </div>
+                )}
                 <div className="text-[11px] text-slate-600 mt-1">{n.detail || `${n.subLabel} — affected by incident`}</div>
                 <div className="text-[10px] font-semibold mt-1.5" style={{ color: colors.border }}>Severity: {n.severity.toUpperCase()}</div>
               </div>

@@ -133,19 +133,44 @@ const SEVERITY_STYLES: Record<string, { color: string; bg: string }> = {
   LOW:      { color: '#059669', bg: '#A7F3D0' },
 };
 
-/** Shorten ARN / long resource name for node label */
-function shortenLabel(s: string, maxLen = 20): string {
-  if (!s) return 'Unknown';
-  // Strip surrounding parentheses (e.g. CloudTrail "(root)" → "root")
-  let cleaned = s.replace(/^\(+|\)+$/g, '').trim();
-  if (!cleaned) cleaned = s;
-  // If it's an ARN, extract the last part
-  if (cleaned.includes(':')) {
-    const parts = cleaned.split(/[:/]/);
-    const last = parts[parts.length - 1] || parts[parts.length - 2] || cleaned;
-    return last.length > maxLen ? last.slice(0, maxLen - 1) + '...' : last;
+/** Humanize long/cryptic resource strings into readable labels (like demo mode) */
+function humanizeLabel(s: string, maxLen = 24): string {
+  if (!s) return 'Unknown Resource';
+  const cleaned = s.replace(/^\(+|\)+$/g, '').trim() || s;
+  const lower = cleaned.toLowerCase();
+  if (lower === 'unknown' || lower === 'unknown resource') return 'Resource';
+  if (/service-linked\s*channel/i.test(cleaned)) return 'Service-linked channel';
+  if (/resource-explorer|\.amazonaws\.com/i.test(cleaned)) return cleaned.length <= maxLen ? cleaned : 'Resource Explorer';
+  // Bedrock Environment + Session UUID pattern → friendly name
+  if (/Environment\s+[a-f0-9-]{36}/i.test(cleaned) || /Session\s+[\d-]+[a-z0-9]+/i.test(cleaned)) {
+    if (lower.includes('policy') || lower.includes('iam')) return shortenFallback(cleaned, maxLen);
+    return 'Bedrock Session';
   }
-  return cleaned.length > maxLen ? cleaned.slice(0, maxLen - 1) + '...' : cleaned;
+  if (/^Environment\s+/i.test(cleaned) && cleaned.length > 30) return 'Bedrock Environment';
+  // IAM Policy: extract policy name
+  const policyMatch = cleaned.match(/IAM\s*Policy[:\s]+([\w-]+)/i) || cleaned.match(/([A-Za-z][\w-]*BedrockAccess)/);
+  if (policyMatch) return policyMatch[1].length <= maxLen ? policyMatch[1] : policyMatch[1].slice(0, maxLen - 2) + '…';
+  // ARN: extract last meaningful part (role/user name, instance ID, etc.)
+  if (cleaned.includes(':') && cleaned.includes('/')) {
+    const parts = cleaned.split(/[:/]/);
+    const last = parts[parts.length - 1] || parts[parts.length - 2];
+    if (last && last.length > 3) return shortenFallback(last, maxLen);
+  }
+  // IP address — keep as is if short
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(cleaned)) return cleaned;
+  return shortenFallback(cleaned, maxLen);
+}
+
+function shortenFallback(s: string, maxLen: number): string {
+  if (!s) return 'Unknown';
+  const last = s.split(/[:/]/).pop() || s;
+  const out = last.length > maxLen ? last.slice(0, maxLen - 1) + '…' : last;
+  return out || 'Resource';
+}
+
+/** Shorten ARN / long resource name for node label (delegates to humanize) */
+function shortenLabel(s: string, maxLen = 24): string {
+  return humanizeLabel(s, maxLen);
 }
 
 /** Classify actor type for subLabel */
@@ -191,6 +216,7 @@ function buildMitreMap(riskScores?: Array<{ event: string; risk: any }>): Map<st
 function buildGraphFromTimeline(
   timeline: Timeline,
   riskScores?: Array<{ event: string; risk: any }>,
+  includeNarrativeFrame = true,
 ): { nodes: NodeDef[]; edges: EdgeDef[] } {
   const events = timeline.events || [];
   if (events.length === 0) return { nodes: [], edges: [] };
@@ -204,8 +230,11 @@ function buildGraphFromTimeline(
 
   for (const ev of events) {
     const actor = ev.actor || 'Unknown';
-    const resource = ev.resource || 'Unknown';
+    let resource = ev.resource || 'Unknown';
     const action = ev.action || 'Unknown';
+    if ((!resource || /^unknown$/i.test(resource)) && action) {
+      if (/DeleteServiceLinkedChannel/i.test(action)) resource = 'Service-linked channel';
+    }
     const severity = ev.severity || 'LOW';
 
     // Track actor
@@ -239,32 +268,111 @@ function buildGraphFromTimeline(
     }
   }
 
-  // Layout: actors on left column, resources on right column
+  // Merge resources that humanize to the same label (e.g. multiple Bedrock sessions → one node)
+  const resourceToHumanized = new Map<string, string>();
+  const humanizedGroups = new Map<string, string[]>();
+  for (const r of resourceMap.keys()) {
+    const h = humanizeLabel(r);
+    resourceToHumanized.set(r, h);
+    if (!humanizedGroups.has(h)) humanizedGroups.set(h, []);
+    humanizedGroups.get(h)!.push(r);
+  }
+  // Canonical resource per group (highest severity, then first)
+  const pureResourceIds = [...resourceMap.keys()].filter(r => !actorMap.has(r));
+  const canonicalByGroup = new Map<string, string>();
+  for (const r of pureResourceIds) {
+    const h = resourceToHumanized.get(r)!;
+    if (canonicalByGroup.has(h)) {
+      const cur = canonicalByGroup.get(h)!;
+      if (severityRank(resourceMap.get(r)!.severity) > severityRank(resourceMap.get(cur)!.severity)) {
+        canonicalByGroup.set(h, r);
+      }
+    } else {
+      canonicalByGroup.set(h, r);
+    }
+  }
+  const uniqueResourceGroups = [...new Set(pureResourceIds.map(r => resourceToHumanized.get(r)!))];
+
   const actorIds = [...actorMap.keys()];
-  const resourceIds = [...resourceMap.keys()];
-
-  // Remove actors that are also resources (self-references) — keep as actor
-  const pureResources = resourceIds.filter(r => !actorMap.has(r));
-
   const leftCount = actorIds.length;
-  const rightCount = pureResources.length;
+  const rightCount = uniqueResourceGroups.length;
   const maxCount = Math.max(leftCount, rightCount, 1);
 
-  const graphWidth = 960;
+  const SHIFT = includeNarrativeFrame ? 320 : 0;
+  const graphWidth = 960 + SHIFT;
   const graphHeight = Math.max(320, maxCount * 100 + 60);
-  const leftX = 140;
-  const rightX = graphWidth - 140;
-  const centerX = graphWidth / 2;
+  const leftX = includeNarrativeFrame ? 360 : 140;
+  const rightX = includeNarrativeFrame ? graphWidth - 200 : graphWidth - 140;
+  const centerX = (leftX + rightX) / 2;
 
   const nodes: NodeDef[] = [];
-  const nodeIdMap = new Map<string, string>(); // original name -> sanitized id
+  const edges: EdgeDef[] = [];
+  const nodeIdMap = new Map<string, string>();
+  const groupToNodeId = new Map<string, string>();
 
-  // Helper: create a sanitized ID
   const makeId = (prefix: string, name: string) => {
     return `${prefix}_${name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}`;
   };
 
-  // Place actor nodes (left side)
+  // Narrative frame: Internet → API Gateway → VPC → [your resources] → CloudTrail (real AWS & production)
+  if (includeNarrativeFrame) {
+    const flowY = graphHeight / 2;
+    nodes.push({
+      id: 'narrative_internet',
+      x: 60,
+      y: flowY,
+      icon: Globe,
+      label: 'Internet',
+      subLabel: 'External Origin',
+      detail: 'Traffic enters from external sources before reaching your AWS environment.',
+      color: '#334155',
+      bg: '#E2E8F0',
+      severity: 'medium',
+      mitreId: 'T1190',
+    });
+    nodes.push({
+      id: 'narrative_gateway',
+      x: 180,
+      y: flowY,
+      icon: Network,
+      label: 'Entry Point',
+      subLabel: 'API / Network',
+      detail: 'Traffic passes through your public endpoints (API Gateway, ALB, or direct access).',
+      color: '#334155',
+      bg: '#E2E8F0',
+      severity: 'medium',
+      mitreId: 'T1190',
+    });
+    nodes.push({
+      id: 'narrative_vpc',
+      x: 300,
+      y: flowY,
+      icon: Wifi,
+      label: 'VPC',
+      subLabel: 'Network Layer',
+      detail: 'Virtual Private Cloud — your AWS network boundary. Resources below are inside or accessed via VPC.',
+      color: '#1D4ED8',
+      bg: '#BFDBFE',
+      severity: 'medium',
+      mitreId: 'T1021',
+    });
+    nodes.push({
+      id: 'narrative_cloudtrail',
+      x: graphWidth - 80,
+      y: flowY,
+      icon: Eye,
+      label: 'CloudTrail',
+      subLabel: 'Monitoring',
+      detail: 'Your AWS activity is logged here. Nova Sentinel analyzed these events to build this attack path.',
+      color: '#059669',
+      bg: '#A7F3D0',
+      severity: 'low',
+      mitreId: 'T1562',
+    });
+    edges.push({ from: 'narrative_internet', to: 'narrative_gateway', color: '#475569', label: 'Traffic', delay: 0.05 });
+    edges.push({ from: 'narrative_gateway', to: 'narrative_vpc', color: '#475569', label: 'Route', delay: 0.1 });
+  }
+
   actorIds.forEach((actor, i) => {
     const info = actorMap.get(actor)!;
     const id = makeId('actor', actor);
@@ -292,36 +400,47 @@ function buildGraphFromTimeline(
     });
   });
 
-  // Place resource nodes (right side)
-  pureResources.forEach((resource, i) => {
-    const info = resourceMap.get(resource)!;
-    const id = makeId('res', resource);
-    nodeIdMap.set(resource, id);
+  // Place resource nodes (right side) — one per humanized group
+  uniqueResourceGroups.forEach((groupKey, i) => {
+    const canonical = canonicalByGroup.get(groupKey)!;
+    const info = resourceMap.get(canonical)!;
+    const resourcesInGroup = humanizedGroups.get(groupKey) || [canonical];
+    const totalCount = resourcesInGroup.reduce((sum, r) => sum + (resourceMap.get(r)?.count || 0), 0);
+    const allActions = new Set<string>();
+    resourcesInGroup.forEach(r => resourceMap.get(r)?.actions.forEach(a => allActions.add(a)));
+    let maxSev = info.severity;
+    resourcesInGroup.forEach(r => {
+      const s = resourceMap.get(r)!.severity;
+      if (severityRank(s) > severityRank(maxSev)) maxSev = s;
+    });
+    const id = makeId('res', groupKey);
+    groupToNodeId.set(groupKey, id);
+    resourcesInGroup.forEach(r => nodeIdMap.set(r, id));
     const y = rightCount === 1 ? graphHeight / 2 : 60 + (i * (graphHeight - 120)) / Math.max(rightCount - 1, 1);
-    const sev = info.severity.toUpperCase();
+    const sev = maxSev.toUpperCase();
     const styles = SEVERITY_STYLES[sev] || SEVERITY_STYLES.LOW;
-    const actionsArr = [...info.actions];
+    const actionsArr = [...allActions];
     const mitreId = actionsArr.map(a => mitreMap.get(a)).find(Boolean);
+    const detailSuffix = totalCount > 1 ? ` (${totalCount} related resources)` : '';
 
     nodes.push({
       id,
       x: rightX,
       y,
-      icon: getIconForResource(resource, info.firstAction),
-      label: shortenLabel(resource),
-      subLabel: resourceSubLabel(resource, info.firstAction),
-      detail: `${resource} — ${info.count} event${info.count > 1 ? 's' : ''}: ${actionsArr.slice(0, 3).join(', ')}${actionsArr.length > 3 ? '...' : ''}`,
+      icon: getIconForResource(canonical, info.firstAction),
+      label: groupKey,
+      subLabel: resourceSubLabel(canonical, info.firstAction),
+      detail: `${groupKey} — ${totalCount} event${totalCount > 1 ? 's' : ''}: ${actionsArr.slice(0, 3).join(', ')}${actionsArr.length > 3 ? '...' : ''}${detailSuffix}`,
       color: styles.color,
       bg: styles.bg,
       severity: sev.toLowerCase() as NodeDef['severity'],
       ring: sev === 'CRITICAL' || sev === 'HIGH',
       mitreId,
-      resourceId: resource.includes(':') ? resource : undefined,
+      resourceId: canonical.includes(':') ? canonical : undefined,
     });
   });
 
-  // If there are resources that are also actors (same entity), they go in the middle
-  const dualEntities = resourceIds.filter(r => actorMap.has(r) && r !== actorIds[0]);
+  const dualEntities = [...resourceMap.keys()].filter(r => actorMap.has(r) && r !== actorIds[0] && !nodeIdMap.has(r));
   dualEntities.forEach((entity, i) => {
     if (nodeIdMap.has(entity)) return; // already placed as actor
     const info = resourceMap.get(entity)!;
@@ -349,28 +468,69 @@ function buildGraphFromTimeline(
     });
   });
 
-  // Build edges
-  const edges: EdgeDef[] = [];
-  let delay = 0.3;
+  // Build edges — map resource to its merged node id
+  let delay = includeNarrativeFrame ? 0.2 : 0.3;
+  const seenEdges = new Set<string>();
+  if (includeNarrativeFrame && actorIds.length > 0) {
+    actorIds.forEach((actor) => {
+      const actorId = nodeIdMap.get(actor);
+      if (actorId && !seenEdges.has(`narrative_vpc->${actorId}`)) {
+        edges.push({ from: 'narrative_vpc', to: actorId, color: '#475569', label: 'Entry', delay });
+        seenEdges.add(`narrative_vpc->${actorId}`);
+        delay += 0.05;
+      }
+    });
+    delay += 0.05;
+  }
+  // Merge edges: same from->to (e.g. Root→Bedrock Session with PutCredentials + DeleteSession) → single edge to avoid overlapping labels
+  const mergedEdgeMap = new Map<string, { action: string; count: number; severity: string; actions: Set<string> }>();
   edgeMap.forEach((info, key) => {
     const [actor, resource] = key.split('|||');
     const fromId = nodeIdMap.get(actor);
-    const toId = nodeIdMap.get(resource);
+    const groupKey = resourceToHumanized.get(resource);
+    const toId = groupKey ? (nodeIdMap.get(resource) || groupToNodeId.get(groupKey)) : nodeIdMap.get(resource);
     if (!fromId || !toId || fromId === toId) return;
+    const mergeKey = `${fromId}->${toId}`;
+    const existing = mergedEdgeMap.get(mergeKey);
+    const sev = info.severity.toUpperCase();
+    if (existing) {
+      if (severityRank(sev) > severityRank(existing.severity)) existing.severity = sev;
+      existing.count += info.count;
+      existing.actions.add(info.action);
+    } else {
+      mergedEdgeMap.set(mergeKey, { action: info.action, count: info.count, severity: sev, actions: new Set([info.action]) });
+    }
+  });
+
+  mergedEdgeMap.forEach((info, mergeKey) => {
+    const [fromId, toId] = mergeKey.split('->');
+    if (!fromId || !toId || seenEdges.has(mergeKey)) return;
+    seenEdges.add(mergeKey);
 
     const sev = info.severity.toUpperCase();
     const edgeColor = sev === 'CRITICAL' ? '#B91C1C' : sev === 'HIGH' ? '#EA580C' : sev === 'MEDIUM' ? '#1D4ED8' : '#475569';
-    const label = info.count > 1 ? `${info.action} (${info.count}x)` : info.action;
+    const actionLabel = info.actions.size > 1 ? 'Multiple' : info.action;
+    let label = info.count > 1 ? `${actionLabel} (${info.count}×)` : actionLabel;
+    if (label.length > 18) label = label.slice(0, 15) + '…';
 
-    edges.push({
-      from: fromId,
-      to: toId,
-      color: edgeColor,
-      label: label.length > 25 ? label.slice(0, 22) + '...' : label,
-      delay,
-    });
+    edges.push({ from: fromId, to: toId, color: edgeColor, label, delay });
     delay += 0.15;
   });
+
+  // Connect more resources to CloudTrail for cohesive end-to-end flow
+  if (includeNarrativeFrame && uniqueResourceGroups.length > 1) {
+    const bySeverity = [...uniqueResourceGroups].sort((a, b) => {
+      const sevA = resourceMap.get(canonicalByGroup.get(a)!)?.severity || 'LOW';
+      const sevB = resourceMap.get(canonicalByGroup.get(b)!)?.severity || 'LOW';
+      return severityRank(sevB) - severityRank(sevA);
+    });
+    bySeverity.slice(0, 3).forEach((gk, i) => {
+      const resId = groupToNodeId.get(gk);
+      if (resId && !seenEdges.has(`${resId}->narrative_cloudtrail`)) {
+        edges.push({ from: resId, to: 'narrative_cloudtrail', color: '#059669', label: 'Logged', delay: delay + 0.2 + i * 0.1 });
+      }
+    });
+  }
 
   return { nodes, edges };
 }
@@ -420,6 +580,12 @@ interface AttackPathDiagramProps {
   timeline?: Timeline;
   orchestrationResult?: OrchestrationResponse | null;
   onNavigateToRemediation?: () => void;
+  /** Use narrative graph (Internet → VPC → EC2 → IAM → RDS) for easy comprehension. Default true for demo only. */
+  useNarrativeDemoGraph?: boolean;
+  /** Dynamic: events analyzed from real AWS — shown in subtitle */
+  eventsAnalyzed?: number;
+  /** Dynamic: days of logs analyzed — shown in subtitle */
+  timeRangeDays?: number;
 }
 
 const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
@@ -445,16 +611,19 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
     props.timeline.events.some(e => e.action && e.action !== 'Unknown')
   );
 
+  // Use narrative graph (Internet → VPC → EC2 → IAM → RDS) for both demo and real AWS — default true for comprehensible end-to-end flow
+  const useNarrative = props.useNarrativeDemoGraph !== false;
+
   // Build dynamic or use static
   const { nodes: NODES, edges: EDGES } = useMemo(() => {
+    if (useNarrative) return { nodes: DEMO_NODES, edges: DEMO_EDGES };
     if (hasRealTimeline && props.timeline) {
       const riskScores = props.orchestrationResult?.results?.risk_scores;
       const graph = buildGraphFromTimeline(props.timeline, riskScores);
-      // If dynamic graph has nodes, use it; otherwise fall back
       if (graph.nodes.length > 0) return graph;
     }
     return { nodes: DEMO_NODES, edges: DEMO_EDGES };
-  }, [hasRealTimeline, props.timeline, props.orchestrationResult]);
+  }, [useNarrative, hasRealTimeline, props.timeline, props.orchestrationResult]);
 
   const nodeMap = useMemo(() => Object.fromEntries(NODES.map(n => [n.id, n])), [NODES]);
 
@@ -676,9 +845,13 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-slate-900">Attack Path Graph</h2>
-            {hasRealTimeline ? (
+            {useNarrative ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                {hasRealTimeline ? 'End-to-end flow · Your AWS' : 'End-to-end flow · Demo'}
+              </span>
+            ) : hasRealTimeline ? (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Live CloudTrail
+                End-to-end flow · Your AWS
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200">
@@ -687,9 +860,15 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
             )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            {hasRealTimeline
-              ? `${NODES.length} nodes from ${props.timeline?.events.length || 0} CloudTrail events · click to inspect · drag to pan`
-              : 'Click node to select & open details below · hover for preview · drag to pan · Ctrl+scroll to zoom'}
+            {useNarrative
+              ? hasRealTimeline
+                ? `End-to-end attack flow: Internet → VPC → resources · Your CloudTrail (${props.timeline?.events?.length || 0} events) · click to inspect · drag to pan`
+                : 'End-to-end attack flow: Internet → VPC → resources · click to inspect · drag to pan'
+              : hasRealTimeline
+                ? (NODES.some(n => n.id === 'narrative_internet')
+                    ? `Event-derived flow from your CloudTrail · ${NODES.length} nodes from ${props.eventsAnalyzed ?? props.timeline?.events?.length ?? 0} events${props.timeRangeDays ? ` (last ${props.timeRangeDays} days)` : ''} · click to inspect · drag to pan`
+                    : `${NODES.length} nodes from ${props.eventsAnalyzed ?? props.timeline?.events?.length ?? 0} CloudTrail events${props.timeRangeDays ? ` (last ${props.timeRangeDays} days)` : ''} · click to inspect · drag to pan`)
+                : 'Click node to select & open details below · hover for preview · drag to pan · Ctrl+scroll to zoom'}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -856,24 +1035,24 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                     className="attack-path-line"
                     style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }}
                   />
-                  {/* Edge label with background for readability */}
+                  {/* Edge label — single text with background, no duplicate rendering */}
                   {edge.label && (
-                    <g>
+                    <g pointerEvents="none">
                       <rect
-                        x={mx - 28}
-                        y={my + curveOffset - 18}
-                        width={56}
-                        height={14}
+                        x={mx - Math.min(40, (edge.label.length * 4) / 2)}
+                        y={my + curveOffset - 20}
+                        width={Math.min(80, Math.max(56, edge.label.length * 5))}
+                        height={16}
                         rx={4}
                         fill="white"
-                        fillOpacity="0.9"
+                        fillOpacity="0.95"
                         stroke={edge.color}
                         strokeWidth="0.5"
-                        strokeOpacity="0.5"
+                        strokeOpacity="0.4"
                       />
                       <text
                         x={mx}
-                        y={my + curveOffset - 8}
+                        y={my + curveOffset - 9}
                         textAnchor="middle"
                         fill={edge.color}
                         fontSize="10"

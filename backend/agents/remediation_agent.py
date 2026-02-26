@@ -51,13 +51,25 @@ class RemediationAgent:
                 for event in timeline_events[:10]  # Limit to first 10 events
             ])
             
+            # Detect AWS service principals — avoid irrelevant steps like "Rotate all IAM credentials"
+            actors = [str(e.get('actor', '')).lower() for e in timeline_events]
+            has_aws_service = any('.amazonaws.com' in a for a in actors)
+            aws_service_note = ""
+            if has_aws_service:
+                aws_service_note = """
+IMPORTANT: The actor(s) appear to be AWS service principals (*.amazonaws.com), not human users or compromised IAM.
+- Do NOT recommend "Rotate IAM credentials for all users" — that is irrelevant (no human credentials involved).
+- Focus on: verifying service configuration, reviewing CloudTrail for context, and optionally disabling/unlinking the service if undesired.
+- Suggest lightweight steps appropriate for AWS-managed service activity (often benign).
+"""
+            
             prompt = f"""You are a cloud security expert generating a remediation plan for a security incident.
 
 INCIDENT DETAILS:
 Root Cause: {root_cause}
 Attack Pattern: {attack_pattern}
 Blast Radius: {blast_radius}
-
+{aws_service_note}
 TIMELINE EVENTS:
 {events_summary}
 

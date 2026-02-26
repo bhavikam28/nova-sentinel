@@ -18,6 +18,16 @@ const SEVERITY_ORDER: Record<string, number> = {
   LOW: 3,
 };
 
+/** Humanize resource for display (Environment UUID → Bedrock Environment, etc.) */
+function humanizeResource(resource: string | undefined): string {
+  if (!resource) return '—';
+  if (/Environment\s+[a-f0-9-]{36}/i.test(resource)) return 'Bedrock Environment';
+  if (/Session\s+[\d-]+[a-z0-9]+/i.test(resource)) return 'Bedrock Session';
+  if (/^unknown$/i.test(resource) || !resource.trim()) return 'Resource';
+  if (/service-linked\s*channel/i.test(resource)) return 'Service-linked channel';
+  return resource;
+}
+
 /** Map AWS/CloudTrail actions to MITRE ATT&CK phase labels */
 function getMitrePhase(action: string): string {
   const a = (action || '').toLowerCase();
@@ -283,7 +293,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
                             </span>
                             <span className="flex items-center gap-1.5">
                               <Server className="w-3.5 h-3.5 text-slate-400" />
-                              {event.resource}
+                              {humanizeResource(event.resource)}
                             </span>
                           </div>
                         </div>

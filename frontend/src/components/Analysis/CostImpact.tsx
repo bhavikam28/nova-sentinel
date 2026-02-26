@@ -10,6 +10,12 @@ import type { Timeline } from '../../types/incident';
 interface CostImpactProps {
   timeline: Timeline;
   incidentType?: string;
+  /** Dynamic: event count from real AWS — scales down estimates when very low */
+  eventsAnalyzed?: number;
+  /** Dynamic: days of logs analyzed — affects calibration */
+  timeRangeDays?: number;
+  /** When true (AWS service principal detected), costs are significantly scaled down */
+  hasAwsServicePrincipal?: boolean;
 }
 
 interface CostCategory {
@@ -26,10 +32,19 @@ interface CostCategory {
   complianceBreakdown?: { framework: string; range: string; share: number }[];
 }
 
-function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[] {
+function estimateCosts(
+  timeline: Timeline,
+  incidentType?: string,
+  opts?: { eventsAnalyzed?: number; timeRangeDays?: number; hasAwsServicePrincipal?: boolean }
+): CostCategory[] {
   const eventCount = timeline.events?.length || 0;
+  const eventsAnalyzed = opts?.eventsAnalyzed ?? eventCount;
+  const hasAwsService = opts?.hasAwsServicePrincipal ?? false;
+  const isLowEventScope = eventsAnalyzed <= 3 || (eventsAnalyzed <= 10 && hasAwsService);
+  const scaleDown = hasAwsService ? 0.15 : (isLowEventScope ? 0.35 : 1);
+
   const hasCritical = timeline.events?.some(e => e.severity === 'CRITICAL');
-  const hasDataAccess = timeline.events?.some(e => 
+  const hasDataAccess = timeline.events?.some(e =>
     (e.action || '').toLowerCase().includes('data') ||
     (e.action || '').toLowerCase().includes('s3') ||
     (e.action || '').toLowerCase().includes('get')
@@ -40,7 +55,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
   const costs: CostCategory[] = [];
 
   if (isCryptoMining) {
-    const amount = 2400 + Math.floor(eventCount * 180);
+    const amount = Math.round((2400 + Math.floor(eventCount * 180)) * scaleDown);
     costs.push({
       id: 'compute',
       label: 'Unauthorized Compute',
@@ -54,7 +69,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
       bg: 'bg-red-50',
     });
   } else {
-    const amount = 350 + Math.floor(eventCount * 45);
+    const amount = Math.round((350 + Math.floor(eventCount * 45)) * scaleDown);
     costs.push({
       id: 'compute',
       label: 'Compromised Resources',
@@ -70,7 +85,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
   }
 
   if (isDataExfil || hasDataAccess) {
-    const amount = 15000 + (hasCritical ? 25000 : 5000);
+    const amount = Math.round((15000 + (hasCritical ? 25000 : 5000)) * scaleDown);
     costs.push({
       id: 'breach',
       label: 'Data Breach Exposure',
@@ -89,7 +104,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
     id: 'downtime',
     label: 'Operational Downtime',
     icon: Clock,
-    amount: hasCritical ? 8500 : 2200,
+    amount: Math.round((hasCritical ? 8500 : 2200) * scaleDown),
     description: 'Estimated revenue impact from service disruption during investigation and remediation.',
     methodology: `${hasCritical ? 'Critical incident: ~2hr MTTR × $4,250/hr' : 'Standard incident: ~1hr MTTR × $2,200/hr'}. Based on average downtime costs for mid-size organizations.`,
     source: 'Gartner IT Downtime Research 2024',
@@ -102,7 +117,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
     id: 'remediation',
     label: 'Manual Remediation (Traditional)',
     icon: AlertTriangle,
-    amount: hasCritical ? 12000 : 4500,
+    amount: Math.round((hasCritical ? 12000 : 4500) * scaleDown),
     description: 'Estimated cost of security team labor for manual incident response without Nova Sentinel.',
     methodology: `${hasCritical ? '3 security engineers × 20hrs × $200/hr' : '2 security engineers × 15hrs × $150/hr'}. Includes investigation, containment, eradication, recovery, and post-incident review.`,
     source: 'Bureau of Labor Statistics / Glassdoor',
@@ -116,7 +131,7 @@ function estimateCosts(timeline: Timeline, incidentType?: string): CostCategory[
       id: 'compliance',
       label: 'Compliance Penalty Risk',
       icon: Scale,
-      amount: 50000,
+      amount: Math.round(50000 * scaleDown),
       description: 'Potential regulatory fines for non-compliance with GDPR, CCPA, HIPAA, or PCI-DSS.',
       methodology: `Regulatory fine estimates based on observed incident scope:\n\n• GDPR (Art. 83): Up to 4% of annual global revenue or €20M — data breach + inadequate security.\n• PCI-DSS: $5,000–$100,000/month from card brands — compromised CDE access.\n• HIPAA: $100–$50,000 per violation tier — ePHI exposure if healthcare data involved.\n• CCPA: $2,500–$7,500 per intentional violation — California resident PII.\n\nThis $50,000 estimate assumes moderate exposure across frameworks. Actual fines depend on jurisdiction, revenue, and breach scope.`,
       source: 'GDPR Art. 83, PCI-DSS SAQ Guidelines, HIPAA Breach Rule',
@@ -150,9 +165,23 @@ const CompactBar: React.FC<{ value: number; max: number; color: string }> = ({ v
   );
 };
 
-const CostImpact: React.FC<CostImpactProps> = ({ timeline, incidentType }) => {
+const CostImpact: React.FC<CostImpactProps> = ({
+  timeline,
+  incidentType,
+  eventsAnalyzed,
+  timeRangeDays,
+  hasAwsServicePrincipal,
+}) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const costs = useMemo(() => estimateCosts(timeline, incidentType), [timeline, incidentType]);
+  const costs = useMemo(
+    () =>
+      estimateCosts(timeline, incidentType, {
+        eventsAnalyzed,
+        timeRangeDays,
+        hasAwsServicePrincipal,
+      }),
+    [timeline, incidentType, eventsAnalyzed, timeRangeDays, hasAwsServicePrincipal]
+  );
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {

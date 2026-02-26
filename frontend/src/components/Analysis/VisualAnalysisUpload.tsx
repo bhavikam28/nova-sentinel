@@ -46,6 +46,64 @@ const DEMO_ANALYSIS = {
   },
 };
 
+/** Humanize long IDs in text for display (Environment UUIDs, Session IDs → friendly names) */
+function humanizeFindingText(text: string): string {
+  return text
+    .replace(/Environment\s+[a-f0-9-]{36},?\s*Session\s+[\d-]+[a-z0-9]+/gi, 'Bedrock Session')
+    .replace(/Environment\s+[a-f0-9-]{36}/gi, 'Bedrock Environment')
+    .replace(/Session\s+[\d-]+[a-z0-9]+/gi, 'Bedrock session')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/** Bold IPs in a string, return React fragments */
+function boldIps(text: string): React.ReactNode {
+  const ipPattern = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g;
+  const parts = text.split(ipPattern);
+  return parts.map((seg, i) => (
+    /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(seg)
+      ? <strong key={i} className="font-semibold text-slate-800">{seg}</strong>
+      : seg
+  ));
+}
+
+/** Format summary for display: humanize IDs, bold IPs, render numbered steps (1–99) on separate lines. */
+function formatSummaryForDisplay(summary: string): React.ReactNode {
+  if (!summary?.trim()) return null;
+  const s = humanizeFindingText(summary);
+  // Match only 1–2 digit step numbers (e.g. "1.", "2)", "12. ") — avoids IPs like 209.242.60.194
+  const stepPattern = /(?=\d{1,2}[.)]\s+)/;
+  const parts = s.split(stepPattern).filter(Boolean);
+  const hasNumberedSteps = parts.length >= 2 && /^\d{1,2}[.)]\s+/.test(parts[1]);
+  if (hasNumberedSteps) {
+    const intro = parts[0].trim();
+    const steps = parts.slice(1).map(p => p.replace(/^\d{1,2}[.)]\s+/, '').replace(/,\s*$/, '').trim()).filter(Boolean);
+    return (
+      <div className="space-y-4">
+        {intro && <p className="text-sm text-slate-700 leading-relaxed">{boldIps(intro)}</p>}
+        <ul className="space-y-2 pl-4 border-l-2 border-indigo-200 list-none">
+          {steps.map((step, i) => (
+            <li key={i} className="text-sm text-slate-700 leading-relaxed flex gap-2">
+              <span className="text-indigo-600 font-bold shrink-0">{i + 1}.</span>
+              <span>{boldIps(step)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  const paragraphs = s.split(/\n\n+/).filter(Boolean);
+  return (
+    <div className="space-y-3">
+      {paragraphs.map((para, i) => (
+        <p key={i} className="text-sm text-slate-700 leading-relaxed">
+          {boldIps(para)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function deriveIncidentFindings(timeline: Timeline): { summary: string; security_findings: string[]; recommendations: string[] } {
   const events = timeline?.events || [];
   const rootCause = timeline?.root_cause || 'Security incident detected.';
@@ -56,7 +114,9 @@ function deriveIncidentFindings(timeline: Timeline): { summary: string; security
     const action = e.action || '';
     const resource = e.resource || '';
     const sig = e.significance || '';
-    if (action && resource) findings.push(`${action} → ${resource}. ${sig}`.trim());
+    const humanizedResource = humanizeFindingText(resource).replace(/^Bedrock Environment\s*,?\s*$/i, 'Bedrock Session');
+    const resourceDisplay = humanizedResource.length > 60 ? humanizedResource.slice(0, 57) + '…' : humanizedResource;
+    if (action && resource) findings.push(`${action} → ${resourceDisplay}. ${sig}`.trim());
   });
   if (findings.length === 0) {
     findings.push(rootCause);
@@ -110,8 +170,10 @@ function deriveIncidentFindings(timeline: Timeline): { summary: string; security
     recommendations.push('Enable MFA for all IAM users involved in this incident');
   }
 
+  const summaryIntro = 'VisualAgent analysis of incident:';
+  const summaryBody = `${rootCause} Attack pattern: ${attackPattern}`;
   return {
-    summary: `VisualAgent analysis of incident: ${rootCause} Attack pattern: ${attackPattern}`,
+    summary: `${summaryIntro} ${summaryBody}`,
     security_findings: findings.slice(0, 8),
     recommendations: recommendations.slice(0, 6),
   };
@@ -348,7 +410,7 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
                           <h5 className="text-sm font-bold text-slate-800">Summary</h5>
                         </div>
                         <div className="p-4">
-                          <p className="text-sm text-slate-700 leading-relaxed">{displayResult.analysis.summary}</p>
+                          {formatSummaryForDisplay(displayResult.analysis.summary)}
                         </div>
                       </div>
                     )}
@@ -370,14 +432,28 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
                           {(Array.isArray(displayResult.analysis.security_findings)
                             ? displayResult.analysis.security_findings
                             : Object.values(displayResult.analysis.security_findings)
-                          ).map((finding: any, i: number) => (
-                            <li key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-red-50/30 transition-colors">
-                              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-bold">
-                                {i + 1}
-                              </span>
-                              <span className="text-sm text-slate-700 leading-relaxed pt-0.5">{String(finding)}</span>
-                            </li>
-                          ))}
+                          ).map((finding: any, i: number) => {
+                            const f = String(finding);
+                            const humanized = humanizeFindingText(f);
+                            const actionMatch = f.match(/^([\w]+)\s*→/);
+                            const action = actionMatch ? actionMatch[1] : '';
+                            const rest = humanized.replace(/^[\w]+\s*→\s*/, '').trim();
+                            return (
+                              <li key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-red-50/30 transition-colors">
+                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-bold">
+                                  {i + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  {action && (
+                                    <span className="text-xs font-semibold text-slate-800">{action}</span>
+                                  )}
+                                  <span className={`text-sm text-slate-700 leading-relaxed ${action ? ' ml-1' : ''} pt-0.5`}>
+                                    {action ? `→ ${rest}` : humanized}
+                                  </span>
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
