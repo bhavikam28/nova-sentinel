@@ -131,11 +131,11 @@ export function generateCompliancePdf(
       y = 20;
     }
 
-    // Finding card - header bar
+    // Finding card - header bar (no blue square; elegant left accent)
     doc.setFillColor(248, 250, 252); // slate-50
     doc.rect(margin, y, contentWidth, 4, 'F');
-    doc.setFillColor(99, 102, 241); // indigo-500
-    doc.rect(margin, y, 4, 4, 'F');
+    doc.setFillColor(99, 102, 241); // indigo-500 - thin left accent bar instead of square
+    doc.rect(margin, y, 1, 4, 'F');
     y += 6;
 
     doc.setFont('helvetica', 'bold');

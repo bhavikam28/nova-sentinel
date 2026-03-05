@@ -53,12 +53,14 @@ export interface AgentState {
   started_at?: string;
   error?: string;
   reason?: string;
+  model?: string;
 }
 
 export interface OrchestrationResponse {
   incident_id: string;
   status: 'completed' | 'failed' | 'running';
   analysis_time_ms: number;
+  model_used?: string;
   agents: {
     temporal?: AgentState;
     visual?: AgentState;
@@ -69,7 +71,7 @@ export interface OrchestrationResponse {
   results: {
     timeline?: Timeline;
     visual?: any;
-    risk_scores?: Array<{ event: string; risk: any }>;
+    risk_scores?: Array<{ event: string; risk?: any; risk_score?: number }>;
     remediation_plan?: any;
     documentation?: any;
   };

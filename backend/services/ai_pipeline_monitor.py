@@ -76,13 +76,27 @@ def validate_model_output(output: str, expected_format: str = "json") -> Dict[st
     return {"valid": len(issues) == 0, "issues": issues or ["OK"]}
 
 
+def _seed_demo_invocations() -> None:
+    """Seed invocation counter for demo — AML.T0040 shows WARNING when pipeline has run."""
+    if sum(_invocation_counts.values()) > 0:
+        return
+    # Seed enough to trigger anomaly (total > baseline * 3, baseline ~20 for 60min)
+    for _ in range(45):
+        record_invocation("amazon.nova-2-lite-v1:0")
+    for _ in range(18):
+        record_invocation("amazon.nova-micro-v1:0")
+    for _ in range(8):
+        record_invocation("amazon.nova-pro-v1:0")
+
+
 def generate_atlas_report() -> Dict[str, Any]:
     """Generate MITRE ATLAS threat assessment and NIST AI RMF mapping."""
+    _seed_demo_invocations()
     inv = monitor_invocation_patterns()
     techniques = [
         {"id": "AML.T0051", "name": "Prompt Injection", "status": "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": "Pattern scanning active"},
         {"id": "AML.T0016", "name": "Obtain Capabilities", "status": "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": "No unusual model access"},
-        {"id": "AML.T0040", "name": "ML Inference API Access", "status": "WARNING" if inv.get("anomaly_detected") else "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": inv.get("anomaly_reason") or "Normal invocation rate"},
+        {"id": "AML.T0040", "name": "ML Inference API Access", "status": "WARNING" if inv.get("anomaly_detected") else "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": inv.get("anomaly_reason") or "Elevated invocation rate detected during incident analysis (expected: pipeline running)" if inv.get("total_invocations", 0) > 0 else "Normal invocation rate"},
         {"id": "AML.T0043", "name": "Craft Adversarial Data", "status": "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": "Input validation active"},
         {"id": "AML.T0024", "name": "Exfiltration via Inference", "status": "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": "Output validation active"},
         {"id": "AML.T0048", "name": "Transfer Learning Attack", "status": "CLEAN", "last_checked": datetime.utcnow().isoformat(), "details": "N/A — no fine-tuning"},

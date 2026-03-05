@@ -88,10 +88,10 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
   return (
     <div className="space-y-5">
       {/* How we calculate — expandable, concise */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
         <button
           onClick={() => setShowMethodology(!showMethodology)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-slate-100/50 transition-colors"
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors border-b border-slate-100 bg-gradient-to-r from-slate-50/80 to-transparent"
         >
           <span className="text-xs font-bold text-slate-600 flex items-center gap-2">
             <HelpCircle className="w-3.5 h-3.5" />
@@ -130,7 +130,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-6 flex flex-col items-center justify-center"
+          className="lg:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-card p-6 flex flex-col items-center justify-center"
         >
           <div className="flex items-center gap-1.5 mb-3">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Security Health</p>

@@ -25,7 +25,9 @@ interface Incident {
 
 interface IncidentHistoryProps {
   accountId?: string;
+  refreshTrigger?: number;
   onSelectIncident?: (incidentId: string) => void;
+  onRunDemoClick?: () => void;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -49,7 +51,7 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-export default function IncidentHistory({ accountId = 'demo-account', onSelectIncident }: IncidentHistoryProps) {
+export default function IncidentHistory({ accountId = 'demo-account', refreshTrigger, onSelectIncident, onRunDemoClick }: IncidentHistoryProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [correlations, setCorrelations] = useState<any>(null);
@@ -79,7 +81,7 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
 
   useEffect(() => {
     loadData();
-  }, [accountId]);
+  }, [accountId, refreshTrigger]);
 
   const hasActiveCampaign = correlations?.campaign_probability > 0.6 || (correlations?.active_campaigns?.length ?? 0) > 0;
   const campaignProb = correlations?.campaign_probability ?? 0;
@@ -90,12 +92,13 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 p-5"
+        className="rounded-2xl border border-slate-200 shadow-card overflow-hidden"
       >
+        <div className="p-5 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
-              <Database className="w-5 h-5 text-indigo-600" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
+              <Database className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">Cross-Incident Memory</h2>
@@ -119,14 +122,17 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
             )}
           </div>
         </div>
+        </div>
 
         {hasActiveCampaign && correlations?.active_campaigns?.[0] && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200"
+            className="mx-5 mb-5 p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3"
           >
-            <p className="text-xs font-bold text-amber-800 mb-1">⚠️ CAMPAIGN ALERT</p>
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+            <p className="text-xs font-bold text-amber-800 mb-1">Campaign Alert</p>
             <p className="text-xs text-amber-700">
               {Math.round(campaignProb * 100)}% probability that incidents{' '}
               {correlations.pattern_matches?.map((p: any) => p.incident_id).join(', ') || 'recent'} are part of a coordinated attack.
@@ -134,6 +140,7 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
                 <span className="block mt-2">{correlations.active_campaigns[0].correlation_summary}</span>
               )}
             </p>
+            </div>
           </motion.div>
         )}
       </motion.div>
@@ -162,12 +169,29 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
           disabled={loading}
           className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-60"
         >
-          {loading ? 'Loading...' : 'Refresh'}
+          {loading ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Refreshing...
+            </span>
+          ) : 'Refresh'}
         </button>
       </div>
 
       {/* Incident Table */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex gap-4">
+                <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />
+                <div className="h-4 bg-slate-200 rounded flex-1 animate-pulse" />
+                <div className="h-4 bg-slate-200 rounded w-20 animate-pulse" />
+                <div className="h-4 bg-slate-200 rounded w-32 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : (incidents?.length ?? 0) > 0 ? (
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
@@ -247,7 +271,7 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
                   <td className="px-4 py-3 text-slate-600 text-xs">{inc.remediation_status || 'generated'}</td>
                   <td className="px-4 py-3">
                     {correlations?.pattern_matches?.some((p: any) => p.incident_id === inc.incident_id) ? (
-                      <Link2 className="w-4 h-4 text-indigo-500" title="Linked to campaign" />
+                      <span title="Linked to campaign"><Link2 className="w-4 h-4 text-indigo-500" /></span>
                     ) : (
                       <span className="text-slate-300">—</span>
                     )}
@@ -256,9 +280,20 @@ export default function IncidentHistory({ accountId = 'demo-account', onSelectIn
               ))}
           </tbody>
         </table>
-        {(!incidents || incidents.length === 0) && !loading && (
-          <div className="p-12 text-center text-slate-500 text-sm">
-            No incidents in memory yet. Run a demo or real AWS analysis to populate.
+        ) : (
+          <div className="p-12 text-center">
+            <p className="text-slate-500 text-sm mb-4">No incidents in memory yet.</p>
+            {onRunDemoClick && (
+              <button
+                onClick={onRunDemoClick}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                Run a demo to populate
+              </button>
+            )}
+            {!onRunDemoClick && (
+              <p className="text-slate-400 text-xs">Run a demo or real AWS analysis to populate.</p>
+            )}
           </div>
         )}
       </div>

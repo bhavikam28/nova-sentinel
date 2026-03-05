@@ -5,9 +5,30 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, CheckCircle2, AlertTriangle, ChevronDown,
-  ChevronUp, Play, Clock, Terminal, Copy, Brain
+  ChevronUp, Play, Clock, Terminal, Copy, Brain, FileText
 } from 'lucide-react';
 import { remediationAPI } from '../../services/api';
+
+function ProofCloudTrail({ event }: { event: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="text-slate-400 hover:text-emerald-400 text-[10px] font-bold flex items-center gap-1"
+      >
+        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {expanded ? 'Hide CloudTrail Event' : 'Show CloudTrail Event'}
+      </button>
+      {expanded && (
+        <pre className="mt-1 text-[10px] text-slate-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+          {JSON.stringify(event, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
 
 interface RemediationStep {
   step: number;
@@ -116,7 +137,11 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, onA
       {/* Header */}
       <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-center justify-between mb-3">
-          <div>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm flex-shrink-0">
+              <Shield className="w-4.5 h-4.5 text-white" />
+            </div>
+            <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h3 className="text-base font-bold text-slate-900">Remediation Plan</h3>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityStyles(priority)}`}>
@@ -127,6 +152,7 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, onA
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">{steps.length} remediation steps</p>
+            </div>
           </div>
         {!approved && onApprove ? (
           <button
@@ -141,6 +167,34 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, onA
             <span className="text-xs font-bold text-emerald-700">Approved</span>
           </div>
         ) : null}
+        </div>
+
+        {/* Execution Timeline */}
+        <div className="mt-4 pt-4 border-t border-slate-200">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Execution Flow</span>
+          </div>
+          <div className="flex items-center">
+            {[
+              { id: 'plan', label: 'Plan', done: steps.length > 0, icon: FileText },
+              { id: 'approved', label: 'Approved', done: approved, icon: CheckCircle2 },
+              { id: 'executed', label: Object.keys(stepProofs).length > 0 ? 'Executed' : 'Awaiting', done: Object.keys(stepProofs).length > 0, icon: Play },
+            ].map((phase, i) => {
+              const Icon = phase.icon;
+              const prevPhaseDone = i === 0 ? true : [steps.length > 0, approved, Object.keys(stepProofs).length > 0][i - 1];
+              return (
+                <React.Fragment key={phase.id}>
+                  {i > 0 && <div className={`w-12 sm:w-16 h-0.5 ${prevPhaseDone ? 'bg-emerald-300' : 'bg-slate-200'}`} />}
+                  <div className={`flex flex-col items-center ${phase.done ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 ${phase.done ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-[10px] font-bold mt-1">{phase.label}</span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
 
         {/* Impact assessment + Estimated time + Progress bar */}
@@ -190,7 +244,6 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, onA
           const riskIfSkipped = step.risk_if_skipped;
           const classification = step.classification || (step.automation === 'automated' ? 'AUTO' : 'APPROVAL');
           const reversible = step.reversible !== false;
-          const automation = step.automation === 'automated' ? 'Automated' : 'Manual approval required';
           const status = stepStatuses[stepNumber] || 'pending';
           const isExpanded = expandedSteps.has(stepNumber);
           const proof = stepProofs[stepNumber];
@@ -316,15 +369,43 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, onA
                         </div>
                       )}
                       {proof ? (
-                        <div className="rounded-lg border border-emerald-200 bg-slate-900 text-green-400 p-4 font-mono text-xs space-y-2">
-                          <div className="font-bold text-emerald-400">✅ REMEDIATION EXECUTED</div>
+                        <div className="rounded-lg border border-emerald-200 bg-slate-900 text-green-400 p-4 font-mono text-xs space-y-3">
+                          <div className="font-bold text-emerald-400 text-sm">✅ REMEDIATION EXECUTED</div>
                           <div>Action: {proof.action_type}</div>
                           <div>Target: {proof.resource_arn}</div>
+                          <div>Executed: {proof.execution_timestamp}</div>
                           <div>Executed By: {proof.executed_by}</div>
                           <div>Status: {proof.status}</div>
+                          {proof.before_state && Object.keys(proof.before_state).length > 0 && (
+                            <div className="pt-2 border-t border-slate-700">
+                              <span className="text-slate-400">Before State:</span>
+                              <pre className="mt-1 text-[10px] text-slate-300 whitespace-pre-wrap break-all">{JSON.stringify(proof.before_state, null, 2)}</pre>
+                            </div>
+                          )}
+                          {proof.after_state && Object.keys(proof.after_state).length > 0 && (
+                            <div>
+                              <span className="text-slate-400">After State:</span>
+                              <pre className="mt-1 text-[10px] text-slate-300 whitespace-pre-wrap break-all">{JSON.stringify(proof.after_state, null, 2)}</pre>
+                            </div>
+                          )}
+                          {proof.cloudtrail_event && Object.keys(proof.cloudtrail_event).length > 0 && (
+                            <ProofCloudTrail event={proof.cloudtrail_event} />
+                          )}
                           {proof.rollback_command && (
                             <div className="pt-2 border-t border-slate-700">
-                              <span className="text-amber-400">Rollback: </span>{proof.rollback_command}
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-amber-400">🔄 Rollback Command:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(proof.rollback_command);
+                                  }}
+                                  className="px-2 py-1 rounded text-[10px] font-bold bg-amber-600/30 text-amber-300 hover:bg-amber-600/50 transition-colors flex items-center gap-1"
+                                >
+                                  <Copy className="w-2.5 h-2.5" /> Copy Rollback
+                                </button>
+                              </div>
+                              <code className="block mt-1 text-[10px] text-amber-300 whitespace-pre-wrap break-all">{proof.rollback_command}</code>
                             </div>
                           )}
                         </div>

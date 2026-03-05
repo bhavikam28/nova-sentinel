@@ -233,7 +233,7 @@ Provide validation in JSON format with:
         automation = (step.get("automation", "") or "").lower()
         if automation == "automated":
             return "AUTO"
-        if "delete" in action or "terminate" in action or "remove" in action and "policy" not in action:
+        if ("delete" in action or "terminate" in action or "remove" in action) and "policy" not in action:
             return "MANUAL"
         if "revoke" in action or "detach" in action or "disable" in action or "restrict" in action:
             return "APPROVAL"

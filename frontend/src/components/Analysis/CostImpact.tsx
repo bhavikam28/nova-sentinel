@@ -226,16 +226,18 @@ const CostImpact: React.FC<CostImpactProps> = ({
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-teal-50/40">
+      <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 tracking-tight">
-              <DollarSign className="w-5 h-5 text-teal-600" />
-              Cost Impact Estimation
-            </h3>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm flex-shrink-0">
+              <DollarSign className="w-5 h-5 text-white" />
+            </div>
+            <div>
+            <h3 className="text-lg font-bold text-slate-800 tracking-tight">Cost Impact Estimation</h3>
             <p className="text-sm text-slate-500 mt-1">
               Estimated financial exposure and Nova Sentinel savings
             </p>
+            </div>
           </div>
           <button
             onClick={expandAll}

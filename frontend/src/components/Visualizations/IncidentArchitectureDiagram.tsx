@@ -173,7 +173,7 @@ interface IncidentArchitectureDiagramProps {
 }
 
 const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = ({
-  timeline, orchestrationResult, securityFindings,
+  timeline, orchestrationResult: _orchestrationResult, securityFindings,
 }) => {
   const nodes = useMemo(() => {
     const events = timeline?.events || [];

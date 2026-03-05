@@ -130,7 +130,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+      <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         {/* Agent attribution */}
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100">
@@ -141,11 +141,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <div>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm flex-shrink-0">
+              <Clock className="w-4.5 h-4.5 text-white" />
+            </div>
+            <div>
             <h3 className="text-base font-bold text-slate-900">Event Timeline</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {sortedEvents.length}{severityFilter !== 'all' ? ` of ${timeline.events.length}` : ''} events • {(timeline.confidence * 100).toFixed(0)}% confidence
             </p>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Severity filter */}

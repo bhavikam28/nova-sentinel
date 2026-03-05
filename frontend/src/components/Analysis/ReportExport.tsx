@@ -20,6 +20,50 @@ interface ReportExportProps {
   incidentType?: string;
 }
 
+/** Convert markdown report to professional HTML for print/PDF (blue header like compliance report) */
+function reportMarkdownToPrintHtml(markdown: string, incidentId?: string): string {
+  const now = new Date().toLocaleString();
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const lines = markdown.split('\n');
+  const parts: string[] = [];
+  parts.push(`<div class="report-header"><h1>Security Incident Report</h1><p>Generated ${now} | ${incidentId || 'Nova Sentinel'}</p></div>`);
+  parts.push('<div class="report-body">');
+  let inTable = false;
+  let tableRows: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.trim();
+    if (!t && !inTable) { parts.push('<p>&nbsp;</p>'); continue; }
+    if (t.startsWith('# ')) { parts.push(`<h1>${escape(t.slice(2))}</h1>`); continue; }
+    if (t.startsWith('## ')) { parts.push(`<h2>${escape(t.slice(3))}</h2>`); continue; }
+    if (t.startsWith('### ')) { parts.push(`<h3>${escape(t.slice(4))}</h3>`); continue; }
+    if (t.startsWith('---')) { continue; }
+    if (t.startsWith('|')) {
+      const cells = t.split('|').filter(Boolean).map(c => escape(c.trim()));
+      if (!inTable) { inTable = true; tableRows = []; }
+      if (t.includes('---') || cells.every(c => /^-+$/.test(c))) { continue; }
+      tableRows.push('<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>');
+      continue;
+    }
+    if (inTable && tableRows.length > 0) {
+      const header = tableRows[0];
+      const body = tableRows.slice(1).join('');
+      parts.push(`<table><thead>${header.replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>')}</thead><tbody>${body}</tbody></table>`);
+      tableRows = [];
+      inTable = false;
+    }
+    if (t.startsWith('- ') || t.startsWith('* ')) { parts.push(`<ul><li>${escape(t.slice(2)).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</li></ul>`); continue; }
+    parts.push(`<p>${escape(t).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p>`);
+  }
+  if (inTable && tableRows.length > 0) {
+    const header = tableRows[0];
+    const body = tableRows.slice(1).join('');
+    parts.push(`<table><thead>${header.replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>')}</thead><tbody>${body}</tbody></table>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
 const REPORT_MODEL_ATTRIBUTION = `
 ---
 
@@ -39,7 +83,7 @@ This report was generated using the following Amazon Nova AI models:
 
 const ReportExport: React.FC<ReportExportProps> = ({
   timeline,
-  orchestrationResult,
+  orchestrationResult: _orchestrationResult,
   incidentId,
   analysisTime,
   remediationPlan,
@@ -257,7 +301,7 @@ ${REPORT_MODEL_ATTRIBUTION}
         : includeCover && useBuiltInCover
           ? builtInCoverHtml()
           : '';
-    const escaped = reportMarkdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const bodyHtml = reportMarkdownToPrintHtml(reportMarkdown, incidentId);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
@@ -266,11 +310,21 @@ ${REPORT_MODEL_ATTRIBUTION}
             <title>Security Incident Report — ${incidentId || 'Nova Sentinel'}</title>
             <style>
               body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; padding: 40px 60px; line-height: 1.6; color: #1e293b; max-width: 800px; margin: 0 auto; }
-              pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; }
-              @media print { body { padding: 20px; } }
+              .report-header { background: #4f46e5; color: white; margin: -40px -60px 32px -60px; padding: 24px 60px 20px; }
+              .report-header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+              .report-header p { margin: 6px 0 0; font-size: 11px; opacity: 0.95; }
+              h2 { font-size: 16px; margin-top: 24px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+              h3 { font-size: 14px; margin-top: 16px; color: #334155; }
+              table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 12px; }
+              th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+              th { background: #3730a3; color: white; font-weight: 600; }
+              tr:nth-child(even) { background: #f8fafc; }
+              ul { padding-left: 20px; margin: 8px 0; }
+              .footer { font-size: 10px; color: #64748b; margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+              @media print { body { padding: 20px; } .report-header { margin: -20px -20px 24px -20px; padding: 20px 20px 16px; } }
             </style>
           </head>
-          <body>${coverHtml}<pre>${escaped}</pre></body>
+          <body>${coverHtml}${bodyHtml}</body>
         </html>
       `);
       printWindow.document.close();
@@ -281,24 +335,27 @@ ${REPORT_MODEL_ATTRIBUTION}
   return (
     <div className="space-y-5">
       {/* Export Options */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/30">
+          <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
             <FileText className="w-5 h-5 text-white" />
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900">Export Analysis Report</h3>
             <p className="text-xs text-slate-500">Generate a comprehensive incident report for your team</p>
           </div>
+          </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="p-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {/* Download Markdown (primary) */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleDownloadMarkdown}
-            className="flex flex-col items-center gap-3 p-5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl transition-all group"
+            className="flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl transition-all group"
           >
             <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 group-hover:border-indigo-300 flex items-center justify-center transition-colors">
               <Download className="w-5 h-5 text-slate-600 group-hover:text-indigo-600 transition-colors" />
@@ -314,7 +371,7 @@ ${REPORT_MODEL_ATTRIBUTION}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleDownloadTxt}
-            className="flex flex-col items-center gap-3 p-5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all group"
+            className="flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all group"
           >
             <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center transition-colors">
               <FileText className="w-5 h-5 text-slate-600" />
@@ -330,7 +387,7 @@ ${REPORT_MODEL_ATTRIBUTION}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleCopyReport}
-            className="flex flex-col items-center gap-3 p-5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all group"
+            className="flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all group"
           >
             <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 group-hover:border-emerald-300 flex items-center justify-center transition-colors">
               {copied ? (
@@ -348,12 +405,12 @@ ${REPORT_MODEL_ATTRIBUTION}
           </motion.button>
 
           {/* Print / PDF with optional Nova Canvas cover */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 min-h-[140px]">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handlePrintReport(false)}
-              className="flex flex-col items-center gap-3 p-5 bg-slate-50 hover:bg-violet-50 border border-slate-200 hover:border-violet-300 rounded-xl transition-all group flex-1"
+              className="flex flex-col items-center justify-center gap-3 p-4 bg-slate-50 hover:bg-violet-50 border border-slate-200 hover:border-violet-300 rounded-xl transition-all group flex-1 min-h-0"
             >
               <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 group-hover:border-violet-300 flex items-center justify-center transition-colors">
                 <Printer className="w-5 h-5 text-slate-600 group-hover:text-violet-600 transition-colors" />
@@ -440,10 +497,11 @@ ${(timeline?.blast_radius || 'Not determined').slice(0, 150)}${(timeline?.blast_
 [Expand to view full report with Risk Distribution, Event Timeline, Remediation Plan, and Model Attribution]`}
           </pre>
         </div>
+        </div>
       </div>
 
       {/* Report Contents Summary */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-5">
         <h4 className="text-sm font-bold text-slate-900 mb-3">Report Includes</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[

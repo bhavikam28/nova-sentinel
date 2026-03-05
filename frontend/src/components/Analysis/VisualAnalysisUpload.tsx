@@ -7,7 +7,7 @@
  */
 import React, { useState, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Image, X, CheckCircle2, AlertCircle, Loader2, Eye, Sparkles, Palette, FileText, Shield, Lightbulb } from 'lucide-react';
+import { Upload, Image, X, CheckCircle2, AlertCircle, Loader2, Eye, Sparkles, Palette, FileText, Lightbulb } from 'lucide-react';
 import SampleArchitectureDiagram from '../Visualizations/SampleArchitectureDiagram';
 import IncidentArchitectureDiagram from '../Visualizations/IncidentArchitectureDiagram';
 import type { Timeline } from '../../types/incident';
@@ -180,7 +180,7 @@ function deriveIncidentFindings(timeline: Timeline): { summary: string; security
 }
 
 const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
-  onUpload, analysisResult, loading = false, timeline, orchestrationResult, onNavigateToRemediation,
+  onUpload, analysisResult, loading = false, timeline, orchestrationResult, onNavigateToRemediation: _onNavigateToRemediation,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);

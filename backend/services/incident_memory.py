@@ -39,6 +39,9 @@ class CorrelationResult:
 TABLE_NAME = "nova-sentinel-incident-memory"
 DEFAULT_ACCOUNT = "demo-account"
 
+# In-memory fallback when DynamoDB unavailable (e.g. local demo without AWS)
+_in_memory_incidents: Dict[str, List[Dict[str, Any]]] = {}
+
 
 def _extract_mitre_techniques(data: Dict[str, Any]) -> List[str]:
     """Extract MITRE technique IDs from analysis results."""
@@ -132,32 +135,51 @@ class IncidentMemoryService:
                 logger.error(f"Error checking table: {e}")
         self._table_checked = True
 
+    def _build_incident_dict(
+        self, incident_id: str, account_id: str, timeline: Dict, events: List, mitre_techniques: List,
+        attack_type: str, severity: str, ioc_indicators: List, affected: List, incident_data: Dict
+    ) -> Dict[str, Any]:
+        """Build incident dict for API response (used by in-memory fallback)."""
+        return {
+            "incident_id": incident_id,
+            "account_id": account_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "severity": severity,
+            "attack_type": attack_type[:200],
+            "mitre_techniques": mitre_techniques,
+            "affected_resources": affected,
+            "risk_score": _extract_risk_score(incident_data),
+            "summary": (timeline.get("root_cause") or timeline.get("analysis_summary") or "Security incident")[:500],
+            "remediation_status": "generated",
+            "ioc_indicators": ioc_indicators,
+        }
+
     async def save_incident(self, incident_data: Dict[str, Any], account_id: str = DEFAULT_ACCOUNT) -> bool:
         """Store incident summary after analysis completes."""
-        await self._ensure_table_exists()
+        incident_id = incident_data.get("incident_id", "INC-UNKNOWN")
+        timeline = incident_data.get("results", {}).get("timeline", incident_data.get("timeline", {}))
+        if isinstance(timeline, str):
+            timeline = {}
+        events = timeline.get("events", []) or []
+        mitre_techniques = _extract_mitre_techniques(incident_data)
+        attack_type = (incident_data.get("metadata", {}).get("incident_type") or
+                      (timeline.get("attack_pattern", "")[:80] if timeline.get("attack_pattern") else "Security Incident"))
+        severity = "LOW"
+        for e in events:
+            s = (e.get("severity") or "").upper()
+            if s == "CRITICAL":
+                severity = "CRITICAL"
+                break
+            elif s == "HIGH" and severity != "CRITICAL":
+                severity = "HIGH"
+            elif s == "MEDIUM" and severity not in ("CRITICAL", "HIGH"):
+                severity = "MEDIUM"
+        ioc_indicators = _extract_iocs(incident_data)
+        affected = list({e.get("resource", "") for e in events if e.get("resource")})[:20]
         try:
-            incident_id = incident_data.get("incident_id", "INC-UNKNOWN")
-            timeline = incident_data.get("results", {}).get("timeline", incident_data.get("timeline", {}))
-            if isinstance(timeline, str):
-                timeline = {}
-            events = timeline.get("events", []) or []
-            mitre_techniques = _extract_mitre_techniques(incident_data)
-            attack_type = (incident_data.get("metadata", {}).get("incident_type") or
-                          (timeline.get("attack_pattern", "")[:80] if timeline.get("attack_pattern") else "Security Incident"))
-            severity = "LOW"
-            for e in events:
-                s = (e.get("severity") or "").upper()
-                if s == "CRITICAL":
-                    severity = "CRITICAL"
-                    break
-                elif s == "HIGH" and severity != "CRITICAL":
-                    severity = "HIGH"
-                elif s == "MEDIUM" and severity not in ("CRITICAL", "HIGH"):
-                    severity = "MEDIUM"
-            ioc_indicators = _extract_iocs(incident_data)
+            await self._ensure_table_exists()
             fingerprint = _correlation_fingerprint(attack_type, mitre_techniques)
             timestamp = datetime.utcnow().isoformat()
-            affected = list({e.get("resource", "") for e in events if e.get("resource")})[:20]
             item = {
                 "account_id": {"S": account_id},
                 "incident_id": {"S": incident_id},
@@ -179,13 +201,19 @@ class IncidentMemoryService:
             logger.info(f"Saved incident {incident_id} to memory (account={account_id})")
             return True
         except Exception as e:
-            logger.error(f"Error saving incident to memory: {e}")
-            return False
+            logger.warning(f"DynamoDB save failed, using in-memory fallback: {e}")
+            incident_dict = self._build_incident_dict(
+                incident_id, account_id, timeline, events, mitre_techniques,
+                attack_type, severity, ioc_indicators, affected, incident_data
+            )
+            _in_memory_incidents.setdefault(account_id, []).insert(0, incident_dict)
+            return True
 
     async def get_recent_incidents(self, account_id: str = DEFAULT_ACCOUNT, limit: int = 5) -> List[Dict[str, Any]]:
         """Query most recent incidents for an account."""
-        await self._ensure_table_exists()
+        out: List[Dict[str, Any]] = []
         try:
+            await self._ensure_table_exists()
             resp = await asyncio.to_thread(
                 self.client.query,
                 TableName=TABLE_NAME,
@@ -195,13 +223,13 @@ class IncidentMemoryService:
             )
             items = resp.get("Items", [])
             items_sorted = sorted(items, key=lambda i: i.get("timestamp", {}).get("S", ""), reverse=True)
-            out = []
             for it in items_sorted[:limit]:
                 out.append(self._item_to_incident(it))
-            return out
         except ClientError as e:
-            logger.warning(f"get_recent_incidents failed: {e}")
-            return []
+            logger.warning(f"get_recent_incidents DynamoDB failed: {e}")
+        in_mem = _in_memory_incidents.get(account_id, [])
+        merged = {i["incident_id"]: i for i in (in_mem + out)}
+        return sorted(merged.values(), key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
 
     def _item_to_incident(self, it: Dict[str, Any]) -> Dict[str, Any]:
         """Convert DynamoDB item to incident dict."""

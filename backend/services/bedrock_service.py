@@ -273,8 +273,6 @@ class BedrockService:
             
             # Build the audio content block for Nova Sonic
             # Nova Sonic accepts SPEECH input via the converse API
-            audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
-            
             messages = [{
                 "role": "user",
                 "content": [{

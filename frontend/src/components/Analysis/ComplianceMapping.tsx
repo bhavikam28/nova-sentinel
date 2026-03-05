@@ -441,11 +441,12 @@ const ComplianceMapping: React.FC<ComplianceMappingProps> = ({ timeline, inciden
       {/* Header */}
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-indigo-600" />
-              Compliance Mapping
-            </h3>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm flex-shrink-0">
+              <Shield className="w-4.5 h-4.5 text-white" />
+            </div>
+            <div>
+            <h3 className="text-base font-bold text-slate-900">Compliance Mapping</h3>
             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
               {summary.total} controls assessed across 6 frameworks — auto-mapped from incident findings
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-medium">
@@ -465,6 +466,7 @@ const ComplianceMapping: React.FC<ComplianceMappingProps> = ({ timeline, inciden
                 {METHODOLOGY_TEXT}
               </div>
             )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-bold">

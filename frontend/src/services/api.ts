@@ -13,6 +13,16 @@ const api = axios.create({
   },
 });
 
+/** Root health check — use for backend connectivity (not service-specific) */
+export const healthCheck = async (): Promise<boolean> => {
+  try {
+    const r = await api.get('/health', { timeout: 3000 });
+    return r?.data?.status === 'healthy';
+  } catch {
+    return false;
+  }
+};
+
 // For file uploads (FormData)
 const apiFormData = axios.create({
   baseURL: API_URL,
@@ -111,12 +121,16 @@ export const orchestrationAPI = {
   analyzeIncident: async (
     events: any[],
     diagram?: File,
-    incidentType?: string
+    incidentType?: string,
+    accountId?: string
   ): Promise<OrchestrationResponse> => {
     const formData = new FormData();
     formData.append('events', JSON.stringify(events));
     if (incidentType) {
       formData.append('incident_type', incidentType);
+    }
+    if (accountId) {
+      formData.append('account_id', accountId);
     }
     if (diagram) {
       formData.append('diagram', diagram);

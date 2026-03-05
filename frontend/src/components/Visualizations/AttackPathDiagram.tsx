@@ -10,7 +10,7 @@ import { motion } from 'framer-motion';
 import {
   Shield, AlertTriangle, Key, Globe, Network,
   Wifi, Server, User, Database, Eye, Lock, Cloud, Zap,
-  ZoomIn, ZoomOut, Maximize2, Minimize2, Search, Download
+  ZoomIn, ZoomOut, Maximize2, Minimize2, Search, Download, Target
 } from 'lucide-react';
 import { threatIntelAPI } from '../../services/api';
 
@@ -213,7 +213,7 @@ function resourceSubLabel(resource: string, action: string): string {
 // ─── Dynamic graph builder ─────────────────────────────────────────────────────
 
 /** Build action → MITRE ID map from LLM-generated risk_scores (dynamic, no hardcoding) */
-function buildMitreMap(riskScores?: Array<{ event: string; risk: any }>): Map<string, string> {
+function buildMitreMap(riskScores?: Array<{ event: string; risk?: any; risk_score?: number }>): Map<string, string> {
   const map = new Map<string, string>();
   if (!riskScores) return map;
   for (const { event, risk } of riskScores) {
@@ -225,7 +225,7 @@ function buildMitreMap(riskScores?: Array<{ event: string; risk: any }>): Map<st
 
 function buildGraphFromTimeline(
   timeline: Timeline,
-  riskScores?: Array<{ event: string; risk: any }>,
+  riskScores?: Array<{ event: string; risk?: any; risk_score?: number }>,
   includeNarrativeFrame = true,
 ): { nodes: NodeDef[]; edges: EdgeDef[] } {
   const events = timeline.events || [];
@@ -870,8 +870,12 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
       data-incident-context={Boolean(props.timeline || props.orchestrationResult) ? 'true' : undefined}
     >
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-        <div>
+      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-slate-50 to-indigo-50/30">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-rose-500 to-orange-600 flex items-center justify-center shadow-sm flex-shrink-0">
+            <Target className="w-4.5 h-4.5 text-white" />
+          </div>
+          <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-slate-900">Attack Path Graph</h2>
             {useNarrative ? (
@@ -899,6 +903,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                     : `${NODES.length} nodes from ${props.eventsAnalyzed ?? props.timeline?.events?.length ?? 0} CloudTrail events${props.timeRangeDays ? ` (last ${props.timeRangeDays} days)` : ''} · click to inspect · drag to pan`)
                 : 'Click node to select & open details below · hover for preview · drag to pan · Ctrl+scroll to zoom'}
           </p>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Search */}
