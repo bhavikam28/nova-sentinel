@@ -41,24 +41,6 @@ export const analysisAPI = {
   },
 
   /**
-   * Analyze REAL CloudTrail events from your AWS account
-   */
-  analyzeRealCloudTrail: async (daysBack: number = 7, maxEvents: number = 100, profile?: string, fetchOnly = true): Promise<AnalysisResponse> => {
-    const params = new URLSearchParams({
-      days_back: daysBack.toString(),
-      max_events: maxEvents.toString(),
-      fetch_only: fetchOnly.toString(),
-    });
-    if (profile) {
-      params.append('profile', profile);
-    }
-    const response = await api.post<AnalysisResponse>(
-      `/api/analysis/real-cloudtrail?${params.toString()}`
-    );
-    return response.data;
-  },
-
-  /**
    * Health check for analysis service
    */
   healthCheck: async (): Promise<{ status: string }> => {
