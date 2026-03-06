@@ -132,6 +132,23 @@ Return ONLY valid JSON, no additional text."""
             )
             
             risk_assessment = self._parse_risk_response(response['text'])
+
+            # Hard override: don't rely on Nova Micro following calibration — enforce in code
+            event_name = (
+                event.get("eventName")
+                or event.get("event_name")
+                or event.get("EventName")
+                or ""
+            )
+            risk_level = (risk_assessment.get("risk_level") or "MEDIUM").upper()
+            if event_name in ("CreatePolicyVersion", "PutUserPolicy"):
+                if risk_level in ("HIGH", "CRITICAL"):
+                    risk_assessment["risk_level"] = "MEDIUM"
+            elif event_name == "GetCallerIdentity":
+                risk_assessment["risk_level"] = "LOW"
+            elif event_name in ("CreateSession", "DeleteSession"):
+                if risk_level in ("HIGH", "CRITICAL"):
+                    risk_assessment["risk_level"] = "MEDIUM"
             
             return risk_assessment
             

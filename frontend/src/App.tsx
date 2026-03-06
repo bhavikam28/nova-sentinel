@@ -11,7 +11,9 @@ import {
 import NovaSentinelLogo from './components/Logo';
 import LandingHero from './components/Landing/LandingHero';
 import FeaturesSection from './components/Landing/FeaturesSection';
+import WhatWhyForWhom from './components/Landing/WhatWhyForWhom';
 import WhyWeWinSection from './components/Landing/WhyWeWinSection';
+import FAQSection from './components/Landing/FAQSection';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ScenarioPicker from './components/Dashboard/ScenarioPicker';
 import RealAWSConnect from './components/Dashboard/RealAWSConnect';
@@ -541,20 +543,20 @@ function App() {
           <div className="space-y-6">
             {/* Incident Header */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/20">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm flex-shrink-0">
-                    <Shield className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-5 h-5 text-slate-600" strokeWidth={1.8} />
                   </div>
                   <div>
                   <div className="flex items-center gap-3 mb-1">
                     <h2 className="text-lg font-bold text-slate-900">
                       Incident {analysisResult.incident_id}
                     </h2>
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                      <span className="text-xs font-bold text-emerald-700">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-slate-600" />
+                      <span className="text-xs font-bold text-slate-700">
                         {(analysisResult.timeline.confidence * 100).toFixed(0)}%
                       </span>
                     </div>
@@ -576,12 +578,12 @@ function App() {
               {orchestrationResult && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {orchestrationResult.results.risk_scores && (
-                    <span className="text-[10px] px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200 font-bold">
+                    <span className="text-[10px] px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">
                       {orchestrationResult.results.risk_scores.length} Risk Scores
                     </span>
                   )}
                   {orchestrationResult.results.remediation_plan && (
-                    <span className="text-[10px] px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 font-bold">
+                    <span className="text-[10px] px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">
                       Remediation Ready
                     </span>
                   )}
@@ -590,12 +592,12 @@ function App() {
               </div>
             </div>
 
-            {/* Disclaimer: Prominent — analysis assumes potential malice */}
-            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            {/* Disclaimer */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
               <div>
-                <p className="text-xs font-bold text-amber-800">Analysis disclaimer</p>
-                <p className="text-[11px] text-amber-700 leading-relaxed mt-0.5">
+                <p className="text-xs font-bold text-slate-700">Analysis disclaimer</p>
+                <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
                   This analysis assumes potential malicious activity. Legitimate admin or account owner usage may be flagged as suspicious. Always validate findings manually before treating them as confirmed breaches.
                 </p>
               </div>
@@ -606,11 +608,11 @@ function App() {
 
             {/* Low event count warning — dynamic for real AWS */}
             {typeof (analysisResult as any)?.events_analyzed === 'number' && (analysisResult as any).events_analyzed <= 5 && typeof (analysisResult as any)?.time_range_days === 'number' && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-start gap-3">
-                <Eye className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
+                <Eye className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
                 <div>
-                  <p className="text-xs font-semibold text-amber-800">Limited event data</p>
-                  <p className="text-[11px] text-amber-700 leading-relaxed mt-0.5">
+                  <p className="text-xs font-semibold text-slate-700">Limited event data</p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
                     Analysis is based on {(analysisResult as any).events_analyzed} events from the last {(analysisResult as any).time_range_days} days. Findings may not reflect full account activity. Consider increasing time range or max events for broader coverage.
                   </p>
                 </div>
@@ -619,11 +621,11 @@ function App() {
 
             {/* AWS service principal — likely low suspicion */}
             {hasAwsServicePrincipalInTimeline(analysisResult.timeline) && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3 flex items-start gap-3">
-                <Shield className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
+                <Shield className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
                 <div>
-                  <p className="text-xs font-semibold text-blue-800">AWS service activity detected</p>
-                  <p className="text-[11px] text-blue-700 leading-relaxed mt-0.5">
+                  <p className="text-xs font-semibold text-slate-700">AWS service activity detected</p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
                     One or more actors appear to be AWS service principals (*.amazonaws.com). This is often benign automated activity (e.g. Resource Explorer, Config). Verify with your AWS service configuration before treating as malicious.
                   </p>
                 </div>
@@ -921,15 +923,15 @@ function App() {
                 />
               )}
               {analysisResult && (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-bold text-emerald-700">Analysis Complete</span>
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-slate-500" />
+                  <span className="text-xs font-bold text-slate-700">Analysis Complete</span>
                 </div>
               )}
               {loading && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-                  <Loader2 className="w-3 h-3 text-indigo-600 animate-spin" />
-                  <span className="text-xs font-bold text-indigo-700">Analyzing...</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg">
+                  <Loader2 className="w-3 h-3 text-slate-600 animate-spin" />
+                  <span className="text-xs font-bold text-slate-700">Analyzing...</span>
                 </div>
               )}
             </div>
@@ -1014,14 +1016,14 @@ function App() {
 
   // ========== LANDING PAGE ==========
   return (
-    <div className="min-h-screen bg-[#06080d] landing-grid-bg">
-      {/* Fixed Navigation — dark cybersecurity */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#06080d]/85 backdrop-blur-xl border-b border-white/[0.06]">
+    <div className="min-h-screen bg-white">
+      {/* Fixed Navigation — light */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2.5">
               <NovaSentinelLogo size={30} animated={false} />
-              <span className="text-base font-bold text-white">Nova Sentinel</span>
+              <span className="text-base font-bold text-slate-900">Nova Sentinel</span>
             </div>
 
             <div className="hidden md:flex items-center gap-6">
@@ -1029,20 +1031,20 @@ function App() {
                 href="https://github.com/bhavikam28/nova-sentinel"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white font-medium transition-colors"
+                className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                 GitHub
               </a>
               <button
                 onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
-                className="text-sm text-slate-400 hover:text-white font-medium transition-colors"
+                className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
               >
                 Try Demo
               </button>
               <button
                 onClick={() => { setMode('console'); window.location.hash = '#console'; }}
-                className="btn-nova px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm"
+                className="btn-nova px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors"
               >
                 Launch Console
               </button>
@@ -1050,7 +1052,7 @@ function App() {
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-slate-400 hover:text-white"
+              className="md:hidden text-slate-600 hover:text-slate-900"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -1063,13 +1065,14 @@ function App() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-white/10 bg-slate-900/95 backdrop-blur-xl"
+              className="md:hidden border-t border-slate-200 bg-white"
             >
               <div className="px-4 py-6 space-y-4">
-                <a href="https://github.com/bhavikam28/nova-sentinel" target="_blank" rel="noopener noreferrer" className="block text-slate-300 hover:text-white font-medium">GitHub</a>
+                <a href="https://github.com/bhavikam28/nova-sentinel" target="_blank" rel="noopener noreferrer" className="block text-slate-600 hover:text-slate-900 font-medium">GitHub</a>
+                <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">FAQ</a>
                 <button
                   onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
-                  className="block text-slate-300 hover:text-white font-medium w-full text-left"
+                  className="block text-slate-600 hover:text-slate-900 font-medium w-full text-left"
                 >
                   Try Demo
                 </button>
@@ -1085,57 +1088,55 @@ function App() {
         </AnimatePresence>
       </nav>
 
-      {/* Hero */}
       <LandingHero />
 
-      {/* Stats Bar */}
-      <div className="flex justify-center gap-12 py-6 border-y border-white/[0.06] bg-[#0b0f18]/50">
+      {/* Stats — premium white bar */}
+      <div className="flex justify-center gap-6 md:gap-10 py-10 bg-white border-y border-slate-200 px-4">
         {[
-          { value: '<60s', label: 'Detection to Resolution' },
+          { value: 'End-to-End', label: 'Detection to Resolution' },
           { value: '5', label: 'Nova Models Orchestrated' },
           { value: '22', label: 'MCP Tools Registered' },
           { value: '$0.01', label: 'Per Incident Analysis' },
           { value: '6', label: 'MITRE ATLAS Techniques' },
         ].map((stat) => (
-          <div key={stat.label} className="text-center">
-            <div className="text-2xl font-mono font-bold text-white">{stat.value}</div>
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mt-1">{stat.label}</div>
+          <div
+            key={stat.label}
+            className="text-center px-6 py-4 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all"
+          >
+            <div className="text-2xl font-bold text-slate-900 font-mono">{stat.value}</div>
+            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-1.5">{stat.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Features */}
+      <WhatWhyForWhom />
       <FeaturesSection />
-
-      {/* Why Nova Sentinel Wins */}
       <WhyWeWinSection />
 
-      {/* CTA Section — Dark */}
-      <section className="py-28 bg-[#0b0f18] border-t border-white/[0.06] relative overflow-hidden" id="cta">
-        <div className="absolute inset-0 landing-grid-bg opacity-50" />
+      {/* CTA — premium */}
+      <section className="py-28 bg-gradient-to-b from-slate-50 to-white border-t border-slate-200 relative overflow-hidden" id="cta">
+        <div className="absolute inset-0 opacity-30" style={{
+          backgroundImage: 'radial-gradient(circle at 30% 50%, rgba(99,102,241,0.06) 0%, transparent 50%), radial-gradient(circle at 70% 50%, rgba(139,92,246,0.06) 0%, transparent 50%)',
+        }} />
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight">
-              Ready to Secure Your Cloud?
+          <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+            <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-6 tracking-tight">
+              Try the Agentic Pipeline
             </h2>
-            <p className="text-xl text-slate-400 mb-14 max-w-2xl mx-auto leading-relaxed">
-              Explore with demo scenarios or connect your own AWS account. Credentials never leave your machine.
+            <p className="text-lg text-slate-600 mb-12 max-w-2xl mx-auto">
+              Demo scenarios or connect your AWS account. From signal to resolution — credentials stay local.
             </p>
             <div className="flex flex-col sm:flex-row gap-5 justify-center">
               <button
                 onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
-                className="px-10 py-4 bg-transparent border-2 border-white/[0.2] text-white rounded-xl font-bold text-lg hover:border-indigo-400 hover:bg-indigo-500/10 transition-all flex items-center gap-3 justify-center"
+                className="px-10 py-4 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:border-indigo-300 hover:bg-indigo-50/50 transition-all flex items-center gap-3 justify-center shadow-sm"
               >
-                <Play className="h-5 w-5 text-indigo-400" />
+                <Play className="h-5 w-5 text-indigo-500" />
                 Try Demo
               </button>
               <button
                 onClick={() => { setMode('console'); window.location.hash = '#console'; }}
-                className="btn-nova inline-flex items-center gap-3 px-10 py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all"
+                className="btn-nova inline-flex items-center gap-3 px-10 py-4 bg-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:bg-indigo-700 transition-all"
               >
                 <Shield className="h-5 w-5" />
                 Launch Console
@@ -1145,21 +1146,22 @@ function App() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-[#06080d] border-t border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <FAQSection />
+
+      <footer className="bg-white border-t border-slate-200 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-2.5 mb-4">
               <NovaSentinelLogo size={28} animated={false} />
-              <span className="text-base font-bold text-white">Nova Sentinel</span>
+              <span className="text-base font-bold text-slate-900">Nova Sentinel</span>
             </div>
-            <p className="text-sm text-slate-400 text-center mb-4">
-              AI-powered security intelligence · Powered by Amazon Nova
+            <p className="text-sm text-slate-500 text-center mb-4">
+              Autonomous Security Incident Response Powered by Amazon Nova
             </p>
             <div className="flex gap-4 text-xs text-slate-500">
               <span>#AmazonNova</span>
               <span>·</span>
-              <span>#Nova Sentinel</span>
+              <span>#NovaSentinel</span>
               <span>·</span>
               <span>© 2026</span>
             </div>

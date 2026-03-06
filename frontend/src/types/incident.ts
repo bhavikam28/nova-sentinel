@@ -74,6 +74,12 @@ export interface OrchestrationResponse {
     risk_scores?: Array<{ event: string; risk?: any; risk_score?: number }>;
     remediation_plan?: any;
     documentation?: any;
+    correlation?: {
+      correlation_summary: string;
+      campaign_probability: number;
+      pattern_matches?: number;
+      technique_overlaps?: number;
+    };
   };
   metadata?: {
     incident_type?: string;

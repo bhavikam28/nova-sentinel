@@ -28,7 +28,7 @@ export const SIDEBAR_FEATURES: SidebarFeature[] = [
   { id: 'attack-path', label: 'Attack Path', icon: GitBranch, locked: false, group: 'analysis' },
   { id: 'incident-history', label: 'Incident History', icon: Database, locked: false, group: 'analysis' },
   // Intelligence group
-  { id: 'compliance', label: 'Compliance Mapping', icon: Scale, locked: false, badge: '6', badgeColor: 'bg-emerald-100 text-emerald-700', group: 'intelligence' },
+  { id: 'compliance', label: 'Compliance Mapping', icon: Scale, locked: false, badge: '6', group: 'intelligence' },
   { id: 'cost', label: 'Cost Impact', icon: DollarSign, locked: false, group: 'intelligence' },
   { id: 'remediation', label: 'Remediation Engine', icon: Shield, locked: false, group: 'intelligence' },
   // Tools group
@@ -103,16 +103,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {mode === 'demo' && hasAnalysis && onBackToScenarios ? (
             <button
               onClick={onBackToScenarios}
-              className="w-full px-3 py-2 rounded-lg text-xs font-bold text-center bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 hover:border-violet-300 transition-colors cursor-pointer"
+              className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-center bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200/80 transition-colors cursor-pointer"
               title="Run a different demo scenario"
             >
               Demo Scenarios
             </button>
           ) : (
-            <div className={`px-3 py-2 rounded-lg text-xs font-bold text-center ${
+            <div className={`px-3 py-2 rounded-lg text-xs font-semibold text-center ${
               mode === 'demo'
-                ? 'bg-violet-50 text-violet-700 border border-violet-200'
-                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                : 'bg-slate-100 text-slate-700 border border-slate-200'
             }`}>
               {mode === 'demo' ? 'Demo Scenarios' : 'Live AWS Console'}
             </div>
@@ -145,11 +145,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       title={collapsed ? feature.label : undefined}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
                         isActive
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                       } ${collapsed ? 'justify-center' : ''}`}
                     >
-                      <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                      <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`} />
                       {!collapsed && (
                         <>
                           <span className="flex-1 text-left truncate">{feature.label}</span>
@@ -248,7 +248,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-slate-50">
           <div className="max-w-6xl mx-auto px-4 lg:px-8 py-6">
             {children}
           </div>

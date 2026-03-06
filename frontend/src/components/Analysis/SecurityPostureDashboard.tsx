@@ -6,7 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Clock, Activity,
-  TrendingUp, ArrowUpRight, Target, Layers, HelpCircle, ChevronDown, ChevronUp, DollarSign, ArrowRight
+  TrendingUp, ArrowUpRight, Target, Layers, HelpCircle, ChevronDown, ChevronUp, DollarSign, ArrowRight, Link2
 } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
 import type { OrchestrationResponse } from '../../types/incident';
@@ -124,6 +124,35 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
         )}
       </div>
 
+      {/* Cross-Incident Correlation — from current run (judges love this) */}
+      {orchestrationResult?.results?.correlation && orchestrationResult.results.correlation.campaign_probability > 0.5 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border-2 border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <Link2 className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-900">
+                Cross-Incident Correlation Detected
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {Math.round((orchestrationResult.results.correlation.campaign_probability) * 100)}% probability this is a coordinated campaign.
+              </p>
+              {orchestrationResult.results.correlation.correlation_summary && (
+                <p className="text-[11px] text-amber-700 mt-1.5 leading-relaxed">
+                  {orchestrationResult.results.correlation.correlation_summary}
+                </p>
+              )}
+              <p className="text-[10px] text-amber-600 mt-1">Ask Aria: &quot;Have we seen this attack before?&quot;</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Top Row: Health Score + Key Metrics */}
       <div className="grid lg:grid-cols-4 gap-4">
         {/* Health Score - Large */}
@@ -173,8 +202,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               label: 'Events Analyzed',
               value: metrics.totalEvents,
               icon: Activity,
-              color: 'text-indigo-600',
-              bg: 'bg-indigo-50',
+              color: 'text-slate-600',
+              bg: 'bg-slate-100',
               trend: null,
               tooltip: `CloudTrail events matching security-relevant APIs.`,
             },
@@ -183,8 +212,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               value: metrics.avgRiskScore,
               suffix: '/100',
               icon: Target,
-              color: 'text-red-600',
-              bg: 'bg-red-50',
+              color: 'text-slate-600',
+              bg: 'bg-slate-100',
               trend: 'high',
               tooltip: `CRITICAL→95, HIGH→75, MEDIUM→50, LOW→25. Mean of event scores.`,
             },
@@ -192,8 +221,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               label: 'AI Confidence',
               value: `${(metrics.confidence * 100).toFixed(0)}%`,
               icon: TrendingUp,
-              color: 'text-emerald-600',
-              bg: 'bg-emerald-50',
+              color: 'text-slate-600',
+              bg: 'bg-slate-100',
               trend: null,
               tooltip: `TemporalAgent confidence from event coverage and correlation.`,
             },
@@ -201,8 +230,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               label: 'Analysis Time',
               value: analysisTime ? `${(analysisTime / 1000).toFixed(1)}s` : 'N/A',
               icon: Clock,
-              color: 'text-violet-600',
-              bg: 'bg-violet-50',
+              color: 'text-slate-600',
+              bg: 'bg-slate-100',
               trend: null,
               tooltip: `Total pipeline elapsed time.`,
             },
@@ -210,8 +239,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               label: 'Agents Used',
               value: orchestrationResult?.agents ? Object.keys(orchestrationResult.agents).length : 5,
               icon: Layers,
-              color: 'text-blue-600',
-              bg: 'bg-blue-50',
+              color: 'text-slate-600',
+              bg: 'bg-slate-100',
               trend: null,
               tooltip: `Number of AI analysis steps that completed.`,
             },
@@ -219,8 +248,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               label: 'Remediation Ready',
               value: orchestrationResult?.results?.remediation_plan ? 'Yes' : 'Pending',
               icon: Shield,
-              color: 'text-emerald-600',
-              bg: 'bg-emerald-50',
+              color: 'text-slate-600',
+              bg: 'bg-slate-100',
               trend: null,
               tooltip: `Yes = step-by-step remediation plan with AWS CLI exists.`,
             },

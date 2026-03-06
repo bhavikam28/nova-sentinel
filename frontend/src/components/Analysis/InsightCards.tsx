@@ -40,48 +40,9 @@ const InsightCards: React.FC<InsightCardsProps> = ({ timeline }) => {
   const totalEvents = timeline?.events?.length || 0;
   
   const insights = [
-    {
-      id: 'root-cause',
-      title: 'Root Cause',
-      subtitle: 'Initial attack vector',
-      icon: Target,
-      text: rootCause,
-      points: parsePoints(rootCause),
-      gradient: 'from-red-500 to-rose-600',
-      lightBg: 'bg-gradient-to-br from-red-50 to-rose-50',
-      border: 'border-red-200',
-      iconColor: 'text-red-600',
-      dotColor: 'bg-red-400',
-      accentBar: 'bg-red-500',
-    },
-    {
-      id: 'attack-pattern',
-      title: 'Attack Pattern',
-      subtitle: 'Kill chain stages',
-      icon: Activity,
-      text: attackPattern,
-      points: parsePoints(attackPattern),
-      gradient: 'from-violet-500 to-purple-600',
-      lightBg: 'bg-gradient-to-br from-violet-50 to-purple-50',
-      border: 'border-violet-200',
-      iconColor: 'text-violet-600',
-      dotColor: 'bg-violet-400',
-      accentBar: 'bg-violet-500',
-    },
-    {
-      id: 'blast-radius',
-      title: 'Blast Radius',
-      subtitle: `${totalEvents} events, ${criticalCount} critical`,
-      icon: Layers,
-      text: blastRadius,
-      points: parsePoints(blastRadius),
-      gradient: 'from-amber-500 to-orange-600',
-      lightBg: 'bg-gradient-to-br from-amber-50 to-orange-50',
-      border: 'border-amber-200',
-      iconColor: 'text-amber-600',
-      dotColor: 'bg-amber-400',
-      accentBar: 'bg-amber-500',
-    },
+    { id: 'root-cause', title: 'Root Cause', subtitle: 'Initial attack vector', icon: Target, text: rootCause, points: parsePoints(rootCause) },
+    { id: 'attack-pattern', title: 'Attack Pattern', subtitle: 'Kill chain stages', icon: Activity, text: attackPattern, points: parsePoints(attackPattern) },
+    { id: 'blast-radius', title: 'Blast Radius', subtitle: `${totalEvents} events, ${criticalCount} critical`, icon: Layers, text: blastRadius, points: parsePoints(blastRadius) },
   ];
 
   return (
@@ -94,33 +55,28 @@ const InsightCards: React.FC<InsightCardsProps> = ({ timeline }) => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: index * 0.1 }}
-            className={`${insight.lightBg} border ${insight.border} rounded-2xl overflow-hidden hover:shadow-elevated transition-all duration-300`}
+            className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
           >
-            {/* Top accent bar */}
-            <div className={`h-1 ${insight.accentBar}`} />
-            
+            <div className="h-0.5 bg-indigo-600" />
             <div className="p-5">
-              {/* Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${insight.gradient} flex items-center justify-center shadow-lg`}>
-                    <Icon className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center border border-slate-200">
+                    <Icon className="w-5 h-5 text-slate-600" strokeWidth={1.8} />
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900 text-sm">{insight.title}</h3>
-                    <p className="text-[10px] text-slate-400 font-medium">{insight.subtitle}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{insight.subtitle}</p>
                   </div>
                 </div>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200">
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
                   Nova 2 Lite
                 </span>
               </div>
-              
-              {/* Points */}
               <ul className="space-y-2">
                 {insight.points.map((point, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                    <div className={`w-1.5 h-1.5 rounded-full ${insight.dotColor} mt-2 flex-shrink-0`} />
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600">
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-2 flex-shrink-0" />
                     <span className="leading-relaxed">{point}</span>
                   </li>
                 ))}

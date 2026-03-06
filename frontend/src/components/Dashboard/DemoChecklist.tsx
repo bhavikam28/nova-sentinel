@@ -37,20 +37,20 @@ export default function DemoChecklist({
   const doneCount = ITEMS.filter(isDone).length;
 
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/80 overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-violet-100/50 transition-colors"
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-100/80 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <ListChecks className="w-4 h-4 text-violet-600" />
-          <span className="text-xs font-bold text-violet-800">Demo Checklist</span>
-          <span className="text-[10px] font-bold text-violet-600">
+          <ListChecks className="w-4 h-4 text-slate-600" strokeWidth={1.8} />
+          <span className="text-xs font-bold text-slate-800">Demo Checklist</span>
+          <span className="text-[10px] font-semibold text-slate-600">
             {doneCount}/{ITEMS.length}
           </span>
         </div>
-        {expanded ? <ChevronUp className="w-4 h-4 text-violet-600" /> : <ChevronDown className="w-4 h-4 text-violet-600" />}
+        {expanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
       </button>
       <AnimatePresence>
         {expanded && (
@@ -71,13 +71,13 @@ export default function DemoChecklist({
                     type="button"
                     onClick={() => onNavigate(item.featureId)}
                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors ${
-                      isCurrent ? 'bg-violet-200/80 text-violet-900' : 'hover:bg-violet-100/70 text-violet-800'
+                      isCurrent ? 'bg-indigo-50 text-indigo-800' : 'hover:bg-slate-100 text-slate-700'
                     }`}
                   >
                     {done ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" strokeWidth={1.8} />
                     ) : (
-                      <Circle className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+                      <Circle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" strokeWidth={1.8} />
                     )}
                     <span className={done ? 'line-through text-violet-600' : ''}>{item.label}</span>
                   </button>

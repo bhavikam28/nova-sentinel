@@ -299,7 +299,7 @@ const CostImpact: React.FC<CostImpactProps> = ({
           <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
             <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">Response Time</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-bold text-slate-800 tabular-nums">&lt;60s</span>
+              <span className="text-xl font-bold text-slate-800 tabular-nums">Automated</span>
               <span className="text-xs text-slate-400">vs 45min avg</span>
             </div>
           </div>

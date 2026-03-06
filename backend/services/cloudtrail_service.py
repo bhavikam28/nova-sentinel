@@ -1,15 +1,26 @@
 """
 Amazon CloudTrail service for fetching real API events.
 Supports multi-region fetch and proper pagination to maximize event retrieval.
+
+Reliability: A short-lived cache (2 min) ensures repeated analyses with the same
+params return the same events, so results stay consistent for product reliability.
 """
 import asyncio
 import boto3
-from typing import List, Dict, Any, Optional
+import threading
+import time
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 
 from utils.config import get_settings
 from utils.logger import logger
+
+# Cache for CloudTrail events: key=(days_back, max_results, profile), value=(events, timestamp)
+# TTL 2 minutes — repeated analyses with same params get identical events for reliability
+_CLOUDTRAIL_CACHE: Dict[Tuple[int, int, str], Tuple[List[Dict[str, Any]], float]] = {}
+_CACHE_LOCK = threading.Lock()
+_CACHE_TTL_SECONDS = 120
 
 # Common regions to query — CloudTrail LookupEvents is per-region
 DEFAULT_REGIONS = ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "eu-west-1", "eu-central-1", "ap-southeast-1"]
@@ -52,7 +63,8 @@ class CloudTrailService:
         self.settings = get_settings()
         
         # Use provided profile, or fall back to settings, or default
-        profile_to_use = profile or self.settings.aws_profile
+        profile_to_use = profile or self.settings.aws_profile or "default"
+        self.profile = profile_to_use
         
         # Create session with profile if specified
         if profile_to_use and profile_to_use != "default":
@@ -220,7 +232,16 @@ class CloudTrailService:
         Get security-relevant CloudTrail events (write + security-relevant read).
         Pass 1: Write events (ReadOnly=false) — CreateRole, AttachRolePolicy, etc.
         Pass 2: Security-relevant read events (GetSecretValue, GetObject, DescribeInstances, etc.)
+        Uses a 2-minute cache so repeated analyses with same params return identical events.
         """
+        cache_key = (days_back, max_results, self.profile)
+        with _CACHE_LOCK:
+            if cache_key in _CLOUDTRAIL_CACHE:
+                cached_events, cached_at = _CLOUDTRAIL_CACHE[cache_key]
+                if time.time() - cached_at < _CACHE_TTL_SECONDS:
+                    logger.info(f"CloudTrail cache hit: {len(cached_events)} events (same params within {_CACHE_TTL_SECONDS}s)")
+                    return cached_events
+
         start_time = datetime.utcnow() - timedelta(days=days_back)
         end_time = datetime.utcnow()
         regions_to_query = regions or DEFAULT_REGIONS
@@ -303,4 +324,8 @@ class CloudTrailService:
             f"CloudTrail: {len(result)} unique events (write + security read) from {len(regions_to_query)} regions "
             f"(last {days_back} days)"
         )
+
+        with _CACHE_LOCK:
+            _CLOUDTRAIL_CACHE[cache_key] = (result, time.time())
+
         return result

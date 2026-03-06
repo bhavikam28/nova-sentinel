@@ -85,13 +85,46 @@ def _correlation_fingerprint(attack_type: str, mitre_techniques: List[str]) -> s
     ).hexdigest()[:32]
 
 
+def _risk_level_to_score(level: str) -> int:
+    """Map risk_level string to numeric score (matches frontend SecurityPostureDashboard)."""
+    s = (level or "").upper()
+    if s == "CRITICAL": return 95
+    if s == "HIGH": return 75
+    if s == "MEDIUM": return 50
+    if s == "LOW": return 25
+    return 0
+
+
 def _extract_risk_score(incident_data: Dict[str, Any]) -> int:
+    """Extract average risk score from risk_scores. Matches frontend avg risk logic."""
     scores = incident_data.get("results", {}).get("risk_scores", []) or []
-    if scores:
-        first = scores[0]
-        if isinstance(first, dict):
-            return int(first.get("score", first.get("risk_score", 65)))
-        return 65
+    if not scores:
+        return int(incident_data.get("risk_score", 50))
+
+    total = 0
+    count = 0
+    for item in scores:
+        if not isinstance(item, dict):
+            continue
+        # Direct numeric: { risk_score: 65 } (demo)
+        if isinstance(item.get("risk_score"), (int, float)):
+            total += int(item["risk_score"])
+            count += 1
+            continue
+        if isinstance(item.get("score"), (int, float)):
+            total += int(item["score"])
+            count += 1
+            continue
+        # Nested: { event: "X", risk: { risk_level: "MEDIUM" } } (real AWS)
+        risk = item.get("risk") or item
+        if isinstance(risk, dict):
+            level = risk.get("risk_level") or risk.get("severity")
+            if level:
+                total += _risk_level_to_score(level)
+                count += 1
+
+    if count > 0:
+        return int(round(total / count))
     return int(incident_data.get("risk_score", 50))
 
 
@@ -109,6 +142,8 @@ class IncidentMemoryService:
         try:
             await asyncio.to_thread(self.client.describe_table, TableName=TABLE_NAME)
             logger.info(f"DynamoDB table {TABLE_NAME} exists")
+            self._table_checked = True
+            return
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 logger.info(f"Creating DynamoDB table {TABLE_NAME}")
@@ -129,11 +164,13 @@ class IncidentMemoryService:
                     waiter = self.client.get_waiter("table_exists")
                     await asyncio.to_thread(waiter.wait, TableName=TABLE_NAME)
                     logger.info(f"Table {TABLE_NAME} is ACTIVE")
+                    self._table_checked = True
                 except Exception as ex:
-                    logger.warning(f"Table creation skipped (may exist): {ex}")
+                    logger.warning(f"Table creation failed: {ex} — will retry on next request")
+                    # Do NOT set _table_checked so we retry create on next call
             else:
                 logger.error(f"Error checking table: {e}")
-        self._table_checked = True
+                # Do NOT set _table_checked when we had AccessDenied etc — retry after policy fix
 
     def _build_incident_dict(
         self, incident_id: str, account_id: str, timeline: Dict, events: List, mitre_techniques: List,

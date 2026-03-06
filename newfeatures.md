@@ -743,7 +743,7 @@ The following improvements add polish, make demos more reliable, and improve coh
 
 Title: "Nova Sentinel — Autonomous Security Incident Response Powered by Amazon Nova"
 
-Tagline: "From alert to resolution in under 60 seconds. Not with one model, but with specialized Nova models working together like a real security team."
+Tagline: "From alert to resolution, autonomously. Not with one model, but with specialized Nova models working together like a real security team."
 
 Key differentiators to emphasize:
 1. **Multi-model orchestration**: 4 Nova models, each doing what it's best at

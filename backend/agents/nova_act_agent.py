@@ -147,7 +147,7 @@ class NovaActAgent:
                     "step": 5,
                     "nova_act_instruction": "For each active access key, click 'Make inactive' to deactivate it",
                     "description": "Deactivate all access keys",
-                    "aws_cli_alternative": f"aws iam update-access-key --user-name {role_name} --access-key-id AKIAXXXXXXXX --status Inactive",
+                    "aws_cli_alternative": f"aws iam update-access-key --user-name {role_name} --access-key-id <ACCESS_KEY_ID> --status Inactive",
                 },
             ])
         elif action == "remove_admin":

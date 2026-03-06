@@ -92,6 +92,15 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
     return { attackStartedIndex: earliestIdx, detectionIndex: detectionIdx };
   }, [timeline.events]);
 
+  const shouldShowAttackStarted = useMemo(() => {
+    const root = (timeline.root_cause || '').toLowerCase();
+    const pattern = (timeline.attack_pattern || '').toLowerCase();
+    const combined = root + ' ' + pattern;
+    const hasHedging = /legitimate|alternatively|could be|could also|account owner|admin maintenance|if malicious|may represent|verify with stakeholders/i.test(combined);
+    const highConfidence = (timeline.confidence ?? 0) >= 0.6;
+    return highConfidence && !hasHedging;
+  }, [timeline.root_cause, timeline.attack_pattern, timeline.confidence]);
+
   const severityCounts = useMemo(() => {
     const counts: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
     timeline.events.forEach(e => {
@@ -277,7 +286,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
                             <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px] font-medium text-slate-600">
                               {mitrePhase}
                             </span>
-                            {(isAttackStart || isDetection) && (
+                            {((isAttackStart && shouldShowAttackStarted) || isDetection) && (
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
                                 isDetection ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-slate-200 text-slate-700 border border-slate-300'
                               }`}>

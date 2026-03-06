@@ -31,18 +31,18 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
     agents.temporal?.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING';
 
   const agentConfig = [
-    { id: 'temporal', name: 'Temporal Analysis', model: 'Nova 2 Lite', icon: Timer, gradient: 'from-slate-600 to-slate-700', status: agents.temporal?.status || 'PENDING', desc: 'Builds incident timeline from CloudTrail. Identifies root cause, attack pattern, and blast radius.' },
-    { id: 'visual', name: 'Visual Analysis', model: 'Nova Pro', icon: ImageIcon, gradient: 'from-blue-600 to-indigo-700', status: visualStatus, desc: 'Maps affected resources into a security visualization. Highlights compromised vs at-risk assets.' },
-    { id: 'risk_scorer', name: 'Risk Scoring', model: 'Nova Micro', icon: Gauge, gradient: 'from-amber-600 to-orange-700', status: agents.risk_scorer?.status || 'PENDING', desc: 'Assigns severity and MITRE ATT&CK technique IDs to each event.' },
-    { id: 'remediation', name: 'Remediation', model: 'Nova 2 Lite', icon: Wrench, gradient: 'from-emerald-600 to-teal-700', status: agents.remediation?.status || 'PENDING', desc: 'Generates step-by-step remediation plan with AWS CLI commands.' },
-    { id: 'documentation', name: 'Documentation', model: 'Nova 2 Lite', icon: BookOpen, gradient: 'from-violet-600 to-purple-700', status: agents.documentation?.status || 'PENDING', desc: 'Creates JIRA tickets, Slack alerts, and Confluence post-incident reports.' },
+    { id: 'temporal', name: 'Temporal Analysis', model: 'Nova 2 Lite', icon: Timer, status: agents.temporal?.status || 'PENDING', desc: 'Builds incident timeline from CloudTrail. Identifies root cause, attack pattern, and blast radius.' },
+    { id: 'visual', name: 'Visual Analysis', model: 'Nova Pro', icon: ImageIcon, status: visualStatus, desc: 'Maps affected resources into a security visualization. Highlights compromised vs at-risk assets.' },
+    { id: 'risk_scorer', name: 'Risk Scoring', model: 'Nova Micro', icon: Gauge, status: agents.risk_scorer?.status || 'PENDING', desc: 'Assigns severity and MITRE ATT&CK technique IDs to each event.' },
+    { id: 'remediation', name: 'Remediation', model: 'Nova 2 Lite', icon: Wrench, status: agents.remediation?.status || 'PENDING', desc: 'Generates step-by-step remediation plan with AWS CLI commands.' },
+    { id: 'documentation', name: 'Documentation', model: 'Nova 2 Lite', icon: BookOpen, status: agents.documentation?.status || 'PENDING', desc: 'Creates JIRA tickets, Slack alerts, and Confluence post-incident reports.' },
   ];
 
   const getStatusIcon = (status: AgentStatus) => {
     switch (status) {
-      case 'COMPLETED': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
-      case 'RUNNING': return <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />;
-      case 'FAILED': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'COMPLETED': return <CheckCircle2 className="w-4 h-4 text-slate-500" />;
+      case 'RUNNING': return <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />;
+      case 'FAILED': return <XCircle className="w-4 h-4 text-slate-400" />;
       default: return <Clock className="w-4 h-4 text-slate-300" />;
     }
   };
@@ -63,7 +63,7 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
         <div className="flex items-center gap-3">
           <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full"
+              className="h-full bg-indigo-600 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
@@ -87,16 +87,16 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.1 }}
-              className={`relative p-4 rounded-xl border-2 transition-all duration-300 ${
-                isRunning ? 'border-indigo-300 bg-indigo-50/50 shadow-glow-sm animate-border-glow' :
-                isCompleted ? 'border-emerald-200 bg-emerald-50/30' :
-                isFailed ? 'border-red-200 bg-red-50/30' :
+              className={`relative p-4 rounded-xl border transition-all duration-300 ${
+                isRunning ? 'border-indigo-200 bg-indigo-50/50' :
+                isCompleted ? 'border-slate-200 bg-white' :
+                isFailed ? 'border-slate-200 bg-slate-50/50' :
                 'border-slate-200 bg-slate-50/50'
               }`}
             >
               <div className="flex items-center justify-between mb-3">
-                <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${agent.gradient} flex items-center justify-center shadow-sm ${isCompleted || isRunning ? 'opacity-100' : 'opacity-40'}`}>
-                  <Icon className="w-4.5 h-4.5 text-white" strokeWidth={2} />
+                <div className={`w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center ${isCompleted || isRunning ? 'opacity-100' : 'opacity-60'}`}>
+                  <Icon className="w-4.5 h-4.5 text-slate-600" strokeWidth={1.8} />
                 </div>
                 {getStatusIcon(agent.status)}
               </div>

@@ -2,7 +2,7 @@
 
 **Autonomous Security Incident Response Powered by Amazon Nova**
 
-> From alert to resolution in under 60 seconds. Not with one model, but with 5 specialized Nova models working together like a real security team.
+> From alert to resolution, autonomously. Not with one model, but with 5 specialized Nova models working together like a real security team.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-22d3ee)](https://nova-sentinel.vercel.app)
 
@@ -79,6 +79,18 @@ Actually executes AWS API calls (not just plans). Before/after state snapshots, 
 - Node.js 18+
 - AWS credentials configured (`aws configure`)
 
+### IAM Permissions
+
+The IAM user (e.g. `secops-lens-pro`) used for AWS credentials needs these permissions:
+
+| Service | Actions | Purpose |
+|---------|---------|---------|
+| **CloudTrail** | `LookupEvents`, `ListTrails` | Real AWS analysis |
+| **Bedrock** | `InvokeModel`, `ListFoundationModels` | Nova AI pipeline |
+| **DynamoDB** | `PutItem`, `GetItem`, `Query`, `DescribeTable`, `CreateTable` | Cross-Incident Memory |
+
+**If you see** `AccessDeniedException` for `dynamodb:PutItem`, `dynamodb:Query`, or `dynamodb:DescribeTable`, add the DynamoDB policy — see **[docs/IAM-POLICY-CLOUDTRAIL.md](docs/IAM-POLICY-CLOUDTRAIL.md)** for exact JSON and step-by-step instructions.
+
 ### Backend
 ```bash
 cd backend
@@ -114,7 +126,7 @@ npm run dev
 
 | Metric | Value |
 |--------|-------|
-| Alert to Resolution | < 60 seconds |
+| Alert to Resolution | End-to-End Automated |
 | Cost per Incident | $0.013 |
 | MITRE ATT&CK Coverage | T1078, T1098, T1059, T1496, T1530 |
 | MITRE ATLAS Monitoring | 6 techniques |

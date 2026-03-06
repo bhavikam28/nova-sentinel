@@ -99,7 +99,7 @@ class TemporalAgent:
                 prompt=prompt,
                 system_prompt=TIMELINE_ANALYSIS_SYSTEM_PROMPT,
                 max_tokens=8000,
-                temperature=0.2
+                temperature=0.0  # Deterministic output for product reliability
             )
             
             response_text = response.get('text', '')
@@ -115,6 +115,9 @@ class TemporalAgent:
             root_lower = root_cause.lower()
             confidence = float(analysis.get('confidence', 0.5))
             event_count = len(trimmed_events)
+            parsed_timeline_count = len(analysis.get('timeline', []))
+            # Use the smaller of input vs parsed — when Nova finds few events in 100 raw, still cap
+            effective_count = min(event_count, parsed_timeline_count) if parsed_timeline_count > 0 else event_count
 
             # Explicit no-threat keywords
             is_no_threat = (
@@ -125,13 +128,15 @@ class TemporalAgent:
                 or 'no external threat detected' in root_lower
             )
             # Hedging language = Nova unsure, likely routine (e.g. "could be legitimate admin—verify")
+            attack_pattern_lower = str(analysis.get('attack_pattern', '')).lower()
+            combined_text = root_lower + ' ' + attack_pattern_lower
             has_hedging = (
-                'legitimate' in root_lower or 'verify with stakeholders' in root_lower
-                or 'could be' in root_lower or 'alternatively' in root_lower
-                or 'account owner' in root_lower or 'admin maintenance' in root_lower
+                'legitimate' in combined_text or 'verify with stakeholders' in combined_text
+                or 'verification with' in combined_text or 'cloud administrators' in combined_text
+                or 'could be' in combined_text or 'alternatively' in combined_text
+                or 'account owner' in combined_text or 'admin maintenance' in combined_text
+                or 'if malicious' in combined_text or 'may represent' in combined_text
             )
-            # Few events + hedging = cap confidence, treat as low-threat
-            few_events_routine = event_count <= 10 and has_hedging and confidence > 0.5
 
             if is_no_threat and not analysis.get('timeline'):
                 analysis["timeline"] = []
@@ -139,10 +144,23 @@ class TemporalAgent:
                 analysis["attack_pattern"] = "N/A - routine activity only"
                 analysis["blast_radius"] = "None"
                 analysis["confidence"] = min(confidence, 0.3)
-            elif few_events_routine:
-                # Nova hedged — cap confidence; low event count + hedging = likely routine
-                analysis["confidence"] = min(confidence, 0.4)
-            
+
+            # UNCONDITIONAL cap: ≤10 effective events = max 50% — Nova overconfident on routine admin
+            # (effective_count = min(raw, parsed) so 3 parsed from 100 raw still caps)
+            if effective_count <= 10:
+                analysis["confidence"] = min(float(analysis.get("confidence", 0.5)), 0.5)
+                logger.info(f"Confidence capped to {analysis['confidence']} (effective_count={effective_count})")
+
+            # Stricter cap: ≤10 + hedging = max 40%
+            if effective_count <= 10 and has_hedging:
+                analysis["confidence"] = min(float(analysis.get("confidence", 0.5)), 0.4)
+                logger.info(f"Confidence capped to {analysis['confidence']} (few events + hedging)")
+
+            logger.warning(
+                f"CONFIDENCE DEBUG: raw={confidence}, event_count={event_count}, parsed={parsed_timeline_count}, "
+                f"effective={effective_count}, has_hedging={has_hedging}, final={analysis.get('confidence')}"
+            )
+
             # Build Timeline object
             timeline_events_data = analysis.get('timeline', [])
             logger.info(f"Building timeline from {len(timeline_events_data)} parsed events")

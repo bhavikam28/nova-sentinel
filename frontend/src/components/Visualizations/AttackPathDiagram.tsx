@@ -110,9 +110,13 @@ function getIconCategory(service: string): keyof typeof SERVICE_TO_ICON {
   return cat || 'other';
 }
 
-function getIconForActor(actor: string): any {
+function getIconForActor(actor: string, severity?: string): any {
   const a = actor.toLowerCase();
-  if (a.includes('root')) return AlertTriangle;
+  const sev = (severity || '').toUpperCase();
+  if (a.includes('root')) {
+    // Root user: AlertTriangle for HIGH/CRITICAL (threat), Shield for MEDIUM/LOW (best-practice violation)
+    return sev === 'HIGH' || sev === 'CRITICAL' ? AlertTriangle : Shield;
+  }
   if (a.includes('.amazonaws.com')) return Cloud;
   if (a.includes('role/')) return Shield;
   if (a.includes('user/')) return User;
@@ -174,8 +178,20 @@ function humanizeLabel(s: string, maxLen = 24): string {
 function shortenFallback(s: string, maxLen: number): string {
   if (!s) return 'Unknown';
   const last = s.split(/[:/]/).pop() || s;
-  const out = last.length > maxLen ? last.slice(0, maxLen - 1) + '…' : last;
-  return out || 'Resource';
+  let out = last.length > maxLen ? last.slice(0, maxLen - 1) + '…' : last;
+  out = out || 'Resource';
+  // Avoid single-char labels (e.g. "arn:aws:iam::123:user/A" → "A") — use descriptive fallback
+  if (out.length < 3) {
+    const lower = s.toLowerCase();
+    if (lower.includes('account') || lower.includes('metadata') || lower.includes('caller')) return 'Account Metadata';
+    if (lower.includes('sts') || lower.includes('assumed-role')) return 'Assumed Role';
+    if (lower.includes('session')) return 'Session';
+    if (lower.includes('policy')) return 'IAM Policy';
+    if (lower.includes('role')) return 'IAM Role';
+    if (lower.includes('user')) return 'IAM User';
+    return 'Resource';
+  }
+  return out;
 }
 
 /** Shorten ARN / long resource name for node label (delegates to humanize) */
@@ -202,23 +218,37 @@ function resourceSubLabel(resource: string, action: string): string {
   }
   const r = resource.toLowerCase();
   const act = action.toLowerCase();
-  if (r.includes('role') || act.includes('role')) return 'IAM Role';
-  if (r.includes('policy') || act.includes('policy')) return 'IAM Policy';
-  if (r.includes('user') || act.includes('user')) return 'IAM User';
+  // PutUserPolicy/AttachUserPolicy target the user receiving the policy, not the policy itself
+  if (/putuserpolicy|attachuserpolicy|createuser|putloginprofile/i.test(action)) return 'IAM User';
+  if (r.includes('role') || /assumerole|createrole|attachrolepolicy/i.test(act)) return 'IAM Role';
+  if (r.includes('policy') || /createpolicyversion|putpolicy|createpolicy/i.test(act)) return 'IAM Policy';
+  if (r.includes('user')) return 'IAM User';
   if (r.includes('bucket') || act.includes('object')) return 'S3 Bucket';
   if (r.includes('instance')) return 'EC2 Instance';
+  if (/createtable|describetable|putitem/i.test(act)) return 'DynamoDB Table';
   return 'Resource';
 }
 
 // ─── Dynamic graph builder ─────────────────────────────────────────────────────
 
-/** Build action → MITRE ID map from LLM-generated risk_scores (dynamic, no hardcoding) */
+/** Build action → MITRE ID map from LLM-generated risk_scores */
 function buildMitreMap(riskScores?: Array<{ event: string; risk?: any; risk_score?: number }>): Map<string, string> {
   const map = new Map<string, string>();
   if (!riskScores) return map;
   for (const { event, risk } of riskScores) {
     const id = risk?.mitre_technique_id;
     if (id && typeof id === 'string' && /^T\d{4}$/.test(id)) map.set(event, id);
+  }
+  return map;
+}
+
+/** Build action → calibrated severity from risk_scores (CreatePolicyVersion/PutUserPolicy capped at MEDIUM) */
+function buildSeverityCapMap(riskScores?: Array<{ event: string; risk?: any }>): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!riskScores) return map;
+  for (const { event, risk } of riskScores) {
+    const level = risk?.risk_level || risk?.severity;
+    if (level && typeof level === 'string') map.set(event, level.toUpperCase());
   }
   return map;
 }
@@ -232,11 +262,13 @@ function buildGraphFromTimeline(
   if (events.length === 0) return { nodes: [], edges: [] };
 
   const mitreMap = buildMitreMap(riskScores);
+  const severityCapMap = buildSeverityCapMap(riskScores);
 
   // Track unique actors and resources
   const actorMap = new Map<string, { severity: string; count: number; actions: Set<string> }>();
   const resourceMap = new Map<string, { severity: string; count: number; actions: Set<string>; firstAction: string }>();
   const edgeMap = new Map<string, { action: string; count: number; severity: string }>();
+  const awsServiceToCloudtrailEdges: Array<{ actor: string; action: string; severity: string }> = [];
 
   for (const ev of events) {
     const actor = ev.actor || 'Unknown';
@@ -245,7 +277,11 @@ function buildGraphFromTimeline(
     if ((!resource || /^unknown$/i.test(resource)) && action) {
       if (/DeleteServiceLinkedChannel/i.test(action)) resource = 'Service-linked channel';
     }
-    const severity = ev.severity || 'LOW';
+    let severity = (ev.severity || 'LOW').toUpperCase();
+    const capped = severityCapMap.get(action);
+    if (capped && severityRank(capped) < severityRank(severity)) severity = capped;
+    const isAwsServicePrincipal = actor.includes('.amazonaws.com');
+    const isServiceLinkedChannelResource = /service-linked\s*channel/i.test(resource) || resource === 'Service-linked channel';
 
     // Track actor
     const existing = actorMap.get(actor);
@@ -257,24 +293,26 @@ function buildGraphFromTimeline(
       actorMap.set(actor, { severity, count: 1, actions: new Set([action]) });
     }
 
-    // Track resource
-    const existingRes = resourceMap.get(resource);
-    if (existingRes) {
-      existingRes.count++;
-      existingRes.actions.add(action);
-      if (severityRank(severity) > severityRank(existingRes.severity)) existingRes.severity = severity;
+    // AWS service principals acting on Service-linked channel: actor only, no duplicate resource node
+    if (isAwsServicePrincipal && isServiceLinkedChannelResource) {
+      awsServiceToCloudtrailEdges.push({ actor, action, severity });
     } else {
-      resourceMap.set(resource, { severity, count: 1, actions: new Set([action]), firstAction: action });
-    }
-
-    // Track edge (actor -> resource)
-    const edgeKey = `${actor}|||${resource}`;
-    const existingEdge = edgeMap.get(edgeKey);
-    if (existingEdge) {
-      existingEdge.count++;
-      if (severityRank(severity) > severityRank(existingEdge.severity)) existingEdge.severity = severity;
-    } else {
-      edgeMap.set(edgeKey, { action, count: 1, severity });
+      const existingRes = resourceMap.get(resource);
+      if (existingRes) {
+        existingRes.count++;
+        existingRes.actions.add(action);
+        if (severityRank(severity) > severityRank(existingRes.severity)) existingRes.severity = severity;
+      } else {
+        resourceMap.set(resource, { severity, count: 1, actions: new Set([action]), firstAction: action });
+      }
+      const edgeKey = `${actor}|||${resource}`;
+      const existingEdge = edgeMap.get(edgeKey);
+      if (existingEdge) {
+        existingEdge.count++;
+        if (severityRank(severity) > severityRank(existingEdge.severity)) existingEdge.severity = severity;
+      } else {
+        edgeMap.set(edgeKey, { action, count: 1, severity });
+      }
     }
   }
 
@@ -310,7 +348,7 @@ function buildGraphFromTimeline(
 
   const SHIFT = includeNarrativeFrame ? 320 : 0;
   const graphWidth = 960 + SHIFT;
-  const graphHeight = Math.max(320, maxCount * 100 + 60);
+  const graphHeight = Math.max(380, maxCount * 130 + 80);
   const leftX = includeNarrativeFrame ? 360 : 140;
   const rightX = includeNarrativeFrame ? graphWidth - 200 : graphWidth - 140;
   const centerX = (leftX + rightX) / 2;
@@ -388,7 +426,7 @@ function buildGraphFromTimeline(
     const info = actorMap.get(actor)!;
     const id = makeId('actor', actor);
     nodeIdMap.set(actor, id);
-    const y = leftCount === 1 ? graphHeight / 2 : 60 + (i * (graphHeight - 120)) / Math.max(leftCount - 1, 1);
+    const y = leftCount === 1 ? graphHeight / 2 : 80 + (i * (graphHeight - 160)) / Math.max(leftCount - 1, 1);
     const sev = info.severity.toUpperCase();
     const styles = SEVERITY_STYLES[sev] || SEVERITY_STYLES.LOW;
     const actionsArr = [...info.actions];
@@ -398,7 +436,7 @@ function buildGraphFromTimeline(
       id,
       x: leftX,
       y,
-      icon: getIconForActor(actor),
+      icon: getIconForActor(actor, info.severity),
       label: shortenLabel(actor),
       subLabel: actorSubLabel(actor),
       detail: `${actor} — ${info.count} event${info.count > 1 ? 's' : ''}: ${actionsArr.slice(0, 3).join(', ')}${actionsArr.length > 3 ? '...' : ''}`,
@@ -427,7 +465,7 @@ function buildGraphFromTimeline(
     const id = makeId('res', groupKey);
     groupToNodeId.set(groupKey, id);
     resourcesInGroup.forEach(r => nodeIdMap.set(r, id));
-    const y = rightCount === 1 ? graphHeight / 2 : 60 + (i * (graphHeight - 120)) / Math.max(rightCount - 1, 1);
+    const y = rightCount === 1 ? graphHeight / 2 : 80 + (i * (graphHeight - 160)) / Math.max(rightCount - 1, 1);
     const sev = maxSev.toUpperCase();
     const styles = SEVERITY_STYLES[sev] || SEVERITY_STYLES.LOW;
     const actionsArr = [...allActions];
@@ -457,7 +495,7 @@ function buildGraphFromTimeline(
     const info = resourceMap.get(entity)!;
     const id = makeId('dual', entity);
     nodeIdMap.set(entity, id);
-    const y = graphHeight / 2 + (i - dualEntities.length / 2) * 80;
+    const y = graphHeight / 2 + (i - dualEntities.length / 2) * 100;
     const sev = info.severity.toUpperCase();
     const styles = SEVERITY_STYLES[sev] || SEVERITY_STYLES.LOW;
     const actionsArr = [...info.actions];
@@ -522,7 +560,7 @@ function buildGraphFromTimeline(
     const edgeColor = sev === 'CRITICAL' ? '#B91C1C' : sev === 'HIGH' ? '#EA580C' : sev === 'MEDIUM' ? '#1D4ED8' : '#475569';
     const actionLabel = info.actions.size > 1 ? 'Multiple' : info.action;
     let label = info.count > 1 ? `${actionLabel} (${info.count}×)` : actionLabel;
-    if (label.length > 18) label = label.slice(0, 15) + '…';
+    if (label.length > 28) label = label.slice(0, 25) + '…';
 
     edges.push({ from: fromId, to: toId, color: edgeColor, label, delay });
     delay += 0.15;
@@ -539,6 +577,18 @@ function buildGraphFromTimeline(
       const resId = groupToNodeId.get(gk);
       if (resId && !seenEdges.has(`${resId}->narrative_cloudtrail`)) {
         edges.push({ from: resId, to: 'narrative_cloudtrail', color: '#059669', label: 'Logged', delay: delay + 0.2 + i * 0.1 });
+      }
+    });
+  }
+
+  // AWS service principals (e.g. resource-explorer) acting on Service-linked channel: edge to CloudTrail only (no resource node)
+  if (includeNarrativeFrame && awsServiceToCloudtrailEdges.length > 0) {
+    const seen = new Set<string>();
+    awsServiceToCloudtrailEdges.forEach(({ actor }) => {
+      const actorId = nodeIdMap.get(actor);
+      if (actorId && !seen.has(`${actorId}->narrative_cloudtrail`)) {
+        seen.add(`${actorId}->narrative_cloudtrail`);
+        edges.push({ from: actorId, to: 'narrative_cloudtrail', color: '#059669', label: 'Logged', delay: delay + 0.3 });
       }
     });
   }
@@ -568,7 +618,7 @@ const DEMO_NODES: NodeDef[] = [
   { id: 'sg', x: 280, y: 80, icon: Shield, label: 'Security Group', subLabel: 'Misconfigured', detail: 'sg-0xyz — 0.0.0.0/0 on port 22 (OPEN)', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1190', resourceId: 'sg-0xyz', riskScore: 95 },
   { id: 'ssh', x: 500, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', detail: '14 failed login attempts before breach', color: '#991B1B', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1021', riskScore: 94 },
   { id: 'secrets', x: 720, y: 80, icon: Key, label: 'Secrets Mgr', subLabel: 'Accessed', detail: 'GetSecretValue — 3 secrets retrieved', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1552', riskScore: 85 },
-  { id: 'cloudtrail', x: 880, y: 80, icon: Eye, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'Detected by Nova Sentinel in <60s', color: '#059669', bg: '#A7F3D0', severity: 'low', mitreId: 'T1562' },
+  { id: 'cloudtrail', x: 880, y: 80, icon: Eye, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'Detected by Nova Sentinel', color: '#059669', bg: '#A7F3D0', severity: 'low', mitreId: 'T1562' },
 ];
 
 const DEMO_EDGES: EdgeDef[] = [
@@ -627,16 +677,20 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
   // Use narrative graph (Internet → VPC → EC2 → IAM → RDS) for both demo and real AWS — default true for comprehensible end-to-end flow
   const useNarrative = props.useNarrativeDemoGraph !== false;
 
+  const confidence = props.timeline?.confidence ?? props.orchestrationResult?.results?.timeline?.confidence ?? 0.5;
+  const lowConfidence = confidence <= 0.4;
+  const includeNarrativeFrame = !lowConfidence;
+
   // Build dynamic or use static
   const { nodes: NODES, edges: EDGES } = useMemo(() => {
     if (useNarrative) return { nodes: DEMO_NODES, edges: DEMO_EDGES };
     if (hasRealTimeline && props.timeline) {
       const riskScores = props.orchestrationResult?.results?.risk_scores;
-      const graph = buildGraphFromTimeline(props.timeline, riskScores);
+      const graph = buildGraphFromTimeline(props.timeline, riskScores, includeNarrativeFrame);
       if (graph.nodes.length > 0) return graph;
     }
     return { nodes: DEMO_NODES, edges: DEMO_EDGES };
-  }, [useNarrative, hasRealTimeline, props.timeline, props.orchestrationResult]);
+  }, [useNarrative, hasRealTimeline, props.timeline, props.orchestrationResult, includeNarrativeFrame]);
 
   const nodeMap = useMemo(() => Object.fromEntries(NODES.map(n => [n.id, n])), [NODES]);
 
@@ -877,14 +931,16 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
           </div>
           <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-slate-900">Attack Path Graph</h2>
+            <h2 className="text-base font-bold text-slate-900">
+              {hasRealTimeline && lowConfidence ? 'Activity Graph' : 'Attack Path Graph'}
+            </h2>
             {useNarrative ? (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                 {hasRealTimeline ? 'End-to-end flow · Your AWS' : 'End-to-end flow · Demo'}
               </span>
             ) : hasRealTimeline ? (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                End-to-end flow · Your AWS
+                {lowConfidence ? 'Event flow from your CloudTrail' : 'End-to-end flow · Your AWS'}
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200">
@@ -900,7 +956,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               : hasRealTimeline
                 ? (NODES.some(n => n.id === 'narrative_internet')
                     ? `Event-derived flow from your CloudTrail · ${NODES.length} nodes from ${props.eventsAnalyzed ?? props.timeline?.events?.length ?? 0} events${props.timeRangeDays ? ` (last ${props.timeRangeDays} days)` : ''} · click to inspect · drag to pan`
-                    : `${NODES.length} nodes from ${props.eventsAnalyzed ?? props.timeline?.events?.length ?? 0} CloudTrail events${props.timeRangeDays ? ` (last ${props.timeRangeDays} days)` : ''} · click to inspect · drag to pan`)
+                    : `Event flow from your CloudTrail · ${NODES.length} nodes from ${props.eventsAnalyzed ?? props.timeline?.events?.length ?? 0} CloudTrail events${props.timeRangeDays ? ` (last ${props.timeRangeDays} days)` : ''} · click to inspect · drag to pan`)
                 : 'Click node to select & open details below · hover for preview · drag to pan · Ctrl+scroll to zoom'}
           </p>
           </div>
@@ -1047,55 +1103,48 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
 
               const dx = to.x - from.x;
               const dy = to.y - from.y;
-              const mx = (from.x + to.x) / 2;
-              const my = (from.y + to.y) / 2;
-              const curveOffset = Math.abs(dy) > 50 ? 0 : (dx > 0 ? -12 : 12);
-              const pathD = `M ${from.x} ${from.y} Q ${mx} ${my + curveOffset} ${to.x} ${to.y}`;
+              const dist = Math.hypot(dx, dy);
+              const curveOffset = dist < 80 ? 0 : (Math.abs(dy) > 80 ? (dx > 0 ? -20 : 20) : (dy > 0 ? 24 : -24));
+              const cpx = (from.x + to.x) / 2 + (Math.abs(dy) > 50 ? curveOffset : 0);
+              const cpy = (from.y + to.y) / 2 + (Math.abs(dy) <= 50 ? curveOffset : 0);
+              const t = 0.5;
+              const t1 = 0.48;
+              const t2 = 0.52;
+              const bezier = (t: number) => ({
+                x: (1 - t) ** 2 * from.x + 2 * (1 - t) * t * cpx + t ** 2 * to.x,
+                y: (1 - t) ** 2 * from.y + 2 * (1 - t) * t * cpy + t ** 2 * to.y,
+              });
+              const mid = bezier(t);
+              const p1 = bezier(t1);
+              const p2 = bezier(t2);
+              const q1x = (1 - t1) * from.x + t1 * cpx;
+              const q1y = (1 - t1) * from.y + t1 * cpy;
+              const q2x = (1 - t2) * cpx + t2 * to.x;
+              const q2y = (1 - t2) * cpy + t2 * to.y;
+              const path1 = `M ${from.x} ${from.y} Q ${q1x} ${q1y} ${p1.x} ${p1.y}`;
+              const path2 = `M ${p2.x} ${p2.y} Q ${q2x} ${q2y} ${to.x} ${to.y}`;
+              const pathFull = `M ${from.x} ${from.y} Q ${cpx} ${cpy} ${to.x} ${to.y}`;
+              const hasLabel = !!edge.label;
 
               return (
                 <g key={`edge-${i}`}>
-                  {/* Base path (static) */}
-                  <path d={pathD} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.25" strokeDasharray="6 4" />
-                  {/* Animated flow path - dashed moving toward target */}
-                  <path
-                    d={pathD}
-                    stroke={edge.color}
-                    strokeWidth="2"
-                    fill="none"
-                    strokeDasharray="8 6"
-                    strokeLinecap="round"
-                    markerEnd="url(#arrow-flow)"
-                    opacity="0.85"
-                    className="attack-path-line"
-                    style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }}
-                  />
-                  {/* Edge label — single text with background, no duplicate rendering */}
-                  {edge.label && (
-                    <g pointerEvents="none">
-                      <rect
-                        x={mx - Math.min(40, (edge.label.length * 4) / 2)}
-                        y={my + curveOffset - 20}
-                        width={Math.min(80, Math.max(56, edge.label.length * 5))}
-                        height={16}
-                        rx={4}
-                        fill="white"
-                        fillOpacity="0.95"
-                        stroke={edge.color}
-                        strokeWidth="0.5"
-                        strokeOpacity="0.4"
-                      />
-                      <text
-                        x={mx}
-                        y={my + curveOffset - 9}
-                        textAnchor="middle"
-                        fill={edge.color}
-                        fontSize="10"
-                        fontWeight="700"
-                        fontFamily="Inter, system-ui, sans-serif"
-                      >
+                  {hasLabel ? (
+                    <>
+                      {/* First half — line breaks at midpoint for label */}
+                      <path d={path1} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
+                      <path d={path1} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
+                      <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill={edge.color} fontSize="10" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" pointerEvents="none">
                         {edge.label}
                       </text>
-                    </g>
+                      {/* Second half — with arrow */}
+                      <path d={path2} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
+                      <path d={path2} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" markerEnd="url(#arrow-flow)" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
+                    </>
+                  ) : (
+                    <>
+                      <path d={pathFull} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
+                      <path d={pathFull} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" markerEnd="url(#arrow-flow)" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
+                    </>
                   )}
                 </g>
               );
@@ -1149,10 +1198,10 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                       <Icon className="w-5 h-5" strokeWidth={1.8} style={{ color: node.color }} />
                     </div>
                   </foreignObject>
-                  <text x={node.x} y={node.y + 38} textAnchor="middle" fill="#334155" fontSize="11" fontWeight="700" fontFamily="Inter, sans-serif">
+                  <text x={node.x} y={node.y + 40} textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" style={{ letterSpacing: '0.02em' }}>
                     {node.label}
                   </text>
-                  <text x={node.x} y={node.y + 52} textAnchor="middle" fill="#94a3b8" fontSize="9" fontWeight="500" fontFamily="Inter, sans-serif">
+                  <text x={node.x} y={node.y + 55} textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="600" fontFamily="Inter, system-ui, sans-serif">
                     {node.subLabel}
                   </text>
                   {(node.mitreId || node.riskScore != null) && (
@@ -1277,14 +1326,16 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                     <p className="text-[10px] text-slate-400 mt-1">Loading reputation…</p>
                   ) : threatIntelData?.error ? (
                     <p className="text-[10px] text-slate-400 mt-1">{threatIntelData.error}</p>
+                  ) : threatIntelData?.source === 'demo' ? (
+                    <div className="mt-1.5 text-[10px] space-y-1">
+                      <p className="text-amber-200/90 font-medium">Threat intel is demo data — not a live lookup.</p>
+                      <p className="text-slate-500">Add ABUSEIPDB_API_KEY or VIRUSTOTAL_API_KEY for real IP reputation. The scores shown above are generic placeholders and may not reflect your actual IP.</p>
+                    </div>
                   ) : (
                     <div className="mt-1.5 text-[10px] space-y-0.5">
                       <p><span className="text-slate-400">IP {threatIntelData?.ip}</span> — {threatIntelData?.abuse_score ?? 0}% abuse confidence, reported {threatIntelData?.reports ?? 0} times</p>
                       {(threatIntelData?.categories?.length > 0) && (
                         <p className="text-slate-400">Categories: {threatIntelData.categories.join(', ')}</p>
-                      )}
-                      {threatIntelData?.source === 'demo' && (
-                        <p className="text-[9px] text-slate-500 italic">Demo mode — add ABUSEIPDB_API_KEY or VIRUSTOTAL_API_KEY for live data</p>
                       )}
                     </div>
                   )}
