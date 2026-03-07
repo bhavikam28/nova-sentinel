@@ -40,9 +40,9 @@ const InsightCards: React.FC<InsightCardsProps> = ({ timeline }) => {
   const totalEvents = timeline?.events?.length || 0;
   
   const insights = [
-    { id: 'root-cause', title: 'Root Cause', subtitle: 'Initial attack vector', icon: Target, text: rootCause, points: parsePoints(rootCause) },
-    { id: 'attack-pattern', title: 'Attack Pattern', subtitle: 'Kill chain stages', icon: Activity, text: attackPattern, points: parsePoints(attackPattern) },
-    { id: 'blast-radius', title: 'Blast Radius', subtitle: `${totalEvents} events, ${criticalCount} critical`, icon: Layers, text: blastRadius, points: parsePoints(blastRadius) },
+    { id: 'root-cause', title: 'Root Cause', subtitle: 'Initial attack vector', icon: Target, text: rootCause, points: parsePoints(rootCause), accent: 'bg-red-500', iconBg: 'bg-red-100', iconColor: 'text-red-600' },
+    { id: 'attack-pattern', title: 'Attack Pattern', subtitle: 'Kill chain stages', icon: Activity, text: attackPattern, points: parsePoints(attackPattern), accent: 'bg-orange-500', iconBg: 'bg-orange-100', iconColor: 'text-orange-600' },
+    { id: 'blast-radius', title: 'Blast Radius', subtitle: `${totalEvents} events, ${criticalCount} critical`, icon: Layers, text: blastRadius, points: parsePoints(blastRadius), accent: 'bg-violet-500', iconBg: 'bg-violet-100', iconColor: 'text-violet-600' },
   ];
 
   return (
@@ -57,19 +57,19 @@ const InsightCards: React.FC<InsightCardsProps> = ({ timeline }) => {
             transition={{ duration: 0.4, delay: index * 0.1 }}
             className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
           >
-            <div className="h-0.5 bg-indigo-600" />
+            <div className={`h-0.5 ${insight.accent}`} />
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center border border-slate-200">
-                    <Icon className="w-5 h-5 text-slate-600" strokeWidth={1.8} />
+                  <div className={`w-10 h-10 rounded-xl ${insight.iconBg} flex items-center justify-center border border-slate-200`}>
+                    <Icon className={`w-5 h-5 ${insight.iconColor}`} strokeWidth={1.8} />
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900 text-sm">{insight.title}</h3>
                     <p className="text-[10px] text-slate-500 font-medium">{insight.subtitle}</p>
                   </div>
                 </div>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
                   Nova 2 Lite
                 </span>
               </div>

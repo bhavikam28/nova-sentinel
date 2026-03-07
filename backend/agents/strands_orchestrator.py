@@ -36,6 +36,7 @@ from mcp_servers.cloudwatch_mcp import get_cloudwatch_mcp
 from mcp_servers.security_hub_mcp import get_security_hub_mcp
 from mcp_servers.nova_canvas_mcp import get_nova_canvas_mcp
 from services.incident_memory import get_incident_memory
+from utils.config import get_settings
 from utils.logger import logger
 
 
@@ -545,8 +546,11 @@ Be concise, actionable, and security-focused in your responses."""
 
 def create_strands_agent() -> Agent:
     """Create a Strands Agent with all security tools registered."""
+    settings = get_settings()
+    # Use inference profile ID (e.g. us.amazon.nova-2-lite-v1:0) — direct model ID no longer supports on-demand
+    model_id = settings.nova_lite_model_id
     return Agent(
-        model="amazon.nova-2-lite-v1:0",
+        model=model_id,
         tools=STRANDS_TOOLS,
         system_prompt=SYSTEM_PROMPT,
     )

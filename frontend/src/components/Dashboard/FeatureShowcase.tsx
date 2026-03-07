@@ -183,7 +183,7 @@ const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({
                       <feature.icon className="w-5 h-5 text-white" />
                     </div>
                     <div className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-white border-2 border-slate-200 rounded-full flex items-center justify-center">
-                      <span className="text-[9px] font-black text-slate-600">{feature.number}</span>
+                      <span className="text-[10px] font-black text-slate-600">{feature.number}</span>
                     </div>
                   </div>
 
@@ -191,7 +191,7 @@ const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-sm font-bold text-slate-900 truncate">{feature.name}</h3>
-                      <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${feature.modelColor} flex-shrink-0`}>
+                      <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${feature.modelColor} flex-shrink-0`}>
                         {feature.model}
                       </span>
                     </div>
@@ -256,7 +256,7 @@ const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({
                                   <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                                     {scenario.name}
                                   </span>
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${config.badge}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${config.badge}`}>
                                     {scenario.severity}
                                   </span>
                                 </div>

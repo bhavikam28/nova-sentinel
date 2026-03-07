@@ -28,12 +28,12 @@ interface ComplianceControl {
 }
 
 const FRAMEWORK_CONFIG: Record<string, { name: string; color: string; bg: string; border: string }> = {
-  CIS: { name: 'CIS Benchmarks', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+  CIS: { name: 'CIS Benchmarks', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   NIST: { name: 'NIST 800-53', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-  SOC2: { name: 'SOC 2', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
-  PCI: { name: 'PCI-DSS', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  SOX: { name: 'SOX', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
-  HIPAA: { name: 'HIPAA', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
+  SOC2: { name: 'SOC 2', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+  PCI: { name: 'PCI-DSS', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
+  SOX: { name: 'SOX', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
+  HIPAA: { name: 'HIPAA', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
 };
 
 function extractIncidentContext(timeline: Timeline): { roleArn: string; roleName: string; sgId: string; bucketName: string; vpcId: string; accountId: string } {
@@ -568,13 +568,13 @@ const ComplianceMapping: React.FC<ComplianceMappingProps> = ({ timeline, inciden
                 <StatusIcon className={`w-4 h-4 flex-shrink-0 ${statusConfig.color}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${fwConfig.bg} ${fwConfig.color} ${fwConfig.border}`}>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${fwConfig.bg} ${fwConfig.color} ${fwConfig.border}`}>
                       {control.controlId}
                     </span>
-                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
                       {statusConfig.label}
                     </span>
-                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${getSeverityColor(control.severity)}`}>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${getSeverityColor(control.severity)}`}>
                       {control.severity.toUpperCase()}
                     </span>
                   </div>

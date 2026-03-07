@@ -439,7 +439,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                     
                     {/* Processing time */}
                     {msg.processingTime && (
-                      <p className="text-[9px] text-slate-400 mt-1.5">
+                      <p className="text-[10px] text-slate-400 mt-1.5">
                         Aria via Nova 2 Lite | {msg.processingTime}ms
                       </p>
                     )}
@@ -546,7 +546,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                 </button>
               </div>
               
-              <p className="text-[9px] text-slate-400 text-center mt-2">
+              <p className="text-[10px] text-slate-400 text-center mt-2">
                 Aria | Powered by Amazon Nova 2 Lite
               </p>
             </div>

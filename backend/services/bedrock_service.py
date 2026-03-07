@@ -354,7 +354,11 @@ class BedrockService:
             if system_prompt:
                 converse_params["system"] = [{"text": system_prompt}]
             
-            # Use converse_stream for streaming audio response
+            # Use converse_stream for streaming audio response (requires boto3 1.42.62+)
+            if not hasattr(self.client, 'converse_stream'):
+                raise RuntimeError(
+                    "bedrock-runtime client missing converse_stream. Upgrade boto3: pip install -U 'boto3>=1.42.62'"
+                )
             response = await asyncio.to_thread(
                 self.client.converse_stream,
                 **converse_params

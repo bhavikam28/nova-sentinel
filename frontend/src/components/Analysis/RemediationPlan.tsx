@@ -286,7 +286,7 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, dem
               failed: { icon: '❌', label: 'Failed', cls: 'bg-red-100 text-red-700 border-red-200' },
             };
             const c = config[status];
-            return <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${c.cls}`}>{c.icon} {c.label}</span>;
+            return <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${c.cls}`}>{c.icon} {c.label}</span>;
           };
 
           return (
@@ -314,7 +314,7 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({ plan, incidentId, dem
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getRiskStyles(risk)}`}>
                       {risk}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                       classification === 'AUTO' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                       classification === 'APPROVAL' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                       'bg-red-100 text-red-700 border border-red-200'

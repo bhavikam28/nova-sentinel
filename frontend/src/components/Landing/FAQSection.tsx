@@ -24,7 +24,7 @@ const FAQSection: React.FC = () => {
     },
     {
       q: 'Is it safe to use my AWS credentials?',
-      a: 'Yes. Credentials stay on your machine. We use aws login (browser OAuth) or AWS SSO — no keys on disk. Nothing is transmitted or stored on our servers. You can audit our code on GitHub.',
+      a: 'Yes. Credentials stay on your machine. We use your local AWS CLI profile or AWS SSO — no keys on disk. Nothing is transmitted or stored on our servers. You can audit our code on GitHub.',
     },
     {
       q: 'What does "agentic" mean?',

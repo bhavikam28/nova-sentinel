@@ -31,11 +31,11 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
     agents.temporal?.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING';
 
   const agentConfig = [
-    { id: 'temporal', name: 'Temporal Analysis', model: 'Nova 2 Lite', icon: Timer, status: agents.temporal?.status || 'PENDING', desc: 'Builds incident timeline from CloudTrail. Identifies root cause, attack pattern, and blast radius.' },
-    { id: 'visual', name: 'Visual Analysis', model: 'Nova Pro', icon: ImageIcon, status: visualStatus, desc: 'Maps affected resources into a security visualization. Highlights compromised vs at-risk assets.' },
-    { id: 'risk_scorer', name: 'Risk Scoring', model: 'Nova Micro', icon: Gauge, status: agents.risk_scorer?.status || 'PENDING', desc: 'Assigns severity and MITRE ATT&CK technique IDs to each event.' },
-    { id: 'remediation', name: 'Remediation', model: 'Nova 2 Lite', icon: Wrench, status: agents.remediation?.status || 'PENDING', desc: 'Generates step-by-step remediation plan with AWS CLI commands.' },
-    { id: 'documentation', name: 'Documentation', model: 'Nova 2 Lite', icon: BookOpen, status: agents.documentation?.status || 'PENDING', desc: 'Creates JIRA tickets, Slack alerts, and Confluence post-incident reports.' },
+    { id: 'temporal', name: 'Temporal Analysis', model: 'Nova 2 Lite', icon: Timer, status: agents.temporal?.status || 'PENDING', desc: 'Builds incident timeline from CloudTrail. Identifies root cause, attack pattern, and blast radius.', iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },
+    { id: 'visual', name: 'Visual Analysis', model: 'Nova Pro', icon: ImageIcon, status: visualStatus, desc: 'Maps affected resources into a security visualization. Highlights compromised vs at-risk assets.', iconBg: 'bg-violet-100', iconColor: 'text-violet-600' },
+    { id: 'risk_scorer', name: 'Risk Scoring', model: 'Nova Micro', icon: Gauge, status: agents.risk_scorer?.status || 'PENDING', desc: 'Assigns severity and MITRE ATT&CK technique IDs to each event.', iconBg: 'bg-amber-100', iconColor: 'text-amber-600' },
+    { id: 'remediation', name: 'Remediation', model: 'Nova 2 Lite', icon: Wrench, status: agents.remediation?.status || 'PENDING', desc: 'Generates step-by-step remediation plan with AWS CLI commands.', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
+    { id: 'documentation', name: 'Documentation', model: 'Nova 2 Lite', icon: BookOpen, status: agents.documentation?.status || 'PENDING', desc: 'Creates JIRA tickets, Slack alerts, and Confluence post-incident reports.', iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },
   ];
 
   const getStatusIcon = (status: AgentStatus) => {
@@ -95,15 +95,15 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
               }`}
             >
               <div className="flex items-center justify-between mb-3">
-                <div className={`w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center ${isCompleted || isRunning ? 'opacity-100' : 'opacity-60'}`}>
-                  <Icon className="w-4.5 h-4.5 text-slate-600" strokeWidth={1.8} />
+                <div className={`w-9 h-9 rounded-lg ${agent.iconBg} border border-slate-200 flex items-center justify-center ${isCompleted || isRunning ? 'opacity-100' : 'opacity-60'}`}>
+                  <Icon className={`w-4.5 h-4.5 ${agent.iconColor}`} strokeWidth={1.8} />
                 </div>
                 {getStatusIcon(agent.status)}
               </div>
               
               <h4 className="text-sm font-bold text-slate-900 mb-0.5">{agent.name}</h4>
               <p className="text-[10px] text-slate-500 font-medium mb-1">{agent.model}</p>
-              <p className="text-[9px] text-slate-400 leading-tight line-clamp-2" title={agent.desc}>{agent.desc}</p>
+              <p className="text-[10px] text-slate-400 leading-tight line-clamp-2" title={agent.desc}>{agent.desc}</p>
 
               {/* Running shimmer effect */}
               {isRunning && (

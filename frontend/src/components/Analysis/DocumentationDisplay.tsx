@@ -132,9 +132,9 @@ h3. Lessons Learned
   };
 
   const tabs = [
-    { id: 'jira' as const, label: 'JIRA', icon: FileText, badge: 'bg-blue-100 text-blue-700 border-blue-200', inactive: 'bg-blue-50/50 text-blue-600 border-blue-100' },
-    { id: 'slack' as const, label: 'Slack', icon: MessageSquare, badge: 'bg-purple-100 text-purple-700 border-purple-200', inactive: 'bg-purple-50/50 text-purple-600 border-purple-100' },
-    { id: 'confluence' as const, label: 'Confluence', icon: Book, badge: 'bg-green-100 text-green-700 border-green-200', inactive: 'bg-green-50/50 text-green-600 border-green-100' },
+    { id: 'jira' as const, label: 'JIRA', icon: FileText, badge: 'bg-indigo-100 text-indigo-700 border-indigo-200', inactive: 'bg-indigo-50/50 text-indigo-600 border-indigo-100' },
+    { id: 'slack' as const, label: 'Slack', icon: MessageSquare, badge: 'bg-violet-100 text-violet-700 border-violet-200', inactive: 'bg-violet-50/50 text-violet-600 border-violet-100' },
+    { id: 'confluence' as const, label: 'Confluence', icon: Book, badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', inactive: 'bg-emerald-50/50 text-emerald-600 border-emerald-100' },
   ];
 
   const getContent = useCallback((): string => {
@@ -165,10 +165,10 @@ h3. Lessons Learned
   const hasContent = content.trim().length > 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/30 flex items-center justify-between">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden max-w-4xl">
+      <div className="px-5 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/30 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm flex-shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm flex-shrink-0">
             <FileText className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
@@ -182,7 +182,7 @@ h3. Lessons Learned
       </div>
 
       {/* Tabs with platform badges — uniform width */}
-      <div className="flex border-b border-slate-200 px-6 gap-1">
+      <div className="flex border-b border-slate-200 px-5 gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -204,7 +204,7 @@ h3. Lessons Learned
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-5">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h4 className="text-sm font-bold text-slate-900">{getTitle()}</h4>
           <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ h3. Lessons Learned
           </div>
         </div>
 
-        <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 max-h-96 overflow-y-auto">
+        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 max-h-64 overflow-y-auto">
           <div className="prose prose-slate prose-sm max-w-none">
             {hasContent ? (
               <FormattedDocContent text={content} />
@@ -245,11 +245,29 @@ h3. Lessons Learned
           </div>
         </div>
 
-        <div className="flex gap-2 pt-4 mt-4 border-t border-slate-100">
-          <button className="btn-nova px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5">
-            <ExternalLink className="w-3.5 h-3.5" />
-            Open in {tabs.find(t => t.id === activeTab)?.label}
+        <div className="flex flex-wrap gap-2 pt-4 mt-4 border-t border-slate-100">
+          <button
+            onClick={() => hasContent && copyToClipboard(content, activeTab)}
+            disabled={!hasContent}
+            title={`Copy formatted content to paste into ${tabs.find(t => t.id === activeTab)?.label}`}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {copied === activeTab ? (
+              <><CheckCircle2 className="w-3.5 h-3.5" /> Copied for {tabs.find(t => t.id === activeTab)?.label}</>
+            ) : (
+              <><Copy className="w-3.5 h-3.5" /> Copy for {tabs.find(t => t.id === activeTab)?.label}</>
+            )}
           </button>
+          {activeTab === 'jira' && (import.meta.env.VITE_JIRA_BASE_URL as string) && (
+            <a
+              href={`${(import.meta.env.VITE_JIRA_BASE_URL as string).replace(/\/$/, '')}/secure/CreateIssue.jspa?summary=${encodeURIComponent(getTitle())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Open in JIRA
+            </a>
+          )}
           <button
             onClick={() => {
               if (!hasContent) return;

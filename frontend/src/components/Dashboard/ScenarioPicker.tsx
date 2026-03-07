@@ -24,10 +24,10 @@ const SCENARIO_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 const getSeverityConfig = (severity: string) => {
   const configs: Record<string, { bg: string; text: string; border: string; dot: string; iconBg: string }> = {
-    CRITICAL: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500', iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600' },
-    HIGH: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600' },
-    MEDIUM: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', dot: 'bg-sky-500', iconBg: 'bg-gradient-to-br from-sky-500 to-cyan-500' },
-    LOW: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400', iconBg: 'bg-gradient-to-br from-slate-400 to-slate-500' },
+    CRITICAL: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500', iconBg: 'bg-gradient-to-br from-red-500 to-red-600' },
+    HIGH: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500', iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600' },
+    MEDIUM: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', iconBg: 'bg-gradient-to-br from-amber-500 to-amber-600' },
+    LOW: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500', iconBg: 'bg-gradient-to-br from-emerald-500 to-emerald-600' },
   };
   return configs[severity] || configs.MEDIUM;
 };

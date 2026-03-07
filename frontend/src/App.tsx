@@ -364,7 +364,7 @@ function App() {
                   }`}
                 >
                   AWS CLI Profile
-                  <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">Recommended</span>
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">Recommended</span>
                   {authMethod === 'profile' && (
                     <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
                   )}
@@ -378,7 +378,7 @@ function App() {
                   }`}
                 >
                   AWS IAM Identity Center
-                  <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">SSO</span>
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">SSO</span>
                   {authMethod === 'sso' && (
                     <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
                   )}
@@ -544,11 +544,11 @@ function App() {
           <div className="space-y-6">
             {/* Incident Header */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 to-slate-50/80">
               <div className="flex items-center justify-between">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
-                    <Shield className="w-5 h-5 text-slate-600" strokeWidth={1.8} />
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-5 h-5 text-indigo-600" strokeWidth={1.8} />
                   </div>
                   <div>
                   <div className="flex items-center gap-3 mb-1">
@@ -584,7 +584,7 @@ function App() {
                     </span>
                   )}
                   {orchestrationResult.results.remediation_plan && (
-                    <span className="text-[10px] px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">
+                    <span className="text-[10px] px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200 font-semibold">
                       Remediation Ready
                     </span>
                   )}
@@ -594,8 +594,8 @@ function App() {
             </div>
 
             {/* Disclaimer */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.8} />
               <div>
                 <p className="text-xs font-bold text-slate-700">Analysis disclaimer</p>
                 <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
@@ -635,8 +635,8 @@ function App() {
 
             {/* AWS service principal — likely low suspicion */}
             {hasAwsServicePrincipalInTimeline(analysisResult.timeline) && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
-                <Shield className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3 flex items-start gap-3">
+                <Shield className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" strokeWidth={1.8} />
                 <div>
                   <p className="text-xs font-semibold text-slate-700">AWS service activity detected</p>
                   <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
@@ -929,6 +929,7 @@ function App() {
           onBack={goBack}
           onBackToScenarios={mode === 'demo' ? resetAnalysis : undefined}
           hasAnalysis={!!analysisResult}
+          awsAccountId={awsAccountId}
           headerRight={
             <div className="flex items-center gap-3">
               {mode === 'console' && awsAccountId && (

@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Shield, GitBranch, Scale, DollarSign,
+  LayoutDashboard, Shield, Brain, GitBranch, Scale, DollarSign,
   FileText, Download, Mic, Image, Clock, Database,
   ChevronLeft, ChevronRight as ChevronRightIcon, ArrowLeft, Menu, X, Zap, Lock
 } from 'lucide-react';
@@ -37,7 +37,7 @@ export const SIDEBAR_FEATURES: SidebarFeature[] = [
   { id: 'aria', label: 'Aria Voice AI', icon: Mic, locked: false, group: 'tools' },
   { id: 'documentation', label: 'Documentation', icon: FileText, locked: false, group: 'tools' },
   { id: 'export', label: 'Export Report', icon: Download, locked: false, group: 'tools' },
-  { id: 'ai-pipeline', label: 'AI Pipeline Security', icon: Shield, locked: false, group: 'ai_governance' },
+  { id: 'ai-pipeline', label: 'AI Pipeline Security', icon: Brain, locked: false, group: 'ai_governance' },
 ];
 
 interface DashboardLayoutProps {
@@ -50,6 +50,8 @@ interface DashboardLayoutProps {
   hasAnalysis?: boolean;
   children: React.ReactNode;
   headerRight?: React.ReactNode;
+  /** AWS account ID when connected in console mode — shown in sidebar */
+  awsAccountId?: string | null;
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({
@@ -61,6 +63,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   hasAnalysis,
   children,
   headerRight,
+  awsAccountId,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -81,7 +84,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <NovaSentinelLogo size={24} animated={false} />
             <div>
               <h2 className="text-sm font-bold text-slate-900 leading-tight">Nova Sentinel</h2>
-              <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
                 {mode === 'demo' ? 'Demo Mode' : 'Console'}
               </p>
             </div>
@@ -98,6 +101,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
       </div>
 
+      {/* Connected account badge (console mode) */}
+      {!collapsed && mode === 'console' && awsAccountId && (
+        <div className="px-4 py-2">
+          <div className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 truncate" title={`Connected: ${awsAccountId}`}>
+            Connected: {awsAccountId}
+          </div>
+        </div>
+      )}
       {/* Mode Badge — clickable in demo mode to return to scenario picker */}
       {!collapsed && (
         <div className="px-4 py-3">
@@ -128,7 +139,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           return (
             <div key={group.key} className="mb-4">
               {!collapsed && (
-                <p className="px-2 mb-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                <p className="px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   {group.label}
                 </p>
               )}

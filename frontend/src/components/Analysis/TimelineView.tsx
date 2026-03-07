@@ -287,7 +287,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
                               {mitrePhase}
                             </span>
                             {((isAttackStart && shouldShowAttackStarted) || isDetection) && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
                                 isDetection ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-slate-200 text-slate-700 border border-slate-300'
                               }`}>
                                 <Zap className="w-2.5 h-2.5" />

@@ -1307,7 +1307,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-bold text-slate-900">{detailPanelNode.label}</span>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${
+                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${
                   detailPanelNode.severity === 'critical' ? 'bg-red-50 text-red-700 border-red-200' :
                   detailPanelNode.severity === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                   detailPanelNode.severity === 'low' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
@@ -1316,7 +1316,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                   {detailPanelNode.severity.toUpperCase()}
                 </span>
                 {detailPanelNode.riskScore != null && (
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-white border border-slate-700">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white border border-slate-700">
                     {detailPanelNode.riskScore}/100
                   </span>
                 )}
@@ -1325,7 +1325,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                     href={MITRE_MAP[detailPanelNode.mitreId]?.url ?? `https://attack.mitre.org/techniques/${detailPanelNode.mitreId}/`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono hover:bg-indigo-100"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono hover:bg-indigo-100"
                   >
                     MITRE {detailPanelNode.mitreId}
                   </a>

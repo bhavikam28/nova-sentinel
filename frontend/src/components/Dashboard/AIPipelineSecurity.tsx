@@ -205,11 +205,18 @@ export default function AIPipelineSecurity() {
 
   return (
     <div className="space-y-6">
+      {/* Context banner for judges */}
+      <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3 flex items-center gap-3">
+        <Shield className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+        <p className="text-sm text-indigo-800 font-medium">
+          Nova Sentinel monitors its own AI pipeline — because who protects the AI?
+        </p>
+      </div>
       {/* Differentiator Hero — "Who protects the AI?" */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-900 via-violet-900 to-slate-900 p-8 md:p-10 text-white shadow-xl border border-indigo-500/20"
+        className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-900 via-indigo-900 to-slate-900 p-6 md:p-8 text-white shadow-xl border border-violet-500/20"
       >
         {/* Accent glow */}
         <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/10 via-transparent to-violet-500/10 pointer-events-none" />
@@ -254,7 +261,7 @@ export default function AIPipelineSecurity() {
             <button
               onClick={handleScanNow}
               disabled={scanning || loading}
-              className="px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 transition-all"
+              className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25 transition-all"
             >
               <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
               {scanning ? 'Scanning...' : 'Scan Now'}
@@ -321,7 +328,7 @@ export default function AIPipelineSecurity() {
                       <Tooltip formatter={(v: number) => [`${v} calls`, 'Invocations']} />
                       <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]}>
                         {chartData.map((_, i) => (
-                          <Cell key={i} fill={['#6366f1', '#8b5cf6', '#06b6d4', '#10b981'][i % 4]} />
+                          <Cell key={i} fill={['#6366f1', '#8b5cf6', '#10b981', '#64748b'][i % 4]} />
                         ))}
                       </Bar>
                     </BarChart>

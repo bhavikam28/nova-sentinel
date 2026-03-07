@@ -42,7 +42,7 @@ const AnalysisTabs: React.FC<AnalysisTabsProps> = ({ children }) => {
               <span className="relative z-10 flex items-center gap-2">
                 {tab.label}
                 {tab.live && (
-                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded border border-emerald-200">
+                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded border border-emerald-200">
                     LIVE
                   </span>
                 )}
