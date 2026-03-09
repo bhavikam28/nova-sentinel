@@ -296,6 +296,12 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
         <p className="text-xs text-slate-500 mt-2">
           Unlike the fixed pipeline, the Agent plans its own execution — click a prompt or type your own.
         </p>
+        <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-slate-100/80 border border-slate-200/80">
+          <Shield className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            <strong>Investigation only</strong> — the Agent audits and analyzes; it does not make changes. Remediation happens in the Remediation Engine tab with human-in-the-loop approval.
+          </p>
+        </div>
       </motion.div>
 
       {/* Input */}
