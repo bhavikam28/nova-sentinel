@@ -192,15 +192,19 @@ Actually executes AWS API calls (not just plans). Before/after state snapshots, 
 
 ## 🤖 Nova Models & Services Used
 
-| Model / Service | Role | Why This Model |
-|-----------------|------|----------------|
-| **Nova Pro** | Visual architecture analysis | Multimodal — reads diagram images |
-| **Nova 2 Lite** | Temporal analysis, remediation, docs | Fast, accurate text reasoning |
-| **Nova Micro** | Risk classification (0-100) | Ultra-fast, deterministic (temp=0.1) |
-| **Nova 2 Sonic** | Voice (Aria) | Integration-ready; requires WebSocket streaming. Aria uses Nova 2 Lite + browser TTS today. |
-| **Nova Canvas** | Report cover art generation | Image generation |
-| **Nova Act** | Browser automation for remediation & JIRA | AWS Console navigation, JIRA ticket creation — plan mode in UI, live mode with SDK |
-| **Nova Multimodal Embeddings** | Semantic similarity for incidents | "Find similar incidents" in Incident History — cosine similarity over incident summaries |
+Nova Sentinel uses **7 Amazon Nova capabilities** — each chosen for what it does best:
+
+| # | Model / Service | Model ID | Usage |
+|---|-----------------|----------|-------|
+| 1 | **Nova Pro** | `amazon.nova-pro-v1:0` | Visual architecture analysis — multimodal, reads diagram images |
+| 2 | **Nova 2 Lite** | `us.amazon.nova-2-lite-v1:0` | Timeline, remediation, docs, Aria, Strands Agent — fast text reasoning |
+| 3 | **Nova Micro** | `amazon.nova-micro-v1:0` | Risk scoring — ultra-fast, deterministic (temp=0.1) |
+| 4 | **Nova 2 Sonic** | `amazon.nova-2-sonic-v1:0` | Voice (integration-ready) — WebSocket streaming for Aria |
+| 5 | **Nova Canvas** | `amazon.nova-canvas-v1:0` | Report cover art — image generation for incident reports |
+| 6 | **Nova Act** | nova-act SDK | Browser automation plans — AWS Console remediation, JIRA ticket creation |
+| 7 | **Nova Multimodal Embeddings** | `amazon.nova-2-multimodal-embeddings-v1:0` | Incident similarity — semantic search over incident history |
+
+**Why this mix?** Each model has a strength. Nova Micro scores risk in &lt;1s. Nova 2 Lite handles the heavy reasoning. Nova Pro reads images. Nova Canvas generates visuals. Nova Act automates browser workflows. Embeddings power "find similar incidents." Throwing one model at everything would be slower and less accurate.
 
 ## 🔧 AWS Services
 

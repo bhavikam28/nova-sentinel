@@ -4,19 +4,78 @@
 
 ---
 
-## The 2am Problem
+## The Gap Nobody Talks About
 
-You've probably been there. A GuardDuty finding fires at 2am. Your SIEM lights up. Someone has to figure out what happened, trace the kill chain, write up the incident, and get a remediation plan in front of the right people. That someone is usually a tired analyst with a dozen other alerts in the queue.
+Security tools are great at detecting. GuardDuty, Security Hub, CloudTrail — they surface the signal. But they don't respond. The gap between "we found something" and "we fixed it" is still filled by humans: manually correlating logs, building timelines, drafting runbooks, and hoping nothing slips through.
 
-The tools we have today are great at detecting. GuardDuty, Security Hub, CloudTrail — they surface the signal. But they don't respond. The gap between "we found something" and "we fixed it" is still filled by humans, manually correlating logs, building timelines, drafting runbooks, and hoping nothing slips through.
+We built Nova Sentinel to close that gap. Not with another dashboard. With an agentic pipeline that takes CloudTrail events, runs them through seven Amazon Nova models and services, and produces a full incident response package — timeline, attack path, risk scores, remediation plan with AWS CLI commands, and documentation ready for JIRA, Slack, or Confluence.
 
-We built Nova Sentinel to see what happens when you close that gap with AI.
+## Seven Nova Capabilities — Why Each One
 
-## Not Another Dashboard
+We didn't pick models at random. Each one does what it's best at:
 
-Nova Sentinel isn't a dashboard. It's not a SIEM layer. It's an agentic pipeline that takes CloudTrail events (or a demo scenario), runs them through five Amazon Nova models plus Nova Act, and produces a full incident response package: timeline, attack path, risk scores, remediation plan with AWS CLI commands, and documentation ready for JIRA, Slack, or Confluence.
+| # | Model / Service | Model ID | Usage |
+|---|-----------------|----------|-------|
+| 1 | **Nova Pro** | `amazon.nova-pro-v1:0` | Visual architecture analysis — reads diagram images, spots misconfigurations |
+| 2 | **Nova 2 Lite** | `us.amazon.nova-2-lite-v1:0` | Timeline, remediation, docs, Aria, Strands Agent — fast text reasoning |
+| 3 | **Nova Micro** | `amazon.nova-micro-v1:0` | Risk scoring — ultra-fast, deterministic (temp=0.1) |
+| 4 | **Nova 2 Sonic** | `amazon.nova-2-sonic-v1:0` | Voice (integration-ready) — WebSocket streaming for Aria |
+| 5 | **Nova Canvas** | `amazon.nova-canvas-v1:0` | Report cover art — image generation for incident reports |
+| 6 | **Nova Act** | nova-act SDK | Browser automation plans — AWS Console remediation, JIRA ticket creation |
+| 7 | **Nova Multimodal Embeddings** | `amazon.nova-2-multimodal-embeddings-v1:0` | Incident similarity — semantic search over incident history |
 
-Each model does what it's best at. Nova Pro reads architecture diagrams and spots misconfigurations. Nova 2 Lite builds the timeline and writes the remediation plan. Nova Micro scores risk in under a second. Nova Canvas generates report cover art. Nova Act turns remediation steps into browser automation plans for the AWS Console. And Nova Multimodal Embeddings powers semantic search — "find incidents similar to this one" — so analysts can spot patterns across their history.
+**Why this mix?** Nova Micro scores risk in under a second. Nova 2 Lite handles the heavy reasoning — timeline, root cause, remediation. Nova Pro reads architecture diagrams. Nova Canvas generates report visuals. Nova Act turns remediation steps into browser automation. Embeddings power "find incidents similar to this one." Throwing one model at everything would be slower and less accurate.
+
+## Architecture: How It All Fits Together
+
+```
+CloudTrail Alert
+      ↓
+┌─────────────────────────────────────────────────┐
+│  STRANDS AGENTS SDK — Orchestration Layer        │
+├─────────┬──────────┬──────────┬────────┬────────┤
+│  Nova   │  Nova 2  │  Nova    │ Orch-  │ Nova 2 │
+│  Pro    │  Lite    │  Micro   │ estrator│ Lite   │
+│ Detect  │Investigate│ Classify │Remediate│Document│
+├─────────┴──────────┴──────────┴────────┴────────┤
+│  5 MCP Servers · 23 Tools · 14 Strands @tool     │
+└──────────────────────────────────────────────────┘
+      ↓              ↓             ↓
+  DynamoDB     CloudTrail      JIRA/Slack/
+  (Memory)     (Audit Proof)   Confluence
+```
+
+The pipeline is deterministic for demos — you see exactly what each agent does. For autonomous queries, the Strands Agent picks its own tools (CloudTrail, IAM, CloudWatch, Security Hub, Nova Canvas) based on your prompt. Real agentic behavior.
+
+### Pipeline Flow (Incident Analysis)
+
+```
+User selects scenario / connects AWS
+         ↓
+POST /api/orchestration/analyze-incident
+         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ 1. Temporal Agent (Nova 2 Lite) → Timeline, root cause        │
+│ 2. Risk Scorer (Nova Micro)    → Risk 0-100 per event       │
+│ 3. Remediation Agent (Nova 2 Lite) → Fix plan + AWS CLI      │
+│ 4. Doc Agent (Nova 2 Lite)     → JIRA, Slack, Confluence     │
+│ 5. DynamoDB                    → Save incident, correlate   │
+└──────────────────────────────────────────────────────────────┘
+         ↓
+Timeline · Attack Path · Compliance · Cost · Remediation · Docs
+```
+
+### MCP Server Architecture
+
+Five AWS MCP servers expose 23 tools that the Strands Agent can call:
+
+| MCP Server | Tools | Purpose |
+|------------|-------|---------|
+| CloudTrail MCP | Event lookup, anomaly scan | Security event source |
+| IAM MCP | User audit, role audit, policy analysis | IAM security checks |
+| CloudWatch MCP | Alarms, metrics, billing anomalies | Operational visibility |
+| Security Hub MCP | Findings, GuardDuty, Inspector | Unified security view |
+| Nova Canvas MCP | Image generation | Report covers, attack visuals |
 
 ## Who It's For
 

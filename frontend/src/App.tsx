@@ -13,6 +13,7 @@ import LandingHero from './components/Landing/LandingHero';
 import FeaturesSection from './components/Landing/FeaturesSection';
 import WhatWhyForWhom from './components/Landing/WhatWhyForWhom';
 import UnderTheHoodSection from './components/Landing/UnderTheHoodSection';
+import NovaModelsSection from './components/Landing/NovaModelsSection';
 import FAQSection from './components/Landing/FAQSection';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ScenarioPicker from './components/Dashboard/ScenarioPicker';
@@ -1183,6 +1184,7 @@ function App() {
 
       <WhatWhyForWhom />
       <FeaturesSection />
+      <NovaModelsSection />
       <UnderTheHoodSection />
 
       {/* CTA — premium */}
