@@ -28,6 +28,7 @@ interface IncidentHistoryProps {
   refreshTrigger?: number;
   onSelectIncident?: (incidentId: string) => void;
   onRunDemoClick?: () => void;
+  backendOffline?: boolean;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -51,7 +52,7 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-export default function IncidentHistory({ accountId = 'demo-account', refreshTrigger, onSelectIncident, onRunDemoClick }: IncidentHistoryProps) {
+export default function IncidentHistory({ accountId = 'demo-account', refreshTrigger, onSelectIncident, onRunDemoClick, backendOffline = false }: IncidentHistoryProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [correlations, setCorrelations] = useState<any>(null);
@@ -60,6 +61,12 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
+    if (backendOffline) {
+      setLoading(false);
+      setError('Demo mode — no backend. Run a demo above to populate.');
+      setIncidents([]);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -72,7 +79,7 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
       setStats(statsRes);
       setCorrelations(corrRes);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to load incident history');
+      setError('Demo mode — no backend. Run a demo above to populate incident memory.');
       setIncidents([]);
     } finally {
       setLoading(false);
@@ -80,13 +87,18 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
   };
 
   useEffect(() => {
+    if (backendOffline) {
+      setLoading(false);
+      setError('Demo mode — no backend. Run a demo above to populate.');
+      setIncidents([]);
+      return;
+    }
     if (refreshTrigger != null && refreshTrigger > 0) {
-      // Delay refresh to allow DynamoDB eventual consistency — just-saved incident may not appear immediately
       const t = setTimeout(loadData, 1800);
       return () => clearTimeout(t);
     }
     loadData();
-  }, [accountId, refreshTrigger]);
+  }, [accountId, refreshTrigger, backendOffline]);
 
   const hasActiveCampaign = correlations?.campaign_probability > 0.6 || (correlations?.active_campaigns?.length ?? 0) > 0;
   const campaignProb = correlations?.campaign_probability ?? 0;
@@ -151,9 +163,13 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
       </motion.div>
 
       {error && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+        <div className={`rounded-lg px-4 py-3 text-xs ${
+          error.includes('Demo mode') ? 'border border-indigo-200 bg-indigo-50 text-indigo-800' : 'border border-amber-200 bg-amber-50 text-amber-800'
+        }`}>
           {error}
-          <button onClick={loadData} className="ml-2 underline font-semibold">Retry</button>
+          {!error.includes('Demo mode') && (
+            <button onClick={loadData} className="ml-2 underline font-semibold">Retry</button>
+          )}
         </div>
       )}
 

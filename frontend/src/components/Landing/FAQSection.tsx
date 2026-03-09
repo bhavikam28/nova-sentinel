@@ -15,24 +15,39 @@ const FAQSection: React.FC = () => {
       a: 'Nova Sentinel is an agentic incident response pipeline powered by Amazon Nova. It orchestrates 5 specialized AI models to go from security alert to remediation plan to documentation — autonomously, with human-in-the-loop approval for risky actions.',
     },
     {
-      q: 'What will this cost me?',
-      a: 'Demo mode is 100% free — no AWS account needed, no charges. For real AWS analysis, you pay only for your own AWS Bedrock usage (~$0.01–0.10 per incident). Credentials stay local; we never store or transmit them.',
+      q: 'What is Demo mode vs. real AWS analysis?',
+      a: 'Demo mode is a preview only — it shows how Nova Sentinel looks and works when connected to a real AWS account. It uses sample data (no real CloudTrail, no real IAM). Use it to explore the UI, workflow, and features. For actual incident response and security analysis, connect your AWS account and run real analysis against your CloudTrail logs.',
       badges: [
-        { icon: CheckCircle2, text: 'Demo mode: 100% free, no AWS account needed', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
-        { icon: DollarSign, text: 'Real AWS: You pay only for Bedrock usage (~$0.01–0.10/incident)', color: 'bg-slate-100 border-slate-200 text-slate-700' },
+        { icon: CheckCircle2, text: 'Demo: Preview only — sample data, no AWS account', color: 'bg-amber-50 border-amber-200 text-amber-700' },
+        { icon: CheckCircle2, text: 'Real AWS: Your CloudTrail, your IAM — actual analysis', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
       ],
     },
     {
+      q: 'Do I need an AWS account?',
+      a: 'No — for Demo mode. Yes — for real security analysis. Demo lets you explore the product without signing in. To analyze your own CloudTrail events, IAM activity, and security posture, you must connect an AWS account with the required permissions.',
+    },
+    {
+      q: 'What will real AWS analysis cost?',
+      a: 'You pay only for your own AWS Bedrock usage — roughly $0.01–0.10 per incident depending on event volume. Demo mode is free and incurs no charges. Credentials stay on your machine; we never store or transmit them.',
+      badges: [
+        { icon: DollarSign, text: 'Bedrock usage only — no subscription or platform fees', color: 'bg-slate-100 border-slate-200 text-slate-700' },
+      ],
+    },
+    {
+      q: 'What AWS permissions do I need for real analysis?',
+      a: 'CloudTrail read (LookupEvents), IAM read (ListUsers, GetUser, ListRoles, GetRole, etc.), and optionally Security Hub and CloudWatch for richer findings. The README lists the exact IAM policy. Credentials stay local; nothing is sent to our servers.',
+    },
+    {
       q: 'Is it safe to use my AWS credentials?',
-      a: 'Yes. Credentials stay on your machine. We use your local AWS CLI profile or AWS SSO — no keys on disk. Nothing is transmitted or stored on our servers. You can audit our code on GitHub.',
+      a: 'Yes. We use your local AWS CLI profile or AWS SSO. No keys are stored on disk or transmitted. You can audit our open-source code on GitHub.',
     },
     {
       q: 'What does "agentic" mean?',
-      a: 'Agentic means multiple AI models work together with shared state. Nova Sentinel uses 5 Nova models: Detect, Investigate, Classify, Remediate, Document. Each does what it\'s best at, passing context through the pipeline — no manual triage.',
+      a: 'Multiple AI models work together with shared state. Nova Sentinel uses 5 Nova models: Temporal (timeline), Risk Scorer (severity), Remediation (action plan), Documentation (JIRA/Slack/Confluence), plus an Autonomous Agent that picks its own tools. Each does what it\'s best at — no manual triage.',
     },
     {
       q: 'How fast is the analysis?',
-      a: 'Risk classification runs in under 1 second (Nova Micro). Full orchestration — timeline, attack path, remediation plan, documentation — completes in one pipeline run. Time varies with event volume; demo scenarios are optimized for quick exploration.',
+      a: 'Risk classification runs in under 1 second (Nova Micro). Full orchestration — timeline, attack path, remediation plan, documentation — completes in one pipeline run. Time varies with CloudTrail event volume (typically 20–60 seconds for 50–100 events).',
     },
   ];
 
@@ -52,7 +67,7 @@ const FAQSection: React.FC = () => {
             </span>
           </h2>
           <p className="text-slate-600 text-sm">
-            Quick answers for security teams and evaluators
+            Demo vs. real AWS, permissions, costs, and how it works
           </p>
         </motion.div>
 

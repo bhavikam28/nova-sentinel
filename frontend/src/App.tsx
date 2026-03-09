@@ -62,7 +62,9 @@ function App() {
   const [ssoRegion, setSsoRegion] = useState('us-east-1');
   const [activeFeature, setActiveFeature] = useState('overview');
   const [useFullAI, setUseFullAI] = useState(false);
-  const [backendOffline, setBackendOffline] = useState(false);
+  const [backendOffline, setBackendOffline] = useState(() =>
+    typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+  );
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionLoading, setConnectionLoading] = useState(false);
   const [incidentHistoryRefreshTrigger, setIncidentHistoryRefreshTrigger] = useState(0);
@@ -90,6 +92,10 @@ function App() {
   }, []);
 
   const loadScenarios = async () => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      setScenarios(DEFAULT_DEMO_SCENARIOS);
+      return;
+    }
     try {
       const data = await demoAPI.listScenarios();
       setScenarios(data.scenarios?.length ? data.scenarios : DEFAULT_DEMO_SCENARIOS);
@@ -100,10 +106,12 @@ function App() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) return;
     healthCheck().then((ok) => setBackendOffline(!ok));
   }, []);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) return;
     if (mode === 'demo' || mode === 'console') {
       healthCheck().then((ok) => setBackendOffline(!ok));
     }
@@ -668,6 +676,7 @@ function App() {
           <IncidentHistory
             accountId={mode === 'console' && awsAccountId ? awsAccountId : 'demo-account'}
             refreshTrigger={incidentHistoryRefreshTrigger}
+            backendOffline={backendOffline}
             onSelectIncident={async (id) => {
               if (id === orchestrationResult?.incident_id) {
                 setActiveFeature('overview');
@@ -787,7 +796,7 @@ function App() {
         );
 
       case 'agentic-query':
-        return <AgenticQuery />;
+        return <AgenticQuery backendOffline={backendOffline} />;
 
       case 'visual':
         return (

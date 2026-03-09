@@ -48,13 +48,182 @@ function detectToolsUsed(text: string): { tool: string; icon: React.ComponentTyp
   return results;
 }
 
-export default function AgenticQuery() {
+/**
+ * Demo fallback responses — used when backend is offline (Vercel-only demo for judges).
+ * These simulate what the Strands Agent would return for each suggested prompt.
+ */
+const DEMO_FALLBACKS: Record<string, string> = {
+  'audit all iam users': `IAM User Audit Results (3 users scanned):
+
+1. admin@company.com — CRITICAL
+   • MFA: Not enabled ⚠️
+   • Access keys: 2 active (oldest: 247 days — exceeds 90-day rotation policy)
+   • Policies: AdministratorAccess attached directly (should use group-based access)
+   • Risk: Root-equivalent permissions without MFA
+
+2. developer-1 — MEDIUM
+   • MFA: Enabled ✓
+   • Access keys: 1 active (34 days old)
+   • Policies: PowerUserAccess via group "developers"
+   • Risk: Broad permissions but MFA mitigates credential theft
+
+3. ci-deploy — HIGH
+   • MFA: Not enabled (service account)
+   • Access keys: 1 active (189 days — needs rotation)
+   • Policies: Custom deploy policy with s3:*, ec2:RunInstances
+   • Risk: Service account with stale key and broad S3 access
+
+Recommendations:
+• Enable MFA on admin@company.com immediately (aws iam enable-mfa-device)
+• Rotate access key for ci-deploy (189 days exceeds policy)
+• Move admin@company.com to group-based permissions, remove direct AdministratorAccess
+• Set up IAM Access Analyzer for continuous monitoring`,
+
+  'scan cloudtrail for anomalies': `CloudTrail Anomaly Scan (last 24 hours):
+
+Scanned 342 events across us-east-1. Found 3 anomalies:
+
+1. Root Account Console Login — CRITICAL
+   • Time: 2026-03-06T03:47:22Z (unusual hour)
+   • Source IP: 198.51.100.42 (not in known IP range)
+   • MFA: Not used
+   • Action: ConsoleLogin → succeeded
+   • Risk: Root account access from unknown IP without MFA at 3am
+
+2. Access Key Created for admin — HIGH
+   • Time: 2026-03-06T04:12:08Z (22 min after root login)
+   • Actor: root
+   • Action: CreateAccessKey for user "admin@company.com"
+   • Risk: Persistence mechanism — new long-lived credentials created
+
+3. Security Group Modified — HIGH
+   • Time: 2026-03-06T04:15:33Z
+   • Actor: admin@company.com (newly created key)
+   • Action: AuthorizeSecurityGroupIngress — opened port 22 to 0.0.0.0/0
+   • Risk: SSH exposed to internet on sg-0abc1234
+
+Assessment: These 3 events form a potential attack chain — root login → credential creation → network exposure. Campaign probability: HIGH.
+
+Recommended: Revoke root session, disable new access key, restore security group rules.`,
+
+  'get security hub findings': `Security Hub Findings (last 7 days):
+
+Retrieved 8 findings from GuardDuty and Inspector:
+
+CRITICAL (2):
+  • GuardDuty: UnauthorizedAccess:IAMUser/MaliciousIPCaller — admin@company.com accessed from known malicious IP
+  • Inspector: CVE-2024-38816 — Spring Framework RCE on i-0abc1234 (port 8080 exposed)
+
+HIGH (3):
+  • GuardDuty: CryptoCurrency:EC2/BitcoinTool.B — Mining activity on i-0def5678
+  • GuardDuty: Recon:IAMUser/MaliciousIPCaller.Custom — Enumeration from 203.0.113.50
+  • Inspector: CVE-2024-21626 — Container escape vulnerability on ECS cluster
+
+MEDIUM (3):
+  • GuardDuty: Policy:IAMUser/RootCredentialUsage — Root account used in last 24h
+  • Inspector: Outdated runtime — Node.js 16 (EOL) on Lambda function
+  • GuardDuty: Behavior:EC2/NetworkPortUnusual — Unusual outbound traffic on port 4444
+
+Summary: 2 critical findings require immediate attention. The CryptoCurrency finding on i-0def5678 correlates with the CloudTrail anomaly scan results.`,
+
+  'check cloudwatch for billing anomalies': `CloudWatch Billing Analysis (last 7 days):
+
+Current estimated charges: $847.32 (up 340% from baseline $192/week)
+
+Anomaly detected: Compute cost spike
+  • EC2 charges: $612.40 (was $85.20 baseline) — +619%
+  • 3 new p3.2xlarge instances launched 2026-03-06T04:20:00Z
+  • Running for 72+ hours continuously
+  • No Auto Scaling group — manually launched
+  • Region: us-east-1 (not the team's usual us-west-2)
+
+Other services:
+  • S3: $18.92 (normal)
+  • DynamoDB: $4.10 (normal)
+  • Bedrock: $12.40 (normal — Nova Sentinel usage)
+  • Data transfer: $199.50 (unusual — high outbound)
+
+Risk assessment: The 619% EC2 spike combined with unusual data transfer strongly suggests cryptocurrency mining or data exfiltration. The p3.2xlarge instances have GPU — commonly used for mining.
+
+Estimated unauthorized cost: ~$612/week if not terminated.
+Recommended: Terminate i-0ghi9012, i-0jkl3456, i-0mno7890 immediately.`,
+
+  'investigate iam roles for privilege escalation': `IAM Role Privilege Escalation Analysis:
+
+Scanned 12 IAM roles. Found 3 escalation risks:
+
+1. contractor-temp — CRITICAL escalation path
+   • Trust: Allows AssumeRole from any IAM user in account
+   • Policies: AdministratorAccess (full admin)
+   • Risk: Any user can escalate to full admin via this role
+   • Path: Low-priv user → AssumeRole contractor-temp → Admin
+   • Fix: aws iam update-assume-role-policy to restrict Principal
+
+2. lambda-execution-role — HIGH
+   • Trust: Lambda service principal (normal)
+   • Policies: Custom policy with iam:PassRole + iam:CreateRole
+   • Risk: Lambda function can create new roles with arbitrary permissions
+   • Path: Code injection in Lambda → create admin role → escalate
+   • Fix: Remove iam:CreateRole from Lambda execution policy
+
+3. ci-deploy-role — MEDIUM
+   • Trust: GitHub OIDC provider (good — no long-lived keys)
+   • Policies: ec2:*, s3:*, ecs:* (broad but scoped to deploy actions)
+   • Risk: Compromised GitHub workflow could provision arbitrary EC2/ECS
+   • Fix: Scope ec2:* to ec2:RunInstances with condition on specific AMIs
+
+No escalation path found for: read-only-role, cloudwatch-role, config-role, backup-role, support-role, audit-role, ssm-role, ecs-task-role, sagemaker-role.`,
+
+  'investigate cross-account role assumptions': `Cross-Account Role Assumption Analysis:
+
+Scanned trust policies for all 12 IAM roles:
+
+Cross-account trust found in 2 roles:
+
+1. OrganizationAccountAccessRole — EXPECTED
+   • Trusts: arn:aws:iam::111111111111:root (management account)
+   • Purpose: AWS Organizations default admin role
+   • Risk: LOW — standard org pattern, but should restrict to specific admin role
+   • Fix: Narrow Principal from :root to specific admin role ARN
+
+2. vendor-integration-role — HIGH
+   • Trusts: arn:aws:iam::999888777666:root (external account)
+   • ExternalId: Not configured ⚠️
+   • Policies: s3:GetObject on company-data-* buckets + kms:Decrypt
+   • Risk: Without ExternalId, susceptible to confused deputy attack
+   • Fix: aws iam update-assume-role-policy — add Condition with sts:ExternalId
+
+No cross-account trust in remaining 10 roles ✓
+
+Recommendation: Add ExternalId condition to vendor-integration-role immediately. This is a well-known attack vector (AWS docs: confused deputy problem).`,
+};
+
+function getDemoFallback(prompt: string): string | null {
+  const lower = prompt.toLowerCase();
+  for (const [key, value] of Object.entries(DEMO_FALLBACKS)) {
+    if (lower.includes(key)) return value;
+  }
+  if (lower.includes('iam') && lower.includes('user')) return DEMO_FALLBACKS['audit all iam users'];
+  if (lower.includes('cloudtrail') || lower.includes('anomal')) return DEMO_FALLBACKS['scan cloudtrail for anomalies'];
+  if (lower.includes('security hub') || lower.includes('guardduty') || lower.includes('finding')) return DEMO_FALLBACKS['get security hub findings'];
+  if (lower.includes('billing') || lower.includes('cloudwatch') || lower.includes('cost')) return DEMO_FALLBACKS['check cloudwatch for billing anomalies'];
+  if (lower.includes('role') && (lower.includes('privilege') || lower.includes('escalat'))) return DEMO_FALLBACKS['investigate iam roles for privilege escalation'];
+  if (lower.includes('cross') && lower.includes('account')) return DEMO_FALLBACKS['investigate cross-account role assumptions'];
+  return null;
+}
+
+interface AgenticQueryProps {
+  backendOffline?: boolean;
+}
+
+export default function AgenticQuery({ backendOffline = false }: AgenticQueryProps) {
   const [prompt, setPrompt] = useState('');
   const [response, setResponse] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [submittedPrompt, setSubmittedPrompt] = useState<string | null>(null);
+  const [isDemoFallback, setIsDemoFallback] = useState(false);
   const startRef = useRef<number>(0);
 
   const runQuery = async (text: string) => {
@@ -67,15 +236,37 @@ export default function AgenticQuery() {
     setError(null);
     setResponse(null);
     setElapsedMs(null);
+    setIsDemoFallback(false);
     startRef.current = Date.now();
 
     try {
-      const result = await orchestrationAPI.agentQuery(trimmed);
-      setElapsedMs(Date.now() - startRef.current);
-      setResponse(result.response || 'No response.');
+      const fallback = getDemoFallback(trimmed);
+      if (backendOffline) {
+        if (fallback) {
+          await new Promise(r => setTimeout(r, 800));
+          setElapsedMs(Date.now() - startRef.current);
+          setResponse(fallback);
+          setIsDemoFallback(true);
+        } else {
+          setElapsedMs(Date.now() - startRef.current);
+          setError('Backend offline — try a suggested prompt for demo results.');
+        }
+      } else {
+        const result = await orchestrationAPI.agentQuery(trimmed);
+        setElapsedMs(Date.now() - startRef.current);
+        setResponse(result.response || 'No response.');
+      }
     } catch (err: any) {
-      setElapsedMs(Date.now() - startRef.current);
-      setError(err.response?.data?.detail || err.message || 'Agent query failed');
+      const fallback = getDemoFallback(trimmed);
+      if (fallback) {
+        await new Promise(r => setTimeout(r, 800));
+        setElapsedMs(Date.now() - startRef.current);
+        setResponse(fallback);
+        setIsDemoFallback(true);
+      } else {
+        setElapsedMs(Date.now() - startRef.current);
+        setError(err.response?.data?.detail || err.message || 'Agent query failed. Backend may be offline.');
+      }
     } finally {
       setLoading(false);
     }
@@ -228,7 +419,7 @@ export default function AgenticQuery() {
                       <MessageSquare className="w-4 h-4 text-indigo-600" />
                       <span className="text-xs font-bold text-slate-700">Agent response</span>
                       <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded ml-1">Autonomous</span>
-                      <span className="text-[10px] text-slate-400 ml-auto">Strands Agents SDK</span>
+                      <span className="text-[10px] text-slate-400 ml-auto">{isDemoFallback ? 'Demo mode (backend offline)' : 'Strands Agents SDK'}</span>
                     </div>
                     <div className="p-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[480px] overflow-y-auto">
                       {response}

@@ -10,7 +10,7 @@ import {
   MessageSquare, ChevronDown, ChevronUp,
   Shield, Search, FileText, DollarSign
 } from 'lucide-react';
-import { incidentHistoryAPI } from '../../services/api';
+import { incidentHistoryAPI, voiceAPI } from '../../services/api';
 
 interface VoiceAssistantProps {
   incidentContext?: any;
@@ -221,16 +221,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const response = await fetch('http://localhost:8000/api/voice/query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: query.trim(),
-            incident_context: incidentContext || null
-          })
-        });
-
-        const data = await response.json();
+        const data = await voiceAPI.query(query.trim(), incidentContext || null);
         
         // Check if response indicates an error/empty response — retry if so
         const responseText = data.response_text || '';
