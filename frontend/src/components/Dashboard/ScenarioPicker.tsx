@@ -4,12 +4,13 @@
  */
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Loader2, Shield, Zap, AlertTriangle, Lock } from 'lucide-react';
+import { ArrowRight, Loader2, Shield, Zap, AlertTriangle, Lock, Play } from 'lucide-react';
 import type { DemoScenario } from '../../types/incident';
 
 interface ScenarioPickerProps {
   scenarios: DemoScenario[];
   onSelectScenario: (scenarioId: string) => void;
+  onStartSimulation?: (scenarioId: string) => void;
   loading?: boolean;
   useFullAI?: boolean;
   onUseFullAIChange?: (v: boolean) => void;
@@ -35,6 +36,7 @@ const getSeverityConfig = (severity: string) => {
 const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
   scenarios,
   onSelectScenario,
+  onStartSimulation,
   loading,
   useFullAI = false,
   onUseFullAIChange,
@@ -56,43 +58,58 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
           const Icon = SCENARIO_ICONS[scenario.id] || Shield;
 
           return (
-            <motion.button
+            <motion.div
               key={scenario.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              onClick={() => !loading && onSelectScenario(scenario.id)}
-              disabled={loading}
-              className="group w-full text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group w-full bg-white rounded-xl p-5 border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all duration-200"
             >
-              <div className="flex items-center gap-4">
-                {/* Icon */}
-                <div className={`w-11 h-11 rounded-xl ${(config as any).iconBg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2.5 mb-0.5">
-                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                      {scenario.name}
-                    </h3>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${config.bg} ${config.text} ${config.border} border`}>
-                      {scenario.severity}
-                    </span>
+              <button
+                onClick={() => !loading && onSelectScenario(scenario.id)}
+                disabled={loading}
+                className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="flex items-center gap-4">
+                  {/* Icon */}
+                  <div className={`w-11 h-11 rounded-xl ${(config as any).iconBg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                    <Icon className="w-5 h-5 text-white" />
                   </div>
-                  <p className="text-xs text-slate-500">{scenario.description}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">{scenario.event_count} CloudTrail events</p>
-                </div>
 
-                {/* Arrow */}
-                {loading ? (
-                  <Loader2 className="w-5 h-5 text-indigo-400 animate-spin flex-shrink-0" />
-                ) : (
-                  <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-                )}
-              </div>
-            </motion.button>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5 mb-0.5">
+                      <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        {scenario.name}
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${config.bg} ${config.text} ${config.border} border`}>
+                        {scenario.severity}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">{scenario.description}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{scenario.event_count} CloudTrail events</p>
+                  </div>
+
+                  {/* Arrow */}
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 text-indigo-400 animate-spin flex-shrink-0" />
+                  ) : (
+                    <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+
+              {/* Watch Live Simulation */}
+              {onStartSimulation && !loading && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onStartSimulation(scenario.id); }}
+                  className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 rounded-md border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 transition-colors"
+                >
+                  <Play className="w-3 h-3" strokeWidth={2.5} />
+                  Watch Live
+                </button>
+              )}
+            </motion.div>
           );
         })}
       </div>

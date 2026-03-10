@@ -68,19 +68,19 @@ function buildBriefMeNarrative(ctx: any): string {
   const storyBits: string[] = [];
   let prevTs = '';
 
-  const actionStories: Record<string, (actor: string, res: string) => string> = {
-    CreateRole: (a, r) => `created a role called ${friendlyName(r)} — which may have been overly permissive`,
-    AttachRolePolicy: (a, r) => `attached full admin access to that role`,
-    AuthorizeSecurityGroupIngress: (a, r) => `opened SSH to the internet — which could be a misconfig or risk`,
-    DescribeInstances: (a, r) => `listed your EC2 instances`,
-    RunInstances: (a, r) => `launched GPU instances — possibly for crypto mining or legitimate workloads`,
-    GuardDutyFinding: (a, r) => `detected activity that looks like crypto mining`,
-    GetObject: (a, r) => `accessed sensitive data from your bucket`,
-    ListBucket: (a, r) => `listed bucket contents`,
-    AssumeRole: (a, r) => `assumed the admin role`,
-    CreateUser: (a, r) => `created a new user — possibly for persistence`,
-    AttachUserPolicy: (a, r) => `gave that user full admin access`,
-    ConsoleLogin: (a, r) => `logged into the console`,
+  const actionStories: Record<string, (_actor: string, res: string) => string> = {
+    CreateRole: (_actor, r) => `created a role called ${friendlyName(r)} — which may have been overly permissive`,
+    AttachRolePolicy: (_actor, _res) => `attached full admin access to that role`,
+    AuthorizeSecurityGroupIngress: (_actor, _res) => `opened SSH to the internet — which could be a misconfig or risk`,
+    DescribeInstances: (_actor, _res) => `listed your EC2 instances`,
+    RunInstances: (_actor, _res) => `launched GPU instances — possibly for crypto mining or legitimate workloads`,
+    GuardDutyFinding: (_actor, _res) => `detected activity that looks like crypto mining`,
+    GetObject: (_actor, _res) => `accessed sensitive data from your bucket`,
+    ListBucket: (_actor, _res) => `listed bucket contents`,
+    AssumeRole: (_actor, _res) => `assumed the admin role`,
+    CreateUser: (_actor, _res) => `created a new user — possibly for persistence`,
+    AttachUserPolicy: (_actor, _res) => `gave that user full admin access`,
+    ConsoleLogin: (_actor, _res) => `logged into the console`,
   };
 
   const disclaimer = "Quick note: This is based on CloudTrail data — it could be an incident or a misconfiguration. Always verify before acting. ";

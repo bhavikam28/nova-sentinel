@@ -2,7 +2,7 @@
  * Cost Impact Estimation - Financial impact analysis of security incidents
  * Based on industry benchmarks with clickable source links
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DollarSign, TrendingUp, Clock, AlertTriangle, Server, Database, Scale, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
@@ -174,6 +174,8 @@ const CostImpact: React.FC<CostImpactProps> = ({
   hasAwsServicePrincipal,
 }) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [tickerValue, setTickerValue] = useState(0);
+  const [tickerComplete, setTickerComplete] = useState(false);
   const costs = useMemo(
     () =>
       estimateCosts(timeline, incidentType, {
@@ -202,6 +204,34 @@ const CostImpact: React.FC<CostImpactProps> = ({
   };
 
   const totalTraditional = useMemo(() => costs.reduce((sum, c) => sum + c.amount, 0), [costs]);
+
+  // Animated cost ticker: counts up from 0 to totalTraditional over ~1.5s (fast, no "stuck" feeling)
+  useEffect(() => {
+    if (totalTraditional <= 0) {
+      setTickerValue(0);
+      setTickerComplete(true);
+      return;
+    }
+    setTickerValue(0);
+    setTickerComplete(false);
+    const duration = 1500;
+    const steps = 25;
+    const stepMs = duration / steps;
+    const increment = totalTraditional / steps;
+    let current = 0;
+    const id = setInterval(() => {
+      current += increment;
+      if (current >= totalTraditional) {
+        setTickerValue(totalTraditional);
+        setTickerComplete(true);
+        clearInterval(id);
+      } else {
+        setTickerValue(Math.round(current));
+      }
+    }, stepMs);
+    return () => clearInterval(id);
+  }, [totalTraditional]);
+
   const savingsBreakdown = useMemo(() => {
     const remediationSaving = costs.find(c => c.id === 'remediation')?.amount || 0;
     const downtimeAmount = costs.find(c => c.id === 'downtime')?.amount || 0;
@@ -247,6 +277,41 @@ const CostImpact: React.FC<CostImpactProps> = ({
             <Info className="w-3.5 h-3.5" />
             {expandedIds.size === costs.length ? 'Collapse All' : 'Expand All'} Methodologies
           </button>
+        </div>
+
+        {/* Real-time cost ticker — animated counter with methodology */}
+        <div className="mb-4 rounded-xl overflow-hidden border border-slate-200 shadow-lg">
+          <div className="px-5 py-4 bg-slate-900 text-white">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Total Incident Cost — Live Ticker</p>
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-3xl font-bold font-mono tabular-nums tracking-tight">
+                  ${tickerValue.toLocaleString()}
+                  {!tickerComplete && <span className="ml-1.5 inline-block w-2.5 h-5 bg-rose-500 animate-pulse rounded-sm" />}
+                </p>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  {tickerComplete ? 'Total exposure without Nova Sentinel' : 'Counting up — simulating attack duration'}
+                </p>
+              </div>
+              {tickerComplete && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="px-5 py-3 rounded-xl bg-emerald-500/25 border border-emerald-400/40"
+                >
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Nova Saves</p>
+                  <p className="text-xl font-bold text-emerald-200 font-mono tabular-nums">${novaSentinelSavings.toLocaleString()}</p>
+                </motion.div>
+              )}
+            </div>
+            {/* What's included + methodology */}
+            <div className="mt-4 pt-4 border-t border-slate-700/60">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">What&apos;s included</p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Sum of: {costs.map((c) => `${c.label} ($${c.amount.toLocaleString()})`).join(' + ')}. Based on {timeline.events?.length || 0} CloudTrail events, incident type &quot;{incidentType || 'security incident'}&quot;. Uses AWS pricing, IBM Cost of Data Breach, Gartner downtime research, BLS labor rates. Expand categories below for full methodology.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Before/After comparison */}

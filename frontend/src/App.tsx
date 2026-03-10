@@ -40,6 +40,7 @@ import IncidentHistory from './components/Dashboard/IncidentHistory';
 import AIPipelineSecurity from './components/Dashboard/AIPipelineSecurity';
 import DemoChecklist from './components/Dashboard/DemoChecklist';
 import AgenticQuery from './components/Analysis/AgenticQuery';
+import { LiveSimulation } from './components/Simulation/LiveSimulation';
 
 type AppMode = 'landing' | 'demo' | 'console';
 
@@ -70,6 +71,7 @@ function App() {
   const [incidentHistoryRefreshTrigger, setIncidentHistoryRefreshTrigger] = useState(0);
   const [visitedFeatures, setVisitedFeatures] = useState<Set<string>>(new Set());
   const [lastDemoScenarioId, setLastDemoScenarioId] = useState<string | null>(null);
+  const [simulationScenarioId, setSimulationScenarioId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeFeature) setVisitedFeatures((prev) => new Set(prev).add(activeFeature));
@@ -342,6 +344,7 @@ function App() {
           <ScenarioPicker
             scenarios={scenarios}
             onSelectScenario={handleSelectScenario}
+            onStartSimulation={(id) => setSimulationScenarioId(id)}
             loading={loading}
             useFullAI={useFullAI}
             onUseFullAIChange={setUseFullAI}
@@ -973,10 +976,24 @@ function App() {
     }
   };
 
+  const handleSimulationComplete = () => {
+    const id = simulationScenarioId;
+    setSimulationScenarioId(null);
+    if (id) handleSelectScenario(id);
+  };
+
   // ========== DEMO or CONSOLE MODE ==========
   if (mode === 'demo' || mode === 'console') {
     return (
       <>
+        {simulationScenarioId && (
+          <LiveSimulation
+            scenarioId={simulationScenarioId}
+            onComplete={handleSimulationComplete}
+            onSkip={handleSimulationComplete}
+          />
+        )}
+        {!simulationScenarioId && (
         <DashboardLayout
           mode={mode}
           activeFeature={activeFeature}
@@ -1095,8 +1112,10 @@ function App() {
             </motion.div>
           </AnimatePresence>
         </DashboardLayout>
+        )}
 
-        {/* Voice Assistant */}
+        {/* Voice Assistant — hidden during simulation */}
+        {!simulationScenarioId && (
         <VoiceAssistant
           incidentContext={orchestrationResult?.results ? {
             timeline: orchestrationResult.results.timeline,
@@ -1109,6 +1128,7 @@ function App() {
           incidentId={orchestrationResult?.incident_id || analysisResult?.incident_id}
           isAnalysisComplete={!!analysisResult && !loading}
         />
+        )}
       </>
     );
   }

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
 import type { OrchestrationResponse } from '../../types/incident';
+import { SLATracker, deriveSLACheckpoints } from './SLATracker';
 import { analysisAPI } from '../../services/api';
 import { healthCheck } from '../../services/api';
 
@@ -114,7 +115,7 @@ const DEMO_WHAT_IF: Record<string, any> = {
 const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
   timeline,
   orchestrationResult,
-  analysisTime,
+  analysisTime: _analysisTime,
   onNavigateToCostImpact,
   onNavigateToTimeline,
 }) => {
@@ -282,7 +283,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             title="Root Cause"
             subtitle="Initial attack vector"
             text={rootCause}
-            icon={Target}
+            icon={Target as React.ComponentType<{ className?: string; strokeWidth?: number }>}
             accent="bg-red-500"
             iconBg="bg-red-100"
             iconColor="text-red-600"
@@ -299,7 +300,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             title="Attack Pattern"
             subtitle="Kill chain stages"
             text={attackPattern}
-            icon={Activity}
+            icon={Activity as React.ComponentType<{ className?: string; strokeWidth?: number }>}
             accent="bg-orange-500"
             iconBg="bg-orange-100"
             iconColor="text-orange-600"
@@ -316,7 +317,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             title="Blast Radius"
             subtitle={`${metrics.totalEvents} events, ${metrics.criticalCount} critical`}
             text={blastRadius}
-            icon={Layers}
+            icon={Layers as React.ComponentType<{ className?: string; strokeWidth?: number }>}
             accent="bg-violet-500"
             iconBg="bg-violet-100"
             iconColor="text-violet-600"
@@ -328,6 +329,18 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             }}
           />
         </div>
+      </section>
+
+      {/* Incident Response SLA */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Incident Response SLA</h2>
+        <SLATracker
+          checkpoints={deriveSLACheckpoints(
+            orchestrationResult?.analysis_time_ms ?? 0,
+            !!orchestrationResult?.results?.remediation_plan,
+            !!orchestrationResult?.results?.documentation
+          )}
+        />
       </section>
 
       {/* What If — Scenario Simulation (AI-Powered Tabletop Exercise) */}
@@ -568,18 +581,20 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             {
               label: 'Events Analyzed',
               value: metrics.totalEvents,
-              icon: Activity,
+              icon: Activity as React.ComponentType<{ className?: string; strokeWidth?: number }>,
               color: 'text-indigo-600',
               bg: 'bg-indigo-100',
               trend: null,
+              suffix: undefined as string | undefined,
             },
             {
               label: 'AI Confidence',
               value: `${(metrics.confidence * 100).toFixed(0)}%`,
-              icon: TrendingUp,
+              icon: TrendingUp as React.ComponentType<{ className?: string; strokeWidth?: number }>,
               color: 'text-emerald-600',
               bg: 'bg-emerald-100',
               trend: null,
+              suffix: undefined as string | undefined,
             },
           ].map((metric, i) => (
             <motion.div
@@ -797,7 +812,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
 
 /** Unified Key Finding card: summary + expandable supporting evidence */
 function KeyFindingCard({
-  id,
+  id: _id,
   title,
   subtitle,
   text,
@@ -805,7 +820,7 @@ function KeyFindingCard({
   accent,
   iconBg,
   iconColor,
-  borderColor,
+  borderColor: _borderColor,
   timeline,
   getSupportingEvents,
 }: {

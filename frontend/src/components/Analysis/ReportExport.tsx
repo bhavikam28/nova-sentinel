@@ -122,7 +122,7 @@ This report was generated using the following Amazon Nova AI models:
 
 const ReportExport: React.FC<ReportExportProps> = ({
   timeline,
-  orchestrationResult,
+  orchestrationResult: _orchestrationResult,
   incidentId,
   analysisTime,
   remediationPlan,
