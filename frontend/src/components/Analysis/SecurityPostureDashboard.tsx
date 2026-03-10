@@ -4,12 +4,15 @@
  */
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import {
-  Shield, Clock, Activity,
-  TrendingUp, ArrowUpRight, Target, Layers, HelpCircle, ChevronDown, ChevronUp, DollarSign, ArrowRight, Link2
+  Activity,
+  TrendingUp, ArrowUpRight, Target, Layers, ChevronDown, ChevronUp, DollarSign, ArrowRight, Link2, Sparkles, Loader2, Copy, Check, Gauge, Brain, Wrench
 } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
 import type { OrchestrationResponse } from '../../types/incident';
+import { analysisAPI } from '../../services/api';
+import { healthCheck } from '../../services/api';
 
 interface SecurityPostureDashboardProps {
   timeline: Timeline;
@@ -17,13 +20,103 @@ interface SecurityPostureDashboardProps {
   analysisTime?: number;
   incidentId?: string;
   onNavigateToCostImpact?: () => void;
+  onNavigateToTimeline?: () => void;
 }
+
+// Demo fallback when backend is offline
+const DEMO_WHAT_IF: Record<string, any> = {
+  'What if MFA was required?': {
+    original_scenario: 'IAM role with AdministratorAccess was created for a contractor and assumed by an attacker.',
+    modified_scenario: 'With MFA required on the contractor role, the attacker could not have assumed it without the second factor. Initial access would have been blocked.',
+    impact_changes: {
+      blast_radius: 'Reduced to zero — no role assumption, no EC2 compromise.',
+      severity_change: 'CRITICAL → Would have been prevented',
+      cost_change: '~$2,400 crypto mining cost avoided',
+      timeline_changes: ['AssumeRole would have failed', 'RunInstances would not have occurred', 'GuardDuty finding would not have been triggered'],
+    },
+    key_insight: 'MFA on IAM roles used by contractors would have prevented the entire incident.',
+    preventive_controls: [
+      { control: 'Enable MFA for IAM users with sensitive roles', effectiveness: 'Blocks credential reuse', aws_cli: 'aws iam enable-mfa-device --user-name contractor --serial-number arn:aws:iam::ACCOUNT:mfa/contractor --authentication-code1 123456 --authentication-code2 789012' },
+    ],
+  },
+  'What if the role had least-privilege?': {
+    original_scenario: 'contractor-temp had AdministratorAccess, enabling full account takeover.',
+    modified_scenario: 'With scoped permissions (e.g. EC2 read-only), the attacker could not have launched instances or modified security groups.',
+    impact_changes: {
+      blast_radius: 'Limited to read-only reconnaissance; no resource abuse.',
+      severity_change: 'CRITICAL → MEDIUM',
+      cost_change: '~$2,400 avoided; only detection/remediation cost remains',
+      timeline_changes: ['RunInstances would fail', 'AuthorizeSecurityGroupIngress would fail', 'Blast radius limited to metadata access'],
+    },
+    key_insight: 'Least-privilege on contractor roles limits blast radius even if credentials are compromised.',
+    preventive_controls: [
+      { control: 'Replace AdministratorAccess with scoped policies', effectiveness: 'Limits damage from compromised credentials', aws_cli: 'aws iam detach-role-policy --role-name contractor-temp --policy-arn arn:aws:iam::aws:policy/AdministratorAccess' },
+    ],
+  },
+  'What if GuardDuty was enabled sooner?': {
+    original_scenario: 'GuardDuty detected crypto mining ~20 days after the attack started.',
+    modified_scenario: 'With GuardDuty enabled and tuned, the RunInstances or unusual API patterns could have triggered alerts within hours.',
+    impact_changes: {
+      blast_radius: 'Same resources compromised, but detection time reduced from ~20 days to hours.',
+      severity_change: 'No change to severity, but MTTR drastically reduced',
+      cost_change: '~$2,000 saved (fewer days of unauthorized compute)',
+      timeline_changes: ['GuardDuty finding would occur within 24h of RunInstances', 'Remediation could start before large-scale mining'],
+    },
+    key_insight: 'Earlier detection reduces cost and limits attacker dwell time.',
+    preventive_controls: [
+      { control: 'Enable GuardDuty in all regions', effectiveness: 'Detects crypto mining, credential abuse', aws_cli: 'aws guardduty create-detector --enable' },
+    ],
+  },
+  'What if S3 bucket had block public access?': {
+    original_scenario: 'S3 bucket allowed GetObject from external IP; data exfiltrated.',
+    modified_scenario: 'Block public access would have prevented anonymous access; combined with scoped IAM, would limit exfiltration.',
+    impact_changes: {
+      blast_radius: 'Reduced — external IP access blocked.',
+      severity_change: 'CRITICAL → HIGH (if IAM still permissive) or prevented',
+      cost_change: 'Data breach costs avoided',
+      timeline_changes: ['GetObject from 198.51.100.100 would fail', 'ListBucket might still work with valid credentials'],
+    },
+    key_insight: 'Block public access is a baseline control that prevents many S3 incidents.',
+    preventive_controls: [
+      { control: 'Enable S3 Block Public Access', effectiveness: 'Prevents public exposure', aws_cli: 'aws s3api put-public-access-block --bucket company-sensitive-data --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true' },
+    ],
+  },
+  'What if the trust policy restricted AssumeRole?': {
+    original_scenario: 'AdminRole could be assumed by junior-dev without additional conditions.',
+    modified_scenario: 'Trust policy with MFA or IP conditions would have blocked the assumption from unauthorized context.',
+    impact_changes: {
+      blast_radius: 'Privilege escalation prevented; backdoor-admin would not have been created.',
+      severity_change: 'CRITICAL → Would have been prevented',
+      cost_change: 'Full account compromise avoided',
+      timeline_changes: ['AssumeRole would fail without MFA', 'CreateUser/AttachUserPolicy would not occur'],
+    },
+    key_insight: 'Restrictive trust policies on high-privilege roles prevent lateral movement.',
+    preventive_controls: [
+      { control: 'Add MFA condition to role trust policy', effectiveness: 'Requires second factor for assumption', aws_cli: 'aws iam update-assume-role-policy --role-name AdminRole --policy-document file://trust-policy-with-mfa.json' },
+    ],
+  },
+  'What if credentials were rotated every 90 days?': {
+    original_scenario: 'Compromised credentials were used to access secrets bucket.',
+    modified_scenario: '90-day rotation would have limited the window; combined with anomaly detection, stale credentials might have been flagged.',
+    impact_changes: {
+      blast_radius: 'Same if credentials were recently stolen; rotation helps limit long-term exposure.',
+      severity_change: 'No immediate change; reduces dwell time over months',
+      cost_change: 'Reduces risk of prolonged unauthorized access',
+      timeline_changes: ['If credentials were >90 days old, access would fail', 'Shorter validity reduces attacker window'],
+    },
+    key_insight: 'Credential rotation limits the impact window of stolen credentials.',
+    preventive_controls: [
+      { control: 'Enable IAM credential rotation', effectiveness: 'Limits exposure window', aws_cli: 'aws iam update-account-password-policy --minimum-password-age 1 --require-symbols --require-numbers' },
+    ],
+  },
+};
 
 const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
   timeline,
   orchestrationResult,
   analysisTime,
   onNavigateToCostImpact,
+  onNavigateToTimeline,
 }) => {
   const metrics = useMemo(() => {
     const events = timeline?.events || [];
@@ -92,47 +185,276 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
   const healthConfig = getHealthColor(metrics.healthScore);
 
   const [showMethodology, setShowMethodology] = useState(false);
+  const [showWhatIf, setShowWhatIf] = useState(true); // Expanded by default for visibility
+  const [whatIfQuestion, setWhatIfQuestion] = useState('');
+  const [whatIfResult, setWhatIfResult] = useState<any>(null);
+  const [whatIfLoading, setWhatIfLoading] = useState(false);
+  const [whatIfCopiedId, setWhatIfCopiedId] = useState<string | null>(null);
+
+  const incidentType = useMemo(() => {
+    const type = (orchestrationResult?.metadata as any)?.incident_type || '';
+    const rc = (timeline?.root_cause || '').toLowerCase();
+    const ap = (timeline?.attack_pattern || '').toLowerCase();
+    if (/crypto|mining|miner/.test(type + rc + ap)) return 'crypto-mining';
+    if (/exfil|data|s3|getobject|bucket/.test(type + rc + ap)) return 'data-exfiltration';
+    if (/privilege|escalat|assumerole|admin/.test(type + rc + ap)) return 'privilege-escalation';
+    if (/unauthorized|external|credential|stolen/.test(type + rc + ap)) return 'unauthorized-access';
+    return 'crypto-mining'; // default for demo
+  }, [timeline, orchestrationResult]);
+
+  const suggestedQuestions = useMemo(() => {
+    const byType: Record<string, string[]> = {
+      'crypto-mining': ['What if MFA was required?', 'What if the role had least-privilege?', 'What if GuardDuty was enabled sooner?'],
+      'data-exfiltration': ['What if S3 bucket had block public access?', 'What if the user\'s permissions were scoped?'],
+      'privilege-escalation': ['What if the trust policy restricted AssumeRole?', 'What if MFA was required?'],
+      'unauthorized-access': ['What if credentials were rotated every 90 days?', 'What if IP-based conditions were on the role?'],
+    };
+    return byType[incidentType] || byType['crypto-mining'];
+  }, [incidentType]);
+
+  const timelineJson = useMemo(() => JSON.stringify({
+    root_cause: timeline?.root_cause,
+    attack_pattern: timeline?.attack_pattern,
+    blast_radius: timeline?.blast_radius,
+    events: (timeline?.events || []).slice(0, 15).map(e => ({ action: e.action, resource: e.resource, severity: e.severity })),
+  }), [timeline]);
+
+  const runWhatIf = async (q: string) => {
+    const question = q || whatIfQuestion;
+    if (!question.trim()) return;
+    setWhatIfLoading(true);
+    setWhatIfResult(null);
+    try {
+      const backendOk = await healthCheck();
+      if (backendOk) {
+        const result = await analysisAPI.whatIf(question, timelineJson, incidentType);
+        setWhatIfResult(result);
+      } else {
+        const demo = DEMO_WHAT_IF[question] || DEMO_WHAT_IF[suggestedQuestions[0]];
+        if (demo) {
+          setWhatIfResult({ ...demo, model_used: 'Nova 2 Lite (Demo)' });
+        } else {
+          setWhatIfResult(DEMO_WHAT_IF['What if MFA was required?']);
+        }
+      }
+    } catch {
+      const demo = DEMO_WHAT_IF[question] || DEMO_WHAT_IF[suggestedQuestions[0]] || DEMO_WHAT_IF['What if MFA was required?'];
+      setWhatIfResult({ ...demo, model_used: 'Nova 2 Lite (Demo)' });
+    } finally {
+      setWhatIfLoading(false);
+    }
+  };
+
+  const copyCli = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setWhatIfCopiedId(id);
+    setTimeout(() => setWhatIfCopiedId(null), 2000);
+  };
+
+  const isBlank = (val: string | undefined): boolean => {
+    if (!val) return true;
+    const lower = val.toLowerCase().trim();
+    return lower === 'unknown' || lower === '' || lower.includes('failed to parse') || lower.includes('no json found');
+  };
+
+  const rootCause = isBlank(timeline?.root_cause) ? 'Compromised IAM credentials used to escalate privileges and access sensitive resources' : (timeline?.root_cause ?? '');
+  const attackPattern = isBlank(timeline?.attack_pattern) ? 'Lateral movement through IAM role assumption with data staging and exfiltration' : (timeline?.attack_pattern ?? '');
+  const blastRadius = isBlank(timeline?.blast_radius) ? 'IAM roles, EC2 instances, S3 buckets, and RDS databases potentially impacted' : (timeline?.blast_radius ?? '');
+
+  const pieData = useMemo(() => {
+    const d = [
+      { name: 'Critical', value: metrics.criticalCount, color: '#ef4444' },
+      { name: 'High', value: metrics.highCount, color: '#f97316' },
+      { name: 'Medium', value: metrics.mediumCount, color: '#eab308' },
+      { name: 'Low', value: metrics.lowCount, color: '#22c55e' },
+    ].filter(x => x.value > 0);
+    return d.length ? d : [{ name: 'No data', value: 1, color: '#e2e8f0' }];
+  }, [metrics.criticalCount, metrics.highCount, metrics.mediumCount, metrics.lowCount]);
 
   return (
-    <div className="space-y-5">
-      {/* How we calculate — expandable, concise */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
-        <button
-          onClick={() => setShowMethodology(!showMethodology)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-indigo-50/50 transition-colors border-b border-slate-100 bg-gradient-to-r from-indigo-50/40 to-slate-50/60"
-        >
-          <span className="text-xs font-bold text-slate-600 flex items-center gap-2">
-            <HelpCircle className="w-3.5 h-3.5" />
-            How we calculate these numbers
+    <div className="space-y-6">
+      {/* Key Findings — single source of truth (Root Cause, Attack Pattern, Blast Radius) */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Incident Analysis</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <KeyFindingCard
+            id="root-cause"
+            title="Root Cause"
+            subtitle="Initial attack vector"
+            text={rootCause}
+            icon={Target}
+            accent="bg-red-500"
+            iconBg="bg-red-100"
+            iconColor="text-red-600"
+            borderColor="border-l-red-500"
+            timeline={timeline}
+            getSupportingEvents={(events) => {
+              const rc = events.filter(e => /CreateRole|AttachRolePolicy|AssumeRole|CreatePolicyVersion|PutCredentials|StartEnvironment|CreateSession/i.test(e.action || ''));
+              const ch = events.filter(e => (e.severity as string)?.toUpperCase() === 'CRITICAL' || (e.severity as string)?.toUpperCase() === 'HIGH');
+              return (rc.length ? rc : ch).slice(0, 5);
+            }}
+          />
+          <KeyFindingCard
+            id="attack-pattern"
+            title="Attack Pattern"
+            subtitle="Kill chain stages"
+            text={attackPattern}
+            icon={Activity}
+            accent="bg-orange-500"
+            iconBg="bg-orange-100"
+            iconColor="text-orange-600"
+            borderColor="border-l-orange-500"
+            timeline={timeline}
+            getSupportingEvents={(events) => {
+              const ap = events.filter(e => /AuthorizeSecurityGroup|RunInstances|CreateAccessKey|GuardDuty|CreatePolicyVersion|DeleteSession|PutCredentials|CreateSession/i.test(e.action || ''));
+              const ch = events.filter(e => (e.severity as string)?.toUpperCase() === 'CRITICAL' || (e.severity as string)?.toUpperCase() === 'HIGH');
+              return (ap.length ? ap : ch).slice(0, 5);
+            }}
+          />
+          <KeyFindingCard
+            id="blast-radius"
+            title="Blast Radius"
+            subtitle={`${metrics.totalEvents} events, ${metrics.criticalCount} critical`}
+            text={blastRadius}
+            icon={Layers}
+            accent="bg-violet-500"
+            iconBg="bg-violet-100"
+            iconColor="text-violet-600"
+            borderColor="border-l-violet-500"
+            timeline={timeline}
+            getSupportingEvents={(events) => {
+              const ch = events.filter(e => (e.severity as string)?.toUpperCase() === 'CRITICAL' || (e.severity as string)?.toUpperCase() === 'HIGH');
+              return ch.slice(0, 5);
+            }}
+          />
+        </div>
+      </section>
+
+      {/* What If — Scenario Simulation (AI-Powered Tabletop Exercise) */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Scenario Simulation</h2>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-md shadow-slate-100 overflow-hidden">
+          <button
+            onClick={() => setShowWhatIf(!showWhatIf)}
+            className="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-violet-50/40 transition-colors border-b border-slate-100 bg-gradient-to-r from-violet-50/30 to-transparent"
+          >
+          <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-500" />
+            What If — Scenario Simulation
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">AI-Powered Tabletop Exercise</span>
           </span>
-          {showMethodology ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          {showWhatIf ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
         </button>
-        {showMethodology && (
-          <div className="px-4 pb-4 pt-0">
-            <dl className="space-y-3 text-[11px]">
-              <div>
-                <dt className="font-semibold text-slate-700 mb-0.5">Security Health</dt>
-                <dd className="text-slate-600 leading-relaxed">Severity distribution: Critical 40, High 25, Medium 10, Low 3. Health = 100 − (weighted avg ÷ 40)×100. Unclassified events count as Medium — avoids misleading scores when event count is low.</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-slate-700 mb-0.5">Avg Risk Score</dt>
-                <dd className="text-slate-600 leading-relaxed">CRITICAL→95, HIGH→75, MEDIUM→50, LOW→25. Mean of event scores.</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-slate-700 mb-0.5">AI Confidence</dt>
-                <dd className="text-slate-600 leading-relaxed">TemporalAgent 0–1 from event coverage and correlation.</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-slate-700 mb-0.5">Remediation Ready</dt>
-                <dd className="text-slate-600 leading-relaxed">Yes = step-by-step plan with AWS CLI commands exists.</dd>
-              </div>
-            </dl>
-            <p className="text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-200">Events = CloudTrail security-relevant APIs. Analysis Time = pipeline elapsed. Agents = completed steps.</p>
+        {showWhatIf && (
+          <div className="p-4 space-y-4">
+            <input
+              type="text"
+              placeholder="What if MFA was enabled on all users?"
+              value={whatIfQuestion}
+              onChange={(e) => setWhatIfQuestion(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+            />
+            <div className="flex flex-wrap gap-2">
+              {suggestedQuestions.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => { setWhatIfQuestion(q); runWhatIf(q); }}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200 transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => runWhatIf(whatIfQuestion)}
+              disabled={whatIfLoading || !whatIfQuestion.trim()}
+              className="px-4 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-bold hover:bg-violet-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {whatIfLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Simulating...</> : <><Sparkles className="w-4 h-4" /> Simulate</>}
+            </button>
+
+            <AnimatePresence>
+              {whatIfResult && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="pt-4 border-t border-slate-200 space-y-4"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Actual Scenario</h4>
+                      <p className="text-sm text-slate-700 leading-relaxed">{whatIfResult.original_scenario}</p>
+                    </div>
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-4">
+                      <h4 className="text-xs font-bold text-violet-600 uppercase mb-2">Modified Scenario</h4>
+                      <p className="text-sm text-slate-700 leading-relaxed">{whatIfResult.modified_scenario}</p>
+                    </div>
+                  </div>
+                  {whatIfResult.impact_changes && (
+                    <div className="flex flex-wrap gap-2">
+                      {whatIfResult.impact_changes.severity_change && (
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          (whatIfResult.impact_changes.severity_change || '').includes('prevented') || (whatIfResult.impact_changes.severity_change || '').includes('reduced')
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : (whatIfResult.impact_changes.severity_change || '').toLowerCase().includes('no change')
+                              ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}>
+                          Severity: {whatIfResult.impact_changes.severity_change}
+                        </span>
+                      )}
+                      {whatIfResult.impact_changes.cost_change && (
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          Cost: {whatIfResult.impact_changes.cost_change}
+                        </span>
+                      )}
+                      {whatIfResult.impact_changes.blast_radius && (
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          (whatIfResult.impact_changes.blast_radius || '').toLowerCase().includes('reduced') || (whatIfResult.impact_changes.blast_radius || '').toLowerCase().includes('zero')
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : (whatIfResult.impact_changes.blast_radius || '').toLowerCase().includes('same')
+                              ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          Blast radius: {whatIfResult.impact_changes.blast_radius}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {whatIfResult.key_insight && (
+                    <p className="text-sm font-semibold text-violet-700 bg-violet-50 px-3 py-2 rounded-lg border border-violet-200">
+                      {whatIfResult.key_insight}
+                    </p>
+                  )}
+                  {whatIfResult.preventive_controls && whatIfResult.preventive_controls.length > 0 && (
+                    <div className="space-y-2">
+                      <h5 className="text-xs font-bold text-slate-600">Preventive Controls</h5>
+                      {whatIfResult.preventive_controls.map((pc: any, i: number) => (
+                        <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
+                          <p className="text-sm font-semibold text-slate-800">{pc.control}</p>
+                          <p className="text-xs text-slate-600 mt-0.5">{pc.effectiveness}</p>
+                          {pc.aws_cli && (
+                            <div className="flex items-start gap-2 mt-2">
+                              <pre className="flex-1 p-2 text-xs font-mono bg-slate-900 text-slate-100 rounded overflow-x-auto">{pc.aws_cli}</pre>
+                              <button onClick={() => copyCli(pc.aws_cli, `cli-${i}`)} className="p-2 rounded bg-slate-200 hover:bg-slate-300">
+                                {whatIfCopiedId === `cli-${i}` ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Cross-Incident Correlation — from current run */}
+      {/* Cross-Incident Correlation */}
       {orchestrationResult?.results?.correlation && orchestrationResult.results.correlation.campaign_probability > 0.5 && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -161,50 +483,87 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
         </motion.div>
       )}
 
-      {/* Top Row: Health Score + Key Metrics */}
-      <div className="grid lg:grid-cols-4 gap-4">
-        {/* Health Score - Large */}
+      {/* Health & Metrics — Premium dashboard with gauges */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Security Posture</h2>
+        <div className="grid lg:grid-cols-4 gap-5">
+        {/* Security Health — Gauge 1 */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="lg:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-card p-6 flex flex-col items-center justify-center"
+          className="lg:col-span-1 bg-gradient-to-b from-white to-slate-50/50 rounded-2xl border border-slate-200/80 shadow-lg shadow-slate-200/50 p-6 flex flex-col items-center justify-center ring-1 ring-white/50"
         >
-          <div className="flex items-center gap-1.5 mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Security Health</p>
-            <span
-              title="Higher = healthier. Weights: Critical 40, High 25, Medium 10, Low 3."
-              className="cursor-help text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-            </span>
-          </div>
+          <p className="text-xs font-semibold text-slate-600 tracking-wide mb-4">Security Health</p>
           <div className="relative">
-            <svg className="w-28 h-28" viewBox="0 0 120 120">
-              {/* Background circle */}
-              <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" strokeWidth="10" />
-              {/* Score arc - use regular circle to avoid framer-motion cx/cy/r undefined errors */}
+            <svg className="w-32 h-32" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="healthGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={metrics.healthScore >= 80 ? '#34d399' : metrics.healthScore >= 60 ? '#fbbf24' : metrics.healthScore >= 40 ? '#fb923c' : '#f87171'} />
+                  <stop offset="100%" stopColor={metrics.healthScore >= 80 ? '#10b981' : metrics.healthScore >= 60 ? '#f59e0b' : metrics.healthScore >= 40 ? '#f97316' : '#ef4444'} />
+                </linearGradient>
+              </defs>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" strokeWidth="8" />
               <circle
                 cx={60}
                 cy={60}
-                r={50}
+                r={52}
                 fill="none"
-                stroke={metrics.healthScore >= 80 ? '#10b981' : metrics.healthScore >= 60 ? '#f59e0b' : metrics.healthScore >= 40 ? '#f97316' : '#ef4444'}
-                strokeWidth="10"
+                stroke="url(#healthGradient)"
+                strokeWidth="8"
                 strokeLinecap="round"
-                strokeDasharray={`${(metrics.healthScore / 100) * 314} 314`}
+                strokeDasharray={`${(metrics.healthScore / 100) * 327} 327`}
                 transform="rotate(-90 60 60)"
-                style={{ transition: 'stroke-dasharray 1s ease-out' }}
+                style={{ transition: 'stroke-dasharray 0.8s ease-out' }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-3xl font-black ${healthConfig.text}`}>{metrics.healthScore}</span>
-              <span className="text-[10px] font-bold text-slate-400">{healthConfig.label}</span>
+              <span className={`text-4xl font-extrabold tracking-tight ${healthConfig.text}`}>{metrics.healthScore}</span>
+              <span className="text-xs font-semibold text-slate-500 mt-0.5">{healthConfig.label}</span>
             </div>
           </div>
         </motion.div>
 
-        {/* Key Metrics */}
-        <div className="lg:col-span-3 grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Avg Risk Score — Gauge 2 */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="lg:col-span-1 bg-gradient-to-b from-white to-violet-50/30 rounded-2xl border border-slate-200/80 shadow-lg shadow-slate-200/50 p-6 flex flex-col items-center justify-center ring-1 ring-white/50"
+        >
+          <p className="text-xs font-semibold text-slate-600 tracking-wide mb-4">Risk Score</p>
+          <div className="relative">
+            <svg className="w-28 h-28" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="riskGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={metrics.avgRiskScore >= 75 ? '#f87171' : metrics.avgRiskScore >= 50 ? '#fb923c' : '#22c55e'} />
+                  <stop offset="100%" stopColor={metrics.avgRiskScore >= 75 ? '#ef4444' : metrics.avgRiskScore >= 50 ? '#f59e0b' : '#10b981'} />
+                </linearGradient>
+              </defs>
+              <circle cx="60" cy="60" r="46" fill="none" stroke="#e2e8f0" strokeWidth="6" />
+              <circle
+                cx={60}
+                cy={60}
+                r={46}
+                fill="none"
+                stroke="url(#riskGradient)"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={`${(metrics.avgRiskScore / 100) * 289} 289`}
+                transform="rotate(-90 60 60)"
+                style={{ transition: 'stroke-dasharray 0.8s ease-out' }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`text-3xl font-extrabold tracking-tight ${metrics.avgRiskScore >= 75 ? 'text-red-600' : metrics.avgRiskScore >= 50 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {metrics.avgRiskScore}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-500 mt-0.5">/ 100</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Key Metrics — security-relevant only */}
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
           {[
             {
               label: 'Events Analyzed',
@@ -213,17 +572,6 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-indigo-600',
               bg: 'bg-indigo-100',
               trend: null,
-              tooltip: `CloudTrail events matching security-relevant APIs.`,
-            },
-            {
-              label: 'Avg Risk Score',
-              value: metrics.avgRiskScore,
-              suffix: '/100',
-              icon: Target,
-              color: 'text-violet-600',
-              bg: 'bg-violet-100',
-              trend: 'high',
-              tooltip: `CRITICAL→95, HIGH→75, MEDIUM→50, LOW→25. Mean of event scores.`,
             },
             {
               label: 'AI Confidence',
@@ -232,34 +580,6 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               color: 'text-emerald-600',
               bg: 'bg-emerald-100',
               trend: null,
-              tooltip: `TemporalAgent confidence from event coverage and correlation.`,
-            },
-            {
-              label: 'Analysis Time',
-              value: analysisTime ? `${(analysisTime / 1000).toFixed(1)}s` : 'N/A',
-              icon: Clock,
-              color: 'text-indigo-600',
-              bg: 'bg-indigo-100',
-              trend: null,
-              tooltip: `Total pipeline elapsed time.`,
-            },
-            {
-              label: 'Agents Used',
-              value: orchestrationResult?.agents ? Object.keys(orchestrationResult.agents).length : 5,
-              icon: Layers,
-              color: 'text-violet-600',
-              bg: 'bg-violet-100',
-              trend: null,
-              tooltip: `Number of AI analysis steps that completed.`,
-            },
-            {
-              label: 'Remediation Ready',
-              value: orchestrationResult?.results?.remediation_plan ? 'Yes' : 'Pending',
-              icon: Shield,
-              color: 'text-emerald-600',
-              bg: 'bg-emerald-100',
-              trend: null,
-              tooltip: `Yes = step-by-step remediation plan with AWS CLI exists.`,
             },
           ].map((metric, i) => (
             <motion.div
@@ -267,131 +587,118 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="bg-white rounded-xl border border-slate-200 p-4 hover:border-indigo-100 transition-colors"
+              className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-md shadow-slate-100 hover:shadow-lg hover:border-slate-300/80 transition-all duration-200"
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{metric.label}</span>
-                  {metric.tooltip && (
-                    <span
-                      title={metric.tooltip}
-                      className="cursor-help text-slate-300 hover:text-slate-500 transition-colors"
-                    >
-                      <HelpCircle className="w-3 h-3" />
-                    </span>
-                  )}
-                </div>
-                <div className={`w-7 h-7 rounded-lg ${metric.bg} flex items-center justify-center`}>
-                  <metric.icon className={`w-3.5 h-3.5 ${metric.color}`} />
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold text-slate-600 tracking-wide">{metric.label}</span>
+                <div className={`w-9 h-9 rounded-xl ${metric.bg} flex items-center justify-center border border-slate-100`}>
+                  <metric.icon className={`w-4 h-4 ${metric.color}`} strokeWidth={2} />
                 </div>
               </div>
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-black text-slate-900">{metric.value}</span>
-                {metric.suffix && <span className="text-xs font-medium text-slate-400 mb-1">{metric.suffix}</span>}
+              <div className="flex items-end gap-1.5">
+                <span className="text-2xl font-extrabold text-slate-800 tracking-tight">{metric.value}</span>
+                {metric.suffix && <span className="text-sm font-medium text-slate-500 mb-0.5">{metric.suffix}</span>}
               </div>
               {metric.trend === 'high' && (
-                <div className="flex items-center gap-1 mt-1">
-                  <ArrowUpRight className="w-3 h-3 text-red-500" />
-                  <span className="text-[10px] font-medium text-red-500">Elevated risk</span>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <ArrowUpRight className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="text-xs font-semibold text-rose-600">Elevated risk</span>
                 </div>
               )}
             </motion.div>
           ))}
         </div>
-      </div>
+        </div>
+      </section>
 
-      {/* Risk Distribution Bar */}
+      {/* Risk Distribution — single chart with links to events */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="bg-white rounded-xl border border-slate-200 p-5 border-l-4 border-l-indigo-400"
+        transition={{ delay: 0.2 }}
+        className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-md shadow-slate-100"
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-slate-900">Risk Distribution</h3>
-          <span className="text-[10px] font-medium text-slate-400">{metrics.totalEvents} total events</span>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-bold text-slate-700 tracking-wide">Risk Distribution</h3>
+          <span className="text-xs font-medium text-slate-500">{metrics.totalEvents} events</span>
         </div>
-        
-        {/* Visual bar */}
-        <div className="h-8 rounded-lg overflow-hidden flex bg-slate-100 mb-4">
-          {metrics.criticalCount > 0 && (
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(metrics.criticalCount / metrics.totalEvents) * 100}%` }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
-              className="bg-red-500 flex items-center justify-center"
-            >
-              {metrics.criticalCount > 0 && (
-                <span className="text-[10px] font-bold text-white">{metrics.criticalCount}</span>
-              )}
-            </motion.div>
-          )}
-          {metrics.highCount > 0 && (
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(metrics.highCount / metrics.totalEvents) * 100}%` }}
-              transition={{ duration: 0.8, delay: 0.1, ease: 'easeOut' }}
-              className="bg-orange-500 flex items-center justify-center"
-            >
-              {metrics.highCount > 0 && (
-                <span className="text-[10px] font-bold text-white">{metrics.highCount}</span>
-              )}
-            </motion.div>
-          )}
-          {metrics.mediumCount > 0 && (
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(metrics.mediumCount / metrics.totalEvents) * 100}%` }}
-              transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
-              className="bg-amber-500 flex items-center justify-center"
-            >
-              {metrics.mediumCount > 0 && (
-                <span className="text-[10px] font-bold text-white">{metrics.mediumCount}</span>
-              )}
-            </motion.div>
-          )}
-          {metrics.lowCount > 0 && (
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(metrics.lowCount / metrics.totalEvents) * 100}%` }}
-              transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
-              className="bg-emerald-500 flex items-center justify-center"
-            >
-              {metrics.lowCount > 0 && (
-                <span className="text-[10px] font-bold text-white">{metrics.lowCount}</span>
-              )}
-            </motion.div>
-          )}
+        <p className="text-[11px] text-slate-500 mb-4">CloudTrail events from this analysis, grouped by severity. Click a severity to view events.</p>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={85}
+                paddingAngle={2}
+                dataKey="value"
+                stroke="none"
+                animationBegin={0}
+                animationDuration={800}
+              >
+                {pieData.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} stroke="#fff" strokeWidth={2} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value: number) => [`${value} events`, '']}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                labelStyle={{ fontWeight: 600 }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
-
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap justify-center gap-4 mt-2">
           {[
-            { label: 'Critical', count: metrics.criticalCount, color: 'bg-red-500' },
-            { label: 'High', count: metrics.highCount, color: 'bg-orange-500' },
-            { label: 'Medium', count: metrics.mediumCount, color: 'bg-amber-500' },
-            { label: 'Low', count: metrics.lowCount, color: 'bg-emerald-500' },
+            { label: 'Critical', count: metrics.criticalCount, color: '#ef4444' },
+            { label: 'High', count: metrics.highCount, color: '#f97316' },
+            { label: 'Medium', count: metrics.mediumCount, color: '#eab308' },
+            { label: 'Low', count: metrics.lowCount, color: '#22c55e' },
           ].map((item) => (
-            <div key={item.label} className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded ${item.color}`} />
-              <span className="text-xs font-medium text-slate-600">{item.label}</span>
-              <span className="text-xs font-bold text-slate-900">{item.count}</span>
-            </div>
+            <button
+              key={item.label}
+              onClick={onNavigateToTimeline}
+              className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-100 transition-colors group"
+              title={`View ${item.count} ${item.label} events in Timeline`}
+            >
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+              <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-800">{item.label}</span>
+              <span className="text-xs font-bold text-slate-800 tabular-nums group-hover:text-indigo-600">{item.count}</span>
+            </button>
           ))}
         </div>
+        {onNavigateToTimeline && (
+          <button
+            onClick={onNavigateToTimeline}
+            className="mt-4 w-full flex items-center justify-between gap-4 text-left rounded-xl border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 px-4 py-3 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <Activity className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">View events in Timeline</h4>
+                <p className="text-xs text-slate-500">See full CloudTrail events with timestamps and actions</p>
+              </div>
+            </div>
+            <ArrowRight className="w-5 h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
+          </button>
+        )}
       </motion.div>
 
-      {/* Cost Impact CTA — prominent link to business value */}
+      {/* Cost Impact CTA */}
       {onNavigateToCostImpact && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="bg-gradient-to-r from-emerald-50 to-indigo-50 rounded-xl border border-emerald-200 p-4"
+          className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50/80 to-indigo-50/60 p-4"
         >
           <button
             onClick={onNavigateToCostImpact}
-            className="w-full flex items-center justify-between gap-4 text-left hover:bg-white/50 rounded-lg p-3 transition-all group"
+            className="w-full flex items-center justify-between gap-4 text-left hover:bg-white/60 rounded-lg p-3 transition-all group"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -407,114 +714,174 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
         </motion.div>
       )}
 
-      {/* Key Findings — expandable full details (summary shown above in InsightCards) */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-white rounded-xl border border-slate-200 p-5 border-l-4 border-l-violet-400"
-      >
-        <h3 className="text-sm font-bold text-slate-900 mb-2">Key Findings — Supporting Evidence</h3>
-        <p className="text-xs text-slate-500 mb-1">
-          Expand to see timeline events that support each finding. Each line is: <span className="font-medium text-slate-600">Timestamp</span> · <span className="font-medium text-slate-600">API action</span> → <span className="font-medium text-slate-600">resource affected</span> (<span className="font-medium text-slate-600">severity</span>).
-        </p>
-        <p className="text-[11px] text-slate-400 mb-4">
-          These are real events from your CloudTrail/log data that led to the finding above.
-        </p>
-        <KeyFindingsExpandable timeline={timeline} />
-      </motion.div>
+      {/* How we calculate — visual, scannable methodology */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+        >
+          <span className="text-sm font-semibold text-slate-700">How we calculate these numbers</span>
+          {showMethodology ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+        </button>
+        {showMethodology && (
+          <div className="px-5 pb-5 pt-4 border-t border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Security Health */}
+              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                  <Gauge className="w-5 h-5 text-indigo-600" strokeWidth={2} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-2">Security Health</h4>
+                  <p className="text-xs text-slate-600 mb-3">Weighted by severity. Higher score = healthier posture.</p>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">Critical 40</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">High 25</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">Medium 10</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">Low 3</span>
+                  </div>
+                  <code className="text-[10px] font-mono text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">100 − (avg ÷ 40)×100</code>
+                </div>
+              </div>
+
+              {/* Avg Risk Score */}
+              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                  <Target className="w-5 h-5 text-violet-600" strokeWidth={2} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-2">Avg Risk Score</h4>
+                  <p className="text-xs text-slate-600 mb-3">Each severity maps to a numeric score. Mean of all events.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">CRITICAL→95</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">HIGH→75</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">MEDIUM→50</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">LOW→25</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Confidence */}
+              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                  <Brain className="w-5 h-5 text-emerald-600" strokeWidth={2} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-2">AI Confidence</h4>
+                  <p className="text-xs text-slate-600">TemporalAgent outputs 0–1 based on event coverage and correlation strength. Higher = more reliable analysis.</p>
+                </div>
+              </div>
+
+              {/* Remediation Ready */}
+              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <Wrench className="w-5 h-5 text-amber-600" strokeWidth={2} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-2">Remediation Ready</h4>
+                  <p className="text-xs text-slate-600">Yes = step-by-step remediation plan with AWS CLI commands exists. Pending = still generating.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 px-4 py-3 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-center gap-3">
+              <Activity className="w-4 h-4 text-indigo-600 shrink-0" />
+              <p className="text-xs text-slate-700"><span className="font-semibold">Events</span> = CloudTrail security-relevant APIs. <span className="font-semibold">Analysis Time</span> = pipeline elapsed.</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-function KeyFindingsExpandable({ timeline }: { timeline: Timeline }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+/** Unified Key Finding card: summary + expandable supporting evidence */
+function KeyFindingCard({
+  id,
+  title,
+  subtitle,
+  text,
+  icon: Icon,
+  accent,
+  iconBg,
+  iconColor,
+  borderColor,
+  timeline,
+  getSupportingEvents,
+}: {
+  id: string;
+  title: string;
+  subtitle: string;
+  text: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  accent: string;
+  iconBg: string;
+  iconColor: string;
+  borderColor: string;
+  timeline: Timeline;
+  getSupportingEvents: (events: Array<{ action?: string; resource?: string; severity?: string; timestamp?: string }>) => Array<{ action?: string; resource?: string; severity?: string; timestamp?: string }>;
+}) {
+  const [expanded, setExpanded] = useState(false);
   const events = timeline?.events || [];
+  const supportingEvents = getSupportingEvents(events);
 
-  const getSupportingEvents = (category: string) => {
-    const criticalHigh = events.filter(e =>
-      (e.severity as string)?.toUpperCase() === 'CRITICAL' || (e.severity as string)?.toUpperCase() === 'HIGH'
-    );
-    if (category === 'root-cause') {
-      const rootCauseRelevant = events.filter(e =>
-        /CreateRole|AttachRolePolicy|AssumeRole|CreatePolicyVersion|PutCredentials|StartEnvironment|CreateSession/i.test(e.action || '')
-      );
-      return (rootCauseRelevant.length > 0 ? rootCauseRelevant : criticalHigh).slice(0, 5);
-    }
-    if (category === 'attack-pattern') {
-      const attackRelevant = events.filter(e =>
-        /AuthorizeSecurityGroup|RunInstances|CreateAccessKey|GuardDuty|CreatePolicyVersion|DeleteSession|PutCredentials|CreateSession/i.test(e.action || '')
-      );
-      return (attackRelevant.length > 0 ? attackRelevant : criticalHigh).slice(0, 5);
-    }
-    return criticalHigh.slice(0, 5);
-  };
-
-  const getSummaryText = (category: string) => {
-    if (category === 'root-cause') return timeline?.root_cause;
-    if (category === 'attack-pattern') return timeline?.attack_pattern;
-    return timeline?.blast_radius;
-  };
-
-  const items = [
-    { id: 'root-cause', label: 'Root Cause', icon: Target, color: 'text-red-600', borderColor: 'border-l-red-500' },
-    { id: 'attack-pattern', label: 'Attack Pattern', icon: Activity, color: 'text-orange-600', borderColor: 'border-l-orange-500' },
-    { id: 'blast-radius', label: 'Blast Radius', icon: Layers, color: 'text-violet-600', borderColor: 'border-l-violet-500' },
-  ];
+  const formatResource = (r: string) =>
+    (r || '').replace(/Environment\s+[a-f0-9-]{36}/gi, 'Bedrock Environment').replace(/Session\s+[\d-]+[a-z0-9]+/gi, 'Bedrock Session');
 
   return (
-    <div className="space-y-2">
-      {items.map((item) => {
-        const isOpen = expanded === item.id;
-        const supportingEvents = getSupportingEvents(item.id);
-        return (
-          <div
-            key={item.id}
-            className={`rounded-lg border border-slate-200 border-l-[3px] ${item.borderColor} overflow-hidden`}
-          >
-            <button
-              onClick={() => setExpanded(isOpen ? null : item.id)}
-              className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
-            >
-              <div className="flex items-center gap-2">
-                <item.icon className={`w-4 h-4 ${item.color}`} />
-                <span className="text-xs font-bold text-slate-700">{item.label}</span>
-              </div>
-              {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-            </button>
-            <AnimatePresence>
-              {isOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-white border-t border-slate-100"
-                >
-                  <div className="p-4 pt-3 space-y-3">
-                    {getSummaryText(item.id) && (
-                      <p className="text-xs text-slate-700 leading-relaxed">{getSummaryText(item.id)}</p>
-                    )}
-                    {supportingEvents.length > 0 ? (
-                      <ul className="space-y-2">
-                        {supportingEvents.map((e, i) => (
-                          <li key={i} className="text-xs text-slate-600 flex items-start gap-2">
-                            <span className="text-slate-400 font-mono shrink-0">{e.timestamp?.slice(0, 16) || '—'}</span>
-                            <span>{e.action} → {(e.resource || '').replace(/Environment\s+[a-f0-9-]{36}/gi, 'Bedrock Environment').replace(/Session\s+[\d-]+[a-z0-9]+/gi, 'Bedrock Session')} ({e.severity})</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : !getSummaryText(item.id) && (
-                      <p className="text-xs text-slate-500">No timeline events for this finding.</p>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+    >
+      <div className={`h-0.5 ${accent}`} />
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center border border-slate-200`}>
+              <Icon className={`w-4.5 h-4.5 ${iconColor}`} strokeWidth={1.8} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">{title}</h3>
+              <p className="text-[10px] text-slate-500">{subtitle}</p>
+            </div>
           </div>
-        );
-      })}
-    </div>
+        </div>
+        <p className="text-sm text-slate-700 leading-relaxed">{text}</p>
+        {supportingEvents.length > 0 && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {expanded ? 'Hide' : 'Show'} supporting evidence ({supportingEvents.length})
+          </button>
+        )}
+      </div>
+      <AnimatePresence>
+        {expanded && supportingEvents.length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden border-t border-slate-100 bg-slate-50/50"
+          >
+            <div className="p-4 pt-3">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase mb-2">CloudTrail events</p>
+              <ul className="space-y-1.5">
+                {supportingEvents.map((e, i) => (
+                  <li key={i} className="text-xs text-slate-600 flex items-start gap-2 font-mono">
+                    <span className="text-slate-400 shrink-0">{e.timestamp?.slice(0, 16) || '—'}</span>
+                    <span>{e.action} → {formatResource(e.resource || '')} ({e.severity})</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

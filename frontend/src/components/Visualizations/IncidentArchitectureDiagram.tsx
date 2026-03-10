@@ -108,12 +108,12 @@ function getSeverity(ev: TimelineEvent, action: string, type: ResourceType): Sev
   return 'low';
 }
 
-function getSeverityColors(severity: SeverityLevel): { bg: string; border: string; label: string } {
+function getSeverityColors(severity: SeverityLevel): { border: string; badge: string; label: string; textColor: string } {
   switch (severity) {
-    case 'critical': return { bg: '#FEE2E2', border: '#EF4444', label: 'Compromised' };
-    case 'high': return { bg: '#FEF3C7', border: '#F59E0B', label: 'At-risk' };
-    case 'medium': return { bg: '#FEF9C3', border: '#EAB308', label: 'Exposed' };
-    default: return { bg: '#D1FAE5', border: '#10B981', label: 'Monitored' };
+    case 'critical': return { border: '#FDA4AF', badge: 'bg-rose-100 text-rose-700 border-rose-200', label: 'Compromised', textColor: '#BE123C' };
+    case 'high': return { border: '#FCD34D', badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'At-risk', textColor: '#B45309' };
+    case 'medium': return { border: '#FDE68A', badge: 'bg-amber-50 text-amber-600 border-amber-100', label: 'Exposed', textColor: '#D97706' };
+    default: return { border: '#86EFAC', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', label: 'Monitored', textColor: '#059669' };
   }
 }
 
@@ -261,57 +261,53 @@ const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = 
   }
 
   const nodeList = layout.flat();
-  const CARD_MIN_W = 160;
 
   return (
-    <div className="w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-      <div className="px-3 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-700">Auto-generated from incident findings</span>
-        <span className="flex items-center gap-2 text-[10px] text-slate-500">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Compromised</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> At-risk</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Monitored</span>
+    <div className="w-full rounded-xl overflow-hidden border border-slate-100 bg-white shadow-sm">
+      <div className="px-4 py-2.5 bg-gradient-to-r from-slate-50 to-indigo-50/30 border-b border-slate-100 flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-600">Auto-generated from incident findings</span>
+        <span className="flex items-center gap-3 text-xs text-slate-500">
+          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Compromised</span>
+          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> At-risk</span>
+          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored</span>
         </span>
       </div>
-      <div className="p-5 overflow-y-auto max-h-[480px] min-h-[320px] rounded-b-xl relative">
-        <div className="border-2 border-solid border-slate-300 rounded-xl bg-slate-50/50 px-5 py-4">
-          <div className="text-sm font-semibold text-slate-600 mb-4">VPC (10.0.0.0/16)</div>
-          <div className="space-y-6">
+      <div className="p-4 rounded-b-xl relative bg-slate-50/30 overflow-auto max-h-[420px] min-h-[200px] overscroll-contain">
+        <div className="rounded-xl border border-slate-100 bg-white px-4 py-4 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 mb-3 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-300" />
+            VPC (10.0.0.0/16)
+          </div>
+          {/* Horizontal layout: categories as columns */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {layout.map((row, ri) => {
             const label = rowLabels[ri];
             const RowIcon = label ? getRowIcon(label) : Wifi;
             return (
-              <div key={ri}>
+              <div key={ri} className="flex flex-col min-w-0 rounded-lg bg-slate-50/50 px-3 py-3 border border-slate-100/80">
                 {label && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <RowIcon className="w-4 h-4 text-slate-500" strokeWidth={2.5} />
-                    <span className="text-xs font-bold text-slate-700">{label}</span>
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-200/60">
+                    <div className="w-7 h-7 rounded-lg bg-white border border-slate-100 flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <RowIcon className="w-3.5 h-3.5 text-slate-500" strokeWidth={2} />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-600 truncate">{label}</span>
                   </div>
                 )}
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-col gap-2">
                   {row.map(n => {
                     const colors = getSeverityColors(n.severity);
                     const isHovered = hoveredNode === n.id;
-                    // Dynamic width: estimate from label length, with min and max
-                    const estimatedWidth = Math.max(CARD_MIN_W, Math.min(360, n.label.length * 9 + 40));
                     return (
                       <div
                         key={n.id}
-                        className="relative rounded-lg border-l-4 px-4 py-3 cursor-pointer transition-all hover:shadow-md"
-                        style={{
-                          backgroundColor: colors.bg,
-                          borderLeftColor: colors.border,
-                          boxShadow: isHovered ? '0 4px 12px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.06)',
-                          minWidth: CARD_MIN_W,
-                          width: estimatedWidth,
-                          maxWidth: '100%',
-                        }}
+                        className={`relative rounded-lg border-l-[3px] px-3 py-2.5 cursor-pointer transition-all bg-white border border-slate-100 w-full min-w-0 ${isHovered ? 'shadow-md ring-1 ring-slate-200/60' : 'shadow-sm hover:shadow'}`}
+                        style={{ borderLeftColor: colors.border }}
                         onMouseEnter={(e) => { setHoveredNode(n.id); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
                         onMouseMove={(e) => hoveredNode === n.id && setTooltipPos({ x: e.clientX, y: e.clientY })}
                         onMouseLeave={() => { setHoveredNode(null); setTooltipPos(null); }}
                       >
-                        <div className="font-semibold text-slate-800 text-sm break-words">{n.label}</div>
-                        <div className="text-xs font-medium mt-0.5 break-words" style={{ color: colors.border }}>{n.subLabel}</div>
+                        <div className="font-semibold text-slate-800 text-xs break-words leading-tight">{n.label}</div>
+                        <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-xs font-medium border w-fit ${colors.badge}`}>{n.subLabel}</span>
                       </div>
                     );
                   })}
@@ -334,14 +330,14 @@ const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = 
             >
               <div className="px-4 py-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-[400px]">
                 <div className="font-bold text-slate-900 text-sm">{n.label} — {n.subLabel}</div>
-                <div className="text-[11px] text-slate-600 font-mono mt-0.5">{typeName}</div>
+                <div className="text-xs text-slate-600 font-mono mt-0.5">{typeName}</div>
                 {n.fullResource && (
-                  <div className="text-[10px] text-slate-500 font-mono mt-1 break-all" title="Full resource ID">
+                  <div className="text-xs text-slate-500 font-mono mt-1 break-all" title="Full resource ID">
                     {n.fullResource}
                   </div>
                 )}
-                <div className="text-[11px] text-slate-600 mt-1">{n.detail || `${n.subLabel} — affected by incident`}</div>
-                <div className="text-[10px] font-semibold mt-1.5" style={{ color: colors.border }}>Severity: {n.severity.toUpperCase()}</div>
+                <div className="text-xs text-slate-600 mt-1">{n.detail || `${n.subLabel} — affected by incident`}</div>
+                <div className="text-xs font-semibold mt-1.5" style={{ color: colors.textColor }}>Severity: {n.severity.toUpperCase()}</div>
               </div>
             </div>
           );

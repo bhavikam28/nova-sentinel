@@ -12,6 +12,162 @@ import {
 } from 'lucide-react';
 import { incidentHistoryAPI, voiceAPI } from '../../services/api';
 
+/** Build 30-60 second podcast-style narrative — simple, fun, easy to listen to */
+function buildBriefMeNarrative(ctx: any): string {
+  if (!ctx?.timeline?.events?.length) {
+    return "No incident timeline available. Run an analysis first and I'll give you the full story.";
+  }
+  const timeline = ctx.timeline;
+  const events = [...timeline.events].sort(
+    (a: any, b: any) => (a.timestamp || '').localeCompare(b.timestamp || '')
+  );
+  const steps = ctx.remediation_plan?.steps || [];
+
+  const formatTime = (ts: string) => {
+    try {
+      const d = new Date(ts);
+      const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      return `${time} on ${date}`;
+    } catch {
+      return ts || 'unknown time';
+    }
+  };
+
+  const timeDiff = (ts1: string, ts2: string): string => {
+    try {
+      const d1 = new Date(ts1).getTime();
+      const d2 = new Date(ts2).getTime();
+      const days = Math.round((d2 - d1) / (24 * 60 * 60 * 1000));
+      if (days >= 1) return `${days} day${days > 1 ? 's' : ''} later`;
+      const hours = Math.round((d2 - d1) / (60 * 60 * 1000));
+      if (hours >= 1) return `${hours} hour${hours > 1 ? 's' : ''} later`;
+      const mins = Math.round((d2 - d1) / (60 * 1000));
+      if (mins >= 1) return `${mins} minute${mins > 1 ? 's' : ''} later`;
+      return 'Next';
+    } catch {
+      return 'Then';
+    }
+  };
+
+  /** Extract friendly name from resource string (e.g. "contractor-temp" from "IAM Role: contractor-temp") */
+  const friendlyName = (r: string): string => {
+    const match = r.match(/:?\s*([a-zA-Z0-9_-]+)$/);
+    return match ? match[1] : r;
+  };
+
+  const friendlyActor = (a: string): string => {
+    if (a.includes('@')) return a.split('@')[0];
+    if (a.includes('contractor')) return 'a contractor';
+    if (a.includes('attacker') || a.includes('session')) return 'someone';
+    if (a.includes('admin-session') || a.includes('admin_session')) return 'an admin';
+    if (a.includes('amazonaws')) return 'GuardDuty';
+    return a;
+  };
+
+  const storyBits: string[] = [];
+  let prevTs = '';
+
+  const actionStories: Record<string, (actor: string, res: string) => string> = {
+    CreateRole: (a, r) => `created a role called ${friendlyName(r)} — which may have been overly permissive`,
+    AttachRolePolicy: (a, r) => `attached full admin access to that role`,
+    AuthorizeSecurityGroupIngress: (a, r) => `opened SSH to the internet — which could be a misconfig or risk`,
+    DescribeInstances: (a, r) => `listed your EC2 instances`,
+    RunInstances: (a, r) => `launched GPU instances — possibly for crypto mining or legitimate workloads`,
+    GuardDutyFinding: (a, r) => `detected activity that looks like crypto mining`,
+    GetObject: (a, r) => `accessed sensitive data from your bucket`,
+    ListBucket: (a, r) => `listed bucket contents`,
+    AssumeRole: (a, r) => `assumed the admin role`,
+    CreateUser: (a, r) => `created a new user — possibly for persistence`,
+    AttachUserPolicy: (a, r) => `gave that user full admin access`,
+    ConsoleLogin: (a, r) => `logged into the console`,
+  };
+
+  const disclaimer = "Quick note: This is based on CloudTrail data — it could be an incident or a misconfiguration. Always verify before acting. ";
+  const skipActions = new Set(['DescribeInstances', 'ListBucket']);
+  const filteredEvents = events.length > 5
+    ? events.filter((e: any) => !skipActions.has(e.action || ''))
+    : events;
+  const eventsToUse = filteredEvents.length > 5 ? filteredEvents.slice(0, 5) : filteredEvents;
+
+  for (let i = 0; i < eventsToUse.length; i++) {
+    const e = eventsToUse[i];
+    const actor = friendlyActor(e.actor || 'someone');
+    const resource = e.resource || '';
+    const resName = friendlyName(resource);
+    const storyteller = actionStories[e.action || ''];
+    const story = storyteller
+      ? storyteller(actor, resource)
+      : `${actor} did something with ${resName || 'your resources'}`;
+
+    const connector = i === 0 ? `So here's what the timeline shows. At ${formatTime(e.timestamp)}` : timeDiff(prevTs, e.timestamp);
+    prevTs = e.timestamp || prevTs;
+    storyBits.push(`${connector}, ${actor} ${story}.`);
+  }
+
+  let rootCause = timeline.root_cause || "something may have gone wrong.";
+  rootCause = rootCause
+    .replace(/by an? attacker/g, 'by someone — possibly external')
+    .replace(/the attacker/g, 'someone')
+    .replace(/IAM role with excessive privileges \(AdministratorAccess\) was created for a contractor and later assumed by[^.]+/gi, 'an overly permissive role was created for a contractor and later used by someone — possibly external');
+  let topRemediation = steps.length > 0 ? steps[0]?.action : 'check the remediation plan';
+  topRemediation = topRemediation
+    .replace(/^Revoke IAM role session/i, 'revoke that role session')
+    .replace(/^Terminate suspicious EC2 instances/i, 'terminate those instances')
+    .replace(/^Disable .+ access keys/i, 'disable those access keys');
+  topRemediation = topRemediation.charAt(0).toLowerCase() + topRemediation.slice(1);
+
+  const closing = `Bottom line? The analysis suggests ${rootCause} You may want to ${topRemediation}. Head to the Remediation tab for the full playbook.`;
+
+  return [disclaimer, ...storyBits, closing].join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Demo fallback responses — dynamic from incidentContext. Keys are fuzzy-matched against user query. */
+function getDemoResponse(query: string, ctx: any): string | null {
+  if (!ctx) return null;
+  const q = query.toLowerCase().trim();
+  const timeline = ctx.timeline;
+  const steps = ctx.remediation_plan?.steps || [];
+  const correlation = ctx.correlation;
+  const confidence = Math.round((timeline?.confidence ?? 0.5) * 100);
+  const severity = timeline?.events?.some((e: any) => (e.severity || '').toUpperCase() === 'CRITICAL') ? 'critical' : 'high';
+
+  const match = (keys: string[]) => keys.some(k => q.includes(k));
+
+  if (match(['root cause', 'rootcause'])) {
+    const rc = timeline?.root_cause || 'The root cause is still under investigation.';
+    const ap = timeline?.attack_pattern || '';
+    return ap ? `${rc} The attacker exploited ${ap}.` : rc;
+  }
+  if (match(['attack pattern', 'attackpattern', 'how did they', 'how did the attacker'])) {
+    const ap = timeline?.attack_pattern || 'This appears to be a targeted attack.';
+    return `${ap} This is classified as ${severity} severity with a confidence of ${confidence}%.`;
+  }
+  if (match(['remediation', 'remediate', 'fix', 'steps', 'what should i do'])) {
+    const top3 = steps.slice(0, 3).map((s: any) => s.action).filter(Boolean);
+    if (top3.length === 0) return 'Review the Remediation tab for the full plan. No steps are available in the current context.';
+    return `Based on the analysis, the top remediation steps are: ${top3.join('. ')}. See the Remediation tab for full details.`;
+  }
+  if (match(['blast radius', 'blastradius', 'impact', 'affected'])) {
+    const br = timeline?.blast_radius || 'Impact assessment is in progress.';
+    return `The blast radius includes: ${br}`;
+  }
+  if (match(['seen this before', 'seen before', 'correlation', 'similar', 'memory'])) {
+    const corr = correlation?.correlation_summary;
+    if (corr) return `Based on cross-incident memory, ${corr}`;
+    return "This appears to be a new attack pattern not seen in previous incidents. No strong correlation with past incidents.";
+  }
+  if (match(['compliance', 'cis', 'nist', 'soc2'])) {
+    return 'This incident affects the following compliance frameworks: CIS Benchmarks (IAM controls), NIST 800-53 (AC-2, AC-6), and SOC 2 (CC6.1). See the Compliance Mapping tab for details.';
+  }
+  if (match(['cost', 'financial', 'estimate', 'dollar'])) {
+    const est = ctx.remediation_plan?.estimated_time_minutes;
+    const costNote = est ? `Estimated response time: ${est} minutes.` : '';
+    return `The estimated financial impact includes compromised compute resources, incident response labor, and potential compliance penalties. ${costNote} See the Cost Estimation section for details.`;
+  }
+  return null;
+}
+
 interface VoiceAssistantProps {
   incidentContext?: any;
   incidentId?: string;
@@ -39,6 +195,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
   const [isProcessing, setIsProcessing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [incidentMemoryCount, setIncidentMemoryCount] = useState<number | null>(null);
+  const [volume, setVolume] = useState(0.6);
   
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -186,7 +343,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     
     utterance.rate = 0.95;
     utterance.pitch = 1.1;
-    utterance.volume = 0.85;
+    utterance.volume = volume;
     
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -194,12 +351,25 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     
     synthRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [speechEnabled, getFemaleVoice]);
+  }, [speechEnabled, getFemaleVoice, volume]);
 
   const stopSpeaking = useCallback(() => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
   }, []);
+
+  // Brief Me — generate and speak narrative from timeline (no backend)
+  const handleBriefMe = useCallback(() => {
+    const narrative = buildBriefMeNarrative(incidentContext);
+    const msg: ChatMessage = {
+      id: `brief-${Date.now()}`,
+      role: 'assistant',
+      text: narrative,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, msg]);
+    if (speechEnabled) speak(narrative);
+  }, [incidentContext, speechEnabled, speak]);
 
   // Submit query to backend
   const handleSubmit = async (text?: string) => {
@@ -258,15 +428,27 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
       }
     }
 
-    // All retries exhausted
-    const errorMessage: ChatMessage = {
-      id: `error-${Date.now()}`,
-      role: 'assistant',
-      text: 'I had trouble processing that. Could you try rephrasing your question? For example, ask about "the attack pattern" or "remediation steps".',
-      timestamp: new Date(),
-      suggestions: ['What is the root cause?', 'Explain the attack pattern', 'Show remediation steps']
-    };
-    setMessages(prev => [...prev, errorMessage]);
+    // All retries exhausted — try demo fallback
+    const demoResponse = getDemoResponse(query.trim(), incidentContext);
+    if (demoResponse) {
+      const assistantMessage: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: demoResponse,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      if (speechEnabled) speak(demoResponse);
+    } else {
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        text: 'I had trouble processing that. Could you try rephrasing your question? For example, ask about "the attack pattern" or "remediation steps".',
+        timestamp: new Date(),
+        suggestions: ['What is the root cause?', 'Explain the attack pattern', 'Show remediation steps']
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
     setIsProcessing(false);
   };
 
@@ -348,7 +530,19 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                   <p className="text-[10px] text-white/70" title="Nova 2 Lite for NLU + browser speech synthesis. Nova Sonic: integration-ready (WebSocket streaming).">Nova 2 Lite + browser TTS</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5" title="Volume">
+                  <Volume2 className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={volume}
+                    onChange={(e) => setVolume(parseFloat(e.target.value))}
+                    className="w-12 h-1.5 accent-white/90 bg-white/20 rounded-full cursor-pointer"
+                  />
+                </div>
                 <button
                   onClick={() => setExpanded(!expanded)}
                   className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
@@ -380,8 +574,22 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
               </div>
             )}
 
+            {/* Brief Me — prominent card above chat */}
+            {isAnalysisComplete && incidentContext?.timeline?.events?.length > 0 && (
+              <div className="px-4 pt-4 pb-4 flex-shrink-0 border-b border-slate-100">
+                <button
+                  onClick={handleBriefMe}
+                  disabled={isProcessing || isSpeaking}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <Mic className="w-4 h-4" />
+                  Brief Me on This Incident
+                </button>
+              </div>
+            )}
+
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
               {messages.map((msg) => (
                 <motion.div
                   key={msg.id}

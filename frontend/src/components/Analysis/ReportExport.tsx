@@ -2,14 +2,16 @@
  * Report Export - Generate and download analysis reports
  * Markdown/PDF export with executive summary and Nova Canvas cover
  */
-import React, { useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download, FileText, Printer, Copy, CheckCircle2,
-  Clock, Shield, AlertTriangle, Target, ChevronDown, ChevronUp, Loader2, Image
+  Clock, Shield, AlertTriangle, Target, ChevronDown, ChevronUp, Loader2, Image, X, Briefcase
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import type { Timeline, OrchestrationResponse } from '../../types/incident';
 import { novaCanvasMCPAPI, reportAPI } from '../../services/api';
+import { estimateCosts } from './CostImpact';
 
 interface ReportExportProps {
   timeline: Timeline;
@@ -18,6 +20,43 @@ interface ReportExportProps {
   analysisTime?: number;
   remediationPlan?: any;
   incidentType?: string;
+}
+
+interface ExecutiveBriefingData {
+  executive_summary: string;
+  image_base64: string | null;
+  incident_id: string;
+  severity: string;
+  cost_estimate: string;
+  blast_radius: string;
+  top_recommendation: string;
+  /** Additional remediation steps for CEO-level completeness */
+  remediation_steps?: string[];
+}
+
+/** Truncate at last word boundary to avoid mid-word cuts */
+function truncateAtWord(s: string, maxLen: number): string {
+  if (!s || s.length <= maxLen) return s || '';
+  const cut = s.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(' ');
+  return lastSpace > maxLen * 0.5 ? cut.slice(0, lastSpace).trim() : cut;
+}
+
+/** Client-side 3-sentence executive summary for demo fallback — complete sentences, no mid-word truncation */
+function buildDemoExecutiveSummary(
+  incidentType: string,
+  rootCause: string,
+  severity: string,
+  blastRadius: string,
+  costEstimate: string,
+  topRec: string
+): string {
+  const rc = truncateAtWord(rootCause || 'Under investigation', 180);
+  const br = truncateAtWord(blastRadius || 'Assessing', 140);
+  const s1 = `A ${severity} security incident (${incidentType}) was detected in your AWS environment.`;
+  const s2 = `Root cause: ${rc}${(rootCause?.length || 0) > 180 ? '...' : ''}. Affected scope: ${br}${(blastRadius?.length || 0) > 140 ? '...' : ''}.`;
+  const s3 = `Cost impact: ${costEstimate || 'See Cost Impact tab'}. Recommended immediate action: ${topRec}.`;
+  return `${s1} ${s2} ${s3}`;
 }
 
 /** Convert markdown report to professional HTML for print/PDF (blue header like compliance report) */
@@ -83,7 +122,7 @@ This report was generated using the following Amazon Nova AI models:
 
 const ReportExport: React.FC<ReportExportProps> = ({
   timeline,
-  orchestrationResult: _orchestrationResult,
+  orchestrationResult,
   incidentId,
   analysisTime,
   remediationPlan,
@@ -95,6 +134,11 @@ const ReportExport: React.FC<ReportExportProps> = ({
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [executiveBriefingOpen, setExecutiveBriefingOpen] = useState(false);
+  const [executiveBriefingData, setExecutiveBriefingData] = useState<ExecutiveBriefingData | null>(null);
+  const [executiveBriefingLoading, setExecutiveBriefingLoading] = useState(false);
+  const [executiveBriefingError, setExecutiveBriefingError] = useState<string | null>(null);
+  const briefingRef = useRef<HTMLDivElement>(null);
 
   const getSteps = () =>
     remediationPlan?.steps ||
@@ -253,6 +297,104 @@ ${REPORT_MODEL_ATTRIBUTION}
     }
   };
 
+  const getBriefingPayload = useCallback(() => {
+    const steps = getSteps();
+    const topRec = steps[0]?.action || 'Review remediation plan';
+    const severity = timeline?.events?.some((e: any) => (e.severity as string)?.toUpperCase() === 'CRITICAL')
+      ? 'CRITICAL'
+      : timeline?.events?.some((e: any) => (e.severity as string)?.toUpperCase() === 'HIGH')
+        ? 'HIGH'
+        : 'MEDIUM';
+    // Compute actual cost from Cost Impact logic — CISO-ready numbers
+    const costs = estimateCosts(timeline, incidentType);
+    const totalCost = costs.reduce((sum, c) => sum + c.amount, 0);
+    const costStr = totalCost > 0
+      ? `~$${totalCost.toLocaleString()} total exposure (unauthorized compute, downtime, remediation)`
+      : 'See Cost Impact tab for breakdown';
+    return {
+      incident_type: incidentType,
+      root_cause: timeline?.root_cause || 'Under investigation',
+      severity,
+      blast_radius: timeline?.blast_radius || 'Assessing',
+      cost_estimate: costStr,
+      top_recommendation: topRec,
+      incident_id: incidentId || 'analysis',
+    };
+  }, [timeline, incidentType, incidentId, remediationPlan]);
+
+  const handleExecutiveBriefing = async () => {
+    setExecutiveBriefingLoading(true);
+    setExecutiveBriefingError(null);
+    setExecutiveBriefingData(null);
+    setExecutiveBriefingOpen(true);
+    const payload = getBriefingPayload();
+    try {
+      const data = await reportAPI.executiveBriefing(payload);
+      setExecutiveBriefingData(data);
+    } catch {
+      setExecutiveBriefingError('Backend unavailable. Showing demo briefing.');
+      const summary = buildDemoExecutiveSummary(
+        payload.incident_type,
+        payload.root_cause,
+        payload.severity,
+        payload.blast_radius,
+        payload.cost_estimate,
+        payload.top_recommendation
+      );
+      setExecutiveBriefingData({
+        executive_summary: summary,
+        image_base64: null,
+        incident_id: payload.incident_id,
+        severity: payload.severity,
+        cost_estimate: payload.cost_estimate,
+        blast_radius: payload.blast_radius,
+        top_recommendation: payload.top_recommendation,
+      });
+    } finally {
+      setExecutiveBriefingLoading(false);
+    }
+  };
+
+  const handleDownloadBriefingPng = async () => {
+    if (!briefingRef.current) return;
+    try {
+      const canvas = await html2canvas(briefingRef.current, {
+        backgroundColor: '#0f172a',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        // Ensure flex/centered elements render correctly in canvas
+        windowWidth: briefingRef.current.scrollWidth,
+        windowHeight: briefingRef.current.scrollHeight,
+      });
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `executive-briefing-${incidentId || 'analysis'}-${new Date().toISOString().split('T')[0]}.png`;
+      link.click();
+    } catch (e) {
+      console.error('Failed to capture PNG:', e);
+    }
+  };
+
+  const handleCopyBriefingSummary = async () => {
+    if (!executiveBriefingData?.executive_summary) return;
+    try {
+      await navigator.clipboard.writeText(executiveBriefingData.executive_summary);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = executiveBriefingData.executive_summary;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleGenerateCover = async () => {
     setCoverLoading(true);
     setCoverImage(null);
@@ -349,7 +491,7 @@ ${REPORT_MODEL_ATTRIBUTION}
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           {/* Download Markdown (primary) */}
           <motion.button
             whileHover={{ scale: 1.02 }}
@@ -454,7 +596,236 @@ ${REPORT_MODEL_ATTRIBUTION}
               )}
             </div>
           </div>
+
+          {/* Executive Briefing */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleExecutiveBriefing}
+            disabled={executiveBriefingLoading}
+            className="flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-xl transition-all group"
+          >
+            <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 group-hover:border-amber-300 flex items-center justify-center transition-colors">
+              {executiveBriefingLoading ? (
+                <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+              ) : (
+                <Briefcase className="w-5 h-5 text-slate-600 group-hover:text-amber-600 transition-colors" />
+              )}
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-bold text-slate-900 group-hover:text-amber-600 transition-colors">
+                Executive Briefing
+              </p>
+              <p className="text-[10px] text-slate-400">AI-generated one-page summary for leadership</p>
+            </div>
+          </motion.button>
         </div>
+
+        {/* Executive Briefing Modal — premium board-ready design */}
+        <AnimatePresence>
+          {executiveBriefingOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md"
+              onClick={() => setExecutiveBriefingOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-fit max-w-[100%] max-h-[90vh] overflow-hidden rounded-2xl bg-[#0f172a]"
+              >
+                {executiveBriefingLoading ? (
+                  <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/50 rounded-2xl p-20 flex flex-col items-center justify-center gap-6">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                      <Loader2 className="w-7 h-7 text-amber-400 animate-spin" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-white font-semibold tracking-tight">Generating Executive Briefing</p>
+                      <p className="text-slate-400 text-sm mt-1">Nova 2 Lite · Executive Summary</p>
+                    </div>
+                  </div>
+                ) : executiveBriefingData ? (
+                  <div
+                    ref={briefingRef}
+                    className="relative w-full rounded-2xl overflow-hidden bg-[#0f172a]"
+                    style={{ width: 960, minWidth: 960, aspectRatio: '16/9' }}
+                  >
+                    {/* Landscape slide format — fits one image, no scroll */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#0f172a] to-[#1e293b]" />
+                    <div className="absolute top-0 left-0 right-0 h-[1px] bg-slate-500/30" />
+                    <div className="relative z-10 h-full p-6 flex flex-col text-white font-sans">
+                      {/* Header — single line */}
+                      <div className="flex items-center justify-between gap-4 mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-semibold tracking-widest text-slate-400 uppercase">Confidential</span>
+                          <span className="text-slate-500">·</span>
+                          <span className="text-base font-bold text-white">Security Incident Report</span>
+                          <span className="text-slate-500">·</span>
+                          <span className="text-xs text-slate-400">{executiveBriefingData.incident_id}</span>
+                          <span className="text-slate-500">·</span>
+                          <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                        <div
+                          className={`shrink-0 w-[90px] h-8 rounded flex items-center justify-center ${
+                            executiveBriefingData.severity === 'CRITICAL' ? 'bg-red-600 text-white' :
+                            executiveBriefingData.severity === 'HIGH' ? 'bg-orange-600 text-white' : 'bg-amber-600 text-slate-900'
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold">{executiveBriefingData.severity}</span>
+                        </div>
+                      </div>
+                      {/* Two-column layout */}
+                      <div className="flex-1 grid grid-cols-[1fr,280px] gap-6 min-h-0">
+                        {/* Left: Summary + Actions */}
+                        <div className="flex flex-col min-h-0">
+                          <div className="mb-3">
+                            <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase mb-1">Executive Summary</p>
+                            <p className="text-[12px] leading-[1.5] text-slate-100 line-clamp-4">
+                              {executiveBriefingData.executive_summary}
+                            </p>
+                          </div>
+                          <div className="flex-1 min-h-0">
+                            <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase mb-1">Immediate Actions</p>
+                            <ol className="space-y-0.5">
+                              {getSteps().slice(0, 3).map((s: any, i: number) => (
+                                <li key={i} className="text-[11px] text-slate-100 flex gap-2">
+                                  <span className="text-slate-500 shrink-0">{i + 1}.</span>
+                                  <span>{s.action || s.title || s.details || 'Review remediation plan'}</span>
+                                </li>
+                              ))}
+                              {getSteps().length === 0 && (
+                                <li className="text-[11px] font-semibold text-white">{executiveBriefingData.top_recommendation}</li>
+                              )}
+                            </ol>
+                          </div>
+                        </div>
+                        {/* Right: Metrics */}
+                        <div className="grid grid-cols-2 gap-2 content-start">
+                          <div className="bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Severity</p>
+                            <p className="text-[11px] font-semibold text-white">{executiveBriefingData.severity}</p>
+                          </div>
+                          <div className="bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Confidence</p>
+                            <p className="text-[11px] font-semibold text-white">{((timeline?.confidence ?? 0) * 100).toFixed(0)}%</p>
+                          </div>
+                          <div className="bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Time to Detect</p>
+                            <p className="text-[11px] font-semibold text-white">{analysisTime ? `${(analysisTime / 1000).toFixed(1)}s` : 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Classification</p>
+                            <p className="text-[11px] font-semibold text-white leading-tight">
+                              {incidentType?.toLowerCase().includes('crypto') ? 'Resource Abuse' :
+                               incidentType?.toLowerCase().includes('exfil') || incidentType?.toLowerCase().includes('data') ? 'Data Exfil' :
+                               incidentType?.toLowerCase().includes('iam') ? 'Credential' : 'Security'}
+                            </p>
+                          </div>
+                          <div className="col-span-2 bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Cost Impact</p>
+                            <p className="text-[11px] font-semibold text-white leading-tight">{executiveBriefingData.cost_estimate}</p>
+                          </div>
+                          <div className="col-span-2 bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Assets Affected</p>
+                            <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">{executiveBriefingData.blast_radius}</p>
+                          </div>
+                          <div className="bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Events</p>
+                            <p className="text-[11px] font-semibold text-white">{(timeline?.events?.length || 0)}</p>
+                          </div>
+                          <div className="bg-slate-800/60 rounded px-3 py-2 border border-slate-700/50">
+                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Status</p>
+                            <p className="text-[11px] font-semibold text-emerald-400">Detected</p>
+                          </div>
+                          {(() => {
+                            const events = timeline?.events || [];
+                            const withTs = events.filter((e: any) => e.timestamp);
+                            if (withTs.length < 2) return null;
+                            const sorted = [...withTs].sort((a: any, b: any) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+                            const first = new Date(sorted[0].timestamp);
+                            const last = new Date(sorted[sorted.length - 1].timestamp);
+                            const dwellMs = last.getTime() - first.getTime();
+                            const dwellDays = Math.round(dwellMs / (1000 * 60 * 60 * 24));
+                            const dwellStr = dwellDays >= 1 ? `~${dwellDays}d` : '< 1d';
+                            return (
+                              <div className="col-span-2 flex gap-3 text-[10px] text-slate-300">
+                                <span>First: {first.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}</span>
+                                <span>Last: {last.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}</span>
+                                <span>Dwell: {dwellStr}</span>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                      {/* Bottom row — fills space: Board Rec + Regulatory */}
+                      <div className="mt-3 flex gap-3">
+                        <div className="flex-1 rounded-lg px-3 py-2 bg-slate-800/40 border border-slate-600/40">
+                          <p className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase mb-0.5">Board Recommendation</p>
+                          <p className="text-[10px] text-slate-200 leading-tight">
+                            Review third-party and contractor IAM lifecycle. Implement time-bound access and quarterly privilege reviews.
+                          </p>
+                        </div>
+                        {(executiveBriefingData.severity === 'CRITICAL' || executiveBriefingData.severity === 'HIGH') && (
+                          <div className="flex-1 rounded-lg px-3 py-2 bg-amber-950/30 border border-amber-700/40">
+                            <p className="text-[9px] font-semibold tracking-wider text-amber-400/90 uppercase mb-0.5">Regulatory Impact</p>
+                            <p className="text-[10px] text-slate-200 leading-tight">
+                              May trigger GDPR, CCPA, HIPAA, or PCI-DSS notification. Legal and compliance review recommended.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      {/* Footer — one line */}
+                      <div className="mt-3 pt-3 border-t border-slate-600/40 flex items-center justify-between text-[9px] text-slate-500">
+                        <span>{(timeline?.attack_pattern || timeline?.root_cause) ? truncateAtWord(timeline?.attack_pattern || timeline?.root_cause || '', 100) : ''}</span>
+                        {executiveBriefingData.severity === 'CRITICAL' && (
+                          <span className="text-amber-400/80">GDPR/CCPA/HIPAA/PCI-DSS review recommended</span>
+                        )}
+                        <span>Nova Sentinel</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {executiveBriefingError && (
+                  <div className="absolute top-3 left-3 right-14 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {executiveBriefingError}
+                  </div>
+                )}
+                <div className="absolute top-3 right-3 flex gap-1.5 z-20">
+                  {executiveBriefingData && (
+                    <>
+                      <button
+                        onClick={handleDownloadBriefingPng}
+                        className="p-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-colors border border-white/5"
+                        title="Download as PNG"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleCopyBriefingSummary}
+                        className="p-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-colors border border-white/5"
+                        title="Copy summary"
+                      >
+                        {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setExecutiveBriefingOpen(false)}
+                    className="p-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-colors border border-white/5"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Report Preview - expandable full report */}
         <div className="bg-slate-900 rounded-xl p-5 overflow-hidden">

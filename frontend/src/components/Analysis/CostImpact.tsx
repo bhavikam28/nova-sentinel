@@ -32,7 +32,8 @@ interface CostCategory {
   complianceBreakdown?: { framework: string; range: string; share: number }[];
 }
 
-function estimateCosts(
+/** Exported for use in ReportExport executive briefing */
+export function estimateCosts(
   timeline: Timeline,
   incidentType?: string,
   opts?: { eventsAnalyzed?: number; timeRangeDays?: number; hasAwsServicePrincipal?: boolean }

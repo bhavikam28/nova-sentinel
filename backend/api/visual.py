@@ -1,15 +1,24 @@
 """
 Visual Analysis API endpoints
 """
-import base64
+import json
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Optional, Dict, Any
+from pydantic import BaseModel
 
 from agents.visual_agent import VisualAgent
+from agents.threat_model_agent import ThreatModelAgent
 from utils.logger import logger
 
 router = APIRouter(prefix="/api/visual", tags=["visual"])
 visual_agent = VisualAgent()
+threat_model_agent = ThreatModelAgent()
+
+
+class ThreatModelRequest(BaseModel):
+    architecture_description: str
+    visual_analysis_json: Optional[str] = None
+    include_ai_threats: bool = True
 
 
 @router.post("/analyze-diagram")
@@ -132,6 +141,34 @@ async def detect_drift(
         raise HTTPException(
             status_code=500,
             detail=f"Drift detection failed: {str(e)}"
+        )
+
+
+@router.post("/threat-model")
+async def generate_threat_model(request: ThreatModelRequest) -> Dict[str, Any]:
+    """
+    Generate STRIDE threat model from architecture description.
+    Optionally use Nova Pro visual analysis as input.
+    """
+    try:
+        visual_analysis = None
+        if request.visual_analysis_json:
+            try:
+                visual_analysis = json.loads(request.visual_analysis_json)
+            except json.JSONDecodeError:
+                logger.warning("Invalid visual_analysis_json, ignoring")
+        result = await threat_model_agent.generate_threat_model(
+            architecture_description=request.architecture_description,
+            visual_analysis=visual_analysis,
+            include_ai_threats=request.include_ai_threats,
+        )
+        return result
+    except Exception as e:
+        import traceback
+        logger.error(f"Threat model generation failed: {e}\n{traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Threat model generation failed: {str(e)}"
         )
 
 

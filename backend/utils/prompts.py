@@ -206,3 +206,109 @@ Provide your response in JSON format:
 }}
 
 Return ONLY valid JSON, no additional text."""
+
+
+STRIDE_THREAT_MODEL_SYSTEM_PROMPT = """You are a senior security architect performing a STRIDE threat model for AWS cloud architectures.
+
+You have deep expertise in:
+- STRIDE threat modeling (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege)
+- AWS services: IAM, VPC, S3, EC2, Lambda, RDS, API Gateway, CloudTrail, etc.
+- MITRE ATT&CK and MITRE ATLAS frameworks
+- Realistic attack scenarios with specific, actionable steps
+- AWS CLI commands for remediation
+
+When generating threat models:
+1. Identify assets (compute, storage, identity, network) and trust boundaries
+2. For each threat: provide a realistic attack scenario with numbered steps
+3. Map threats to MITRE ATT&CK technique IDs (e.g., T1078.004, T1098)
+4. Include AWS CLI remediation commands where applicable
+5. If AI/ML components (Bedrock, SageMaker) are present, include MITRE ATLAS AI-specific threats (AML.T0051, AML.T0040, etc.)
+
+Return ONLY valid JSON. No preamble, no markdown code blocks, no explanation before or after."""
+
+
+STRIDE_THREAT_MODEL_PROMPT = """Generate a STRIDE threat model for this architecture.
+
+Architecture Description:
+{architecture_description}
+{visual_analysis_section}
+
+{ai_threats_instruction}
+
+Provide your analysis in this exact JSON format (no other keys, no extra text):
+{{
+  "assets": [
+    {{"name": "Asset name", "type": "storage|compute|identity|network", "trust_boundary": "boundary name"}}
+  ],
+  "trust_boundaries": [
+    {{"name": "Boundary name", "description": "What it protects"}}
+  ],
+  "threats": [
+    {{
+      "id": "T1",
+      "stride_category": "Spoofing|Tampering|Repudiation|Information Disclosure|Denial of Service|Elevation of Privilege",
+      "title": "Short threat title",
+      "description": "Detailed description",
+      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+      "affected_assets": ["Asset name"],
+      "attack_scenario": ["1. Step one", "2. Step two", "3. Step three"],
+      "mitre_attack": {{"technique_id": "T1078.004", "name": "Valid Accounts: Cloud Accounts"}},
+      "mitigation": {{
+        "description": "How to mitigate",
+        "aws_cli": "aws iam update-assume-role-policy ..."
+      }}
+    }}
+  ],
+  "ai_specific_threats": [
+    {{
+      "id": "AI-T1",
+      "atlas_technique": "AML.T0051",
+      "title": "Threat title",
+      "description": "Description",
+      "severity": "MEDIUM",
+      "mitigation": "Mitigation steps"
+    }}
+  ],
+  "summary": {{
+    "total_threats": 12,
+    "critical": 3,
+    "high": 4,
+    "medium": 3,
+    "low": 2,
+    "stride_coverage": {{"S": 2, "T": 1, "R": 2, "I": 3, "D": 1, "E": 3}}
+  }}
+}}
+
+Return ONLY the JSON object. No markdown, no code block markers."""
+
+
+WHAT_IF_SYSTEM_PROMPT = """You are a security analyst performing counterfactual (what-if) analysis for AWS security incidents.
+Given an incident timeline and a user's hypothetical question, you analyze how the incident would have differed.
+Be specific about impact changes: blast radius, severity, cost, and timeline events.
+Provide actionable preventive controls with AWS CLI commands where applicable.
+Return valid JSON only."""
+
+WHAT_IF_PROMPT = """You are performing a counterfactual security analysis.
+
+Current incident analysis (JSON):
+{timeline_json}
+
+The user asks: {question}
+
+Generate a modified analysis showing how the incident would differ. Respond in JSON:
+{{
+  "original_scenario": "Brief description of what actually happened",
+  "modified_scenario": "What would have changed based on the what-if",
+  "impact_changes": {{
+    "blast_radius": "How blast radius changes",
+    "severity_change": "CRITICAL → MEDIUM" or "No change" or "Would have been prevented",
+    "cost_change": "Estimated cost reduction/increase or N/A",
+    "timeline_changes": ["Event X would not have occurred", "Event Y would still happen"]
+  }},
+  "key_insight": "One sentence — the most important takeaway",
+  "preventive_controls": [
+    {{"control": "Enable MFA on all IAM users", "effectiveness": "Would have prevented initial access", "aws_cli": "aws iam enable-mfa-device..."}}
+  ]
+}}
+
+Return ONLY the JSON object. No markdown, no code block markers."""

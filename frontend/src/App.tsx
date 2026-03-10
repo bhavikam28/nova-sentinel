@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, AlertCircle, CheckCircle2, Menu, X, 
-  Loader2, Eye, Brain, Zap, Shield, FileText
+  Loader2, Eye, Brain, Zap, Shield, FileText, Mic, MessageSquare, Volume2
 } from 'lucide-react';
 import NovaSentinelLogo from './components/Logo';
 import LandingHero from './components/Landing/LandingHero';
@@ -19,7 +19,6 @@ import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ScenarioPicker from './components/Dashboard/ScenarioPicker';
 import RealAWSConnect from './components/Dashboard/RealAWSConnect';
 import TimelineView from './components/Analysis/TimelineView';
-import InsightCards from './components/Analysis/InsightCards';
 import AttackPathDiagram from './components/Visualizations/AttackPathDiagram';
 import VisualAnalysisUpload from './components/Analysis/VisualAnalysisUpload';
 import RemediationPlan from './components/Analysis/RemediationPlan';
@@ -662,9 +661,6 @@ function App() {
               </div>
             )}
 
-            {/* Insight Cards */}
-            <InsightCards timeline={analysisResult.timeline} />
-
             {/* Security Posture Dashboard */}
             <SecurityPostureDashboard
               timeline={analysisResult.timeline}
@@ -672,6 +668,7 @@ function App() {
               analysisTime={analysisResult.analysis_time_ms}
               incidentId={analysisResult.incident_id}
               onNavigateToCostImpact={() => setActiveFeature('cost')}
+              onNavigateToTimeline={() => setActiveFeature('timeline')}
             />
           </div>
         );
@@ -854,22 +851,50 @@ function App() {
 
       case 'aria':
         return (
-          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+            {/* Header — matches other tabs */}
+            <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-violet-50/40">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Mic className="w-4.5 h-4.5 text-white" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Aria — Voice Security Assistant</h3>
+                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    Powered by Amazon Nova 2 Lite
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 border border-violet-200 text-[10px] font-medium">
+                      <Volume2 className="w-3 h-3" /> Voice + Text
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Aria — Voice Security Assistant</h3>
-            <p className="text-sm text-slate-500 mb-4 max-w-md mx-auto">
-              Powered by Amazon Nova 2 Lite. Click the chat icon in the bottom-right corner to ask Aria about incidents, compliance, remediation, and more.
-            </p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 border border-violet-200 rounded-lg text-sm text-violet-700 font-medium">
-              <div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
-              Aria is active — look for the chat button below
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* How to use */}
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <MessageSquare className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" strokeWidth={1.8} />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">How to use Aria</p>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Click the chat icon in the bottom-right corner to open Aria. Ask questions by voice or text — she explains findings, recommends actions, and walks you through results.
+                  </p>
+                  <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-lg text-xs text-violet-700 font-medium">
+                    <div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                    Aria is active — look for the chat button below
+                  </div>
+                </div>
+              </div>
+
+              {/* Before analysis */}
+              {!analysisResult && (
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Run a demo scenario or connect your AWS account first. Once analysis is complete, Aria can walk you through the incident, explain the attack path, recommend remediation, and answer questions about compliance and cost.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1077,6 +1102,7 @@ function App() {
             timeline: orchestrationResult.results.timeline,
             remediation_plan: orchestrationResult.results.remediation_plan,
             risk_scores: orchestrationResult.results.risk_scores,
+            correlation: orchestrationResult.results.correlation,
             incident_id: orchestrationResult.incident_id,
             incident_type: orchestrationResult.metadata?.incident_type,
           } : undefined}

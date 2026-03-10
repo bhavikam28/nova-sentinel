@@ -2,6 +2,7 @@
 Report API — PDF export with Nova Canvas cover
 
 Generates PDF: Cover (Nova Canvas) → Executive Summary → Technical Details → Remediation → Compliance → Appendix
+Executive Briefing: Nova 2 Lite summary + Nova Canvas infographic for leadership
 """
 import io
 import base64
@@ -11,6 +12,16 @@ from pydantic import BaseModel
 from typing import Optional
 
 router = APIRouter(prefix="/api/report", tags=["report"])
+
+
+class ExecutiveBriefingRequest(BaseModel):
+    incident_type: str
+    root_cause: str
+    severity: str
+    blast_radius: str
+    cost_estimate: str
+    top_recommendation: str
+    incident_id: str
 
 
 class ExportPdfRequest(BaseModel):
@@ -158,5 +169,52 @@ async def export_pdf(req: ExportPdfRequest) -> StreamingResponse:
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/executive-briefing")
+async def generate_executive_briefing(req: ExecutiveBriefingRequest):
+    """Generate executive briefing: Nova 2 Lite summary + Nova Canvas infographic background."""
+    try:
+        from services.bedrock_service import BedrockService
+        bedrock = BedrockService()
+
+        # 1. Nova 2 Lite — CISO-level executive summary (board-ready, actionable)
+        summary_prompt = f"""You are a CISO writing a one-page briefing for the board. Write exactly 3 sentences. Each sentence must add value—no filler, no "see tab for details."
+
+Context:
+- Incident: {req.incident_type} | Severity: {req.severity}
+- Root cause: {req.root_cause}
+- Blast radius / assets affected: {req.blast_radius}
+- Estimated cost exposure: {req.cost_estimate}
+- Immediate action: {req.top_recommendation}
+
+Requirements:
+- Sentence 1: Business impact—what happened and why it matters to the business (revenue, risk, compliance).
+- Sentence 2: Root cause and scope—who/what was compromised, in plain language.
+- Sentence 3: Recommended action and timeline—what we must do now, with urgency.
+
+Include specific dollar amounts if provided. Avoid jargon. Output ONLY the 3 sentences, no bullets or headers."""
+
+        summary_result = await bedrock.invoke_nova_lite(summary_prompt, max_tokens=300, temperature=0.3)
+        executive_summary = (summary_result.get("text") or "").strip() or (
+            f"A {req.severity} security incident ({req.incident_type}) was detected. "
+            f"Root cause: {req.root_cause[:200]}. "
+            f"Immediate action: {req.top_recommendation}."
+        )
+
+        # Skip Nova Canvas — CEO/CISO briefings use clean solid background (no decorative dots/patterns)
+        image_b64 = None
+
+        return {
+            "executive_summary": executive_summary,
+            "image_base64": image_b64,
+            "incident_id": req.incident_id,
+            "severity": req.severity,
+            "cost_estimate": req.cost_estimate,
+            "blast_radius": req.blast_radius,
+            "top_recommendation": req.top_recommendation,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

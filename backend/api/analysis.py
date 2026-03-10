@@ -1,10 +1,12 @@
 """
 Analysis API endpoints
 """
+import json
 import time
 import uuid
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional
+from pydantic import BaseModel
 
 from models.incident import AnalysisRequest, AnalysisResponse
 from agents.temporal_agent import TemporalAgent
@@ -12,8 +14,15 @@ from agents.risk_scorer_agent import RiskScorerAgent
 from services.cloudtrail_service import CloudTrailService
 from utils.logger import logger
 from utils.config import get_settings
+from utils.prompts import WHAT_IF_SYSTEM_PROMPT, WHAT_IF_PROMPT
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
+
+
+class WhatIfRequest(BaseModel):
+    question: str
+    timeline_json: str
+    incident_type: Optional[str] = None
 temporal_agent = TemporalAgent()
 risk_scorer = RiskScorerAgent()
 cloudtrail_service = CloudTrailService()
@@ -284,6 +293,64 @@ async def score_event_risk(
             status_code=500,
             detail=f"Event risk scoring failed: {str(e)}"
         )
+
+
+@router.post("/what-if")
+async def what_if_simulation(request: WhatIfRequest):
+    """
+    Counterfactual (what-if) scenario simulation.
+    Given an incident timeline and a hypothetical question, returns how the incident would differ.
+    Uses Nova 2 Lite for reasoning.
+    """
+    try:
+        start_time = time.time()
+        logger.info(f"What-if simulation: {request.question[:80]}...")
+
+        prompt = WHAT_IF_PROMPT.format(
+            timeline_json=request.timeline_json[:12000],  # Truncate to fit context
+            question=request.question,
+        )
+        response = await temporal_agent.bedrock.invoke_nova_lite(
+            prompt=prompt,
+            system_prompt=WHAT_IF_SYSTEM_PROMPT,
+            max_tokens=4000,
+            temperature=0.2,
+        )
+        response_text = response.get("text", "")
+
+        # Parse JSON from response
+        json_str = None
+        if "```json" in response_text:
+            start = response_text.find("```json") + 7
+            end = response_text.find("```", start)
+            if end > start:
+                json_str = response_text[start:end].strip()
+        elif "```" in response_text:
+            start = response_text.find("```") + 3
+            end = response_text.find("```", start)
+            if end > start:
+                json_str = response_text[start:end].strip()
+        if not json_str:
+            start_idx = response_text.find("{")
+            end_idx = response_text.rfind("}") + 1
+            if start_idx >= 0 and end_idx > start_idx:
+                json_str = response_text[start_idx:end_idx]
+
+        if not json_str:
+            raise ValueError("No JSON in model response")
+
+        result = json.loads(json_str)
+        result["analysis_time_ms"] = int((time.time() - start_time) * 1000)
+        result["model_used"] = settings.nova_lite_model_id
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.error(f"What-if JSON parse error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse what-if response")
+    except Exception as e:
+        import traceback
+        logger.error(f"What-if simulation failed: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/test-bedrock")

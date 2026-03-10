@@ -47,6 +47,18 @@ export const analysisAPI = {
     const response = await api.get('/api/analysis/health');
     return response.data;
   },
+
+  /**
+   * What-if scenario simulation — counterfactual analysis
+   */
+  whatIf: async (question: string, timelineJson: string, incidentType?: string): Promise<any> => {
+    const response = await api.post('/api/analysis/what-if', {
+      question,
+      timeline_json: timelineJson,
+      incident_type: incidentType,
+    });
+    return response.data;
+  },
 };
 
 export const demoAPI = {
@@ -189,6 +201,17 @@ export const visualAPI = {
   },
 };
 
+export const threatModelAPI = {
+  generate: async (description: string, visualAnalysis?: any, includeAiThreats = true): Promise<any> => {
+    const response = await api.post('/api/visual/threat-model', {
+      architecture_description: description,
+      visual_analysis_json: visualAnalysis ? JSON.stringify(visualAnalysis) : null,
+      include_ai_threats: includeAiThreats,
+    });
+    return response.data;
+  },
+};
+
 export const authAPI = {
   /**
    * Test AWS connection with a specific profile
@@ -287,6 +310,27 @@ export const reportAPI = {
       markdown,
       cover_image_base64: coverImageBase64 || undefined,
     }, { responseType: 'blob' });
+    return response.data;
+  },
+
+  executiveBriefing: async (data: {
+    incident_type: string;
+    root_cause: string;
+    severity: string;
+    blast_radius: string;
+    cost_estimate: string;
+    top_recommendation: string;
+    incident_id: string;
+  }): Promise<{
+    executive_summary: string;
+    image_base64: string | null;
+    incident_id: string;
+    severity: string;
+    cost_estimate: string;
+    blast_radius: string;
+    top_recommendation: string;
+  }> => {
+    const response = await api.post('/api/report/executive-briefing', data);
     return response.data;
   },
 };

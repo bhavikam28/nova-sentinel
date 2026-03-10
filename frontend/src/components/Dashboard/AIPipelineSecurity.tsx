@@ -166,7 +166,7 @@ const DEMO_AI_SECURITY_STATUS = {
 const COST_TABLE_DATA = [
   { agent: 'TemporalAgent', model: 'Nova 2 Lite', calls: 45, tokens: 6000, latency: '1.2s', cost: 0.0024 },
   { agent: 'RiskScorer', model: 'Nova Micro', calls: 18, tokens: 1000, latency: '0.3s', cost: 0.0003 },
-  { agent: 'VisualAgent', model: 'Nova Pro', calls: 8, tokens: 3000, latency: '2.1s', cost: 0.0045 },
+  { agent: 'Visual Agent', model: 'Nova Pro', calls: 8, tokens: 3000, latency: '2.1s', cost: 0.0045 },
   { agent: 'RemediationAgent', model: 'Nova 2 Lite', calls: 22, tokens: 5800, latency: '1.8s', cost: 0.0032 },
   { agent: 'DocAgent', model: 'Nova 2 Lite', calls: 23, tokens: 5000, latency: '2.4s', cost: 0.0028 },
 ];
@@ -387,7 +387,7 @@ export default function AIPipelineSecurity() {
               <div>
                 <h3 className="text-base font-bold text-slate-900">MITRE ATLAS Threat Detection</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  6 AI/ML threat techniques monitored. <span className="text-indigo-600 font-medium">Click any card</span> to explore detection details.
+                  Monitors <span className="font-medium text-indigo-600">Nova Sentinel&apos;s own AI pipeline</span> — not your architecture. 6 techniques. <span className="text-indigo-600 font-medium">Click any card</span> for details.
                 </p>
               </div>
             </div>

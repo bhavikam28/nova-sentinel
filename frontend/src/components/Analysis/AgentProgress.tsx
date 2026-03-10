@@ -1,12 +1,13 @@
 /**
  * Agent Progress - Analysis Pipeline Status
  * Shows multi-agent analysis completion with model attribution
+ * Collapsible by default to reduce clutter on Security tab
  */
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2, Loader2, XCircle, Clock,
-  Timer, ImageIcon, Gauge, Wrench, BookOpen
+  Timer, ImageIcon, Gauge, Wrench, BookOpen, ChevronDown, ChevronUp
 } from 'lucide-react';
 import type { AgentStatus } from '../../types/incident';
 
@@ -21,6 +22,8 @@ interface AgentProgressProps {
 }
 
 const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
+  const [expanded, setExpanded] = useState(false);
+
   // Visual analysis runs separately (IncidentArchitectureDiagram auto-generates from timeline).
   // If the orchestrator completed (temporal is done), visual is also done.
   const visualStatus: AgentStatus =
@@ -51,70 +54,85 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
   const progressPercent = (completedCount / agentConfig.length) * 100;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card">
-      {/* Header with progress bar */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h3 className="text-base font-bold text-slate-900">Core Analysis Pipeline</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {completedCount}/{agentConfig.length} agents completed — each agent is a specialized AI that runs a different analysis step
-          </p>
-        </div>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+      {/* Compact header — click to expand */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-50/50 transition-colors"
+      >
         <div className="flex items-center gap-3">
-          <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+          <h3 className="text-sm font-bold text-slate-700">Core Analysis Pipeline</h3>
+          <span className="text-xs text-slate-500">
+            {completedCount}/{agentConfig.length} agents · {Math.round(progressPercent)}%
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-indigo-600 rounded-full"
+              className="h-full bg-indigo-500 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
             />
           </div>
-          <span className="text-xs font-bold text-slate-600">{Math.round(progressPercent)}%</span>
+          {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
         </div>
-      </div>
+      </button>
 
-      {/* Agent Pipeline */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {agentConfig.map((agent, index) => {
-          const Icon = agent.icon;
-          const isRunning = agent.status === 'RUNNING';
-          const isCompleted = agent.status === 'COMPLETED';
-          const isFailed = agent.status === 'FAILED';
-          
-          return (
-            <motion.div
-              key={agent.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              className={`relative p-4 rounded-xl border transition-all duration-300 ${
-                isRunning ? 'border-indigo-200 bg-indigo-50/50' :
-                isCompleted ? 'border-slate-200 bg-white' :
-                isFailed ? 'border-slate-200 bg-slate-50/50' :
-                'border-slate-200 bg-slate-50/50'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className={`w-9 h-9 rounded-lg ${agent.iconBg} border border-slate-200 flex items-center justify-center ${isCompleted || isRunning ? 'opacity-100' : 'opacity-60'}`}>
-                  <Icon className={`w-4.5 h-4.5 ${agent.iconColor}`} strokeWidth={1.8} />
-                </div>
-                {getStatusIcon(agent.status)}
+      {/* Agent Pipeline — expandable */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-0 border-t border-slate-100">
+              <p className="text-sm text-slate-600 mt-3 mb-4">Each agent is a specialized AI that runs a different analysis step.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                {agentConfig.map((agent, index) => {
+                  const Icon = agent.icon;
+                  const isRunning = agent.status === 'RUNNING';
+                  const isCompleted = agent.status === 'COMPLETED';
+                  const isFailed = agent.status === 'FAILED';
+
+                  return (
+                    <motion.div
+                      key={agent.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`relative p-4 rounded-xl border transition-all duration-300 ${
+                        isRunning ? 'border-indigo-200 bg-indigo-50/50' :
+                        isCompleted ? 'border-slate-200 bg-white' :
+                        isFailed ? 'border-slate-200 bg-slate-50/50' :
+                        'border-slate-200 bg-slate-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={`w-9 h-9 rounded-lg ${agent.iconBg} border border-slate-200 flex items-center justify-center ${isCompleted || isRunning ? 'opacity-100' : 'opacity-60'}`}>
+                          <Icon className={`w-4.5 h-4.5 ${agent.iconColor}`} strokeWidth={1.8} />
+                        </div>
+                        {getStatusIcon(agent.status)}
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900 mb-0.5">{agent.name}</h4>
+                      <p className="text-xs text-slate-500 font-medium mb-2">{agent.model}</p>
+                      <p className="text-xs text-slate-600 leading-relaxed">{agent.desc}</p>
+                      {isRunning && (
+                        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+                          <div className="absolute inset-0 shimmer" />
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
               </div>
-              
-              <h4 className="text-sm font-bold text-slate-900 mb-0.5">{agent.name}</h4>
-              <p className="text-[10px] text-slate-500 font-medium mb-1">{agent.model}</p>
-              <p className="text-[10px] text-slate-400 leading-tight line-clamp-2" title={agent.desc}>{agent.desc}</p>
-
-              {/* Running shimmer effect */}
-              {isRunning && (
-                <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
-                  <div className="absolute inset-0 shimmer" />
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

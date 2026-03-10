@@ -10,7 +10,8 @@ import { motion } from 'framer-motion';
 import {
   Shield, AlertTriangle, Key, Globe, Network,
   Wifi, Server, User, Database, Eye, Lock, Cloud, Zap,
-  ZoomIn, ZoomOut, Maximize2, Minimize2, Search, Download, Target
+  ZoomIn, ZoomOut, Maximize2, Minimize2, Search, Download, Target,
+  Play, Pause, RotateCcw
 } from 'lucide-react';
 import { threatIntelAPI } from '../../services/api';
 
@@ -52,6 +53,7 @@ interface NodeDef {
   mitreId?: string;
   resourceId?: string;
   riskScore?: number; // 0–100, shown on critical/high nodes
+  timestamp?: string; // ISO or display string for replay
 }
 
 interface EdgeDef {
@@ -269,12 +271,18 @@ function buildGraphFromTimeline(
   const events = timeline.events || [];
   if (events.length === 0) return { nodes: [], edges: [] };
 
+  const minTs = events.reduce((acc, e) => {
+    const t = e.timestamp;
+    if (!t) return acc;
+    return !acc || t < acc ? t : acc;
+  }, '');
+
   const mitreMap = buildMitreMap(riskScores);
   const severityCapMap = buildSeverityCapMap(riskScores);
 
   // Track unique actors and resources
-  const actorMap = new Map<string, { severity: string; count: number; actions: Set<string> }>();
-  const resourceMap = new Map<string, { severity: string; count: number; actions: Set<string>; firstAction: string }>();
+  const actorMap = new Map<string, { severity: string; count: number; actions: Set<string>; firstTimestamp?: string }>();
+  const resourceMap = new Map<string, { severity: string; count: number; actions: Set<string>; firstAction: string; firstTimestamp?: string }>();
   const edgeMap = new Map<string, { action: string; count: number; severity: string }>();
   const awsServiceToCloudtrailEdges: Array<{ actor: string; action: string; severity: string }> = [];
 
@@ -307,12 +315,14 @@ function buildGraphFromTimeline(
 
     // Track actor
     const existing = actorMap.get(actor);
+    const ts = ev.timestamp;
     if (existing) {
       existing.count++;
       existing.actions.add(action);
       if (severityRank(severity) > severityRank(existing.severity)) existing.severity = severity;
+      if (ts && (!existing.firstTimestamp || ts < existing.firstTimestamp)) existing.firstTimestamp = ts;
     } else {
-      actorMap.set(actor, { severity, count: 1, actions: new Set([action]) });
+      actorMap.set(actor, { severity, count: 1, actions: new Set([action]), firstTimestamp: ts });
     }
 
     // AWS service principals acting on Service-linked channel: actor only, no duplicate resource node
@@ -324,8 +334,9 @@ function buildGraphFromTimeline(
         existingRes.count++;
         existingRes.actions.add(action);
         if (severityRank(severity) > severityRank(existingRes.severity)) existingRes.severity = severity;
+        if (ts && (!existingRes.firstTimestamp || ts < existingRes.firstTimestamp)) existingRes.firstTimestamp = ts;
       } else {
-        resourceMap.set(resource, { severity, count: 1, actions: new Set([action]), firstAction: action });
+        resourceMap.set(resource, { severity, count: 1, actions: new Set([action]), firstAction: action, firstTimestamp: ts });
       }
       const edgeKey = `${actor}|||${resource}`;
       const existingEdge = edgeMap.get(edgeKey);
@@ -387,6 +398,7 @@ function buildGraphFromTimeline(
   // Narrative frame: Internet → API Gateway → VPC → [your resources] → CloudTrail (real AWS & production)
   if (includeNarrativeFrame) {
     const flowY = graphHeight / 2;
+    const narrativeTs = minTs ? minTs.replace(/Z$/, '') : '2026-01-15T14:20:00';
     nodes.push({
       id: 'narrative_internet',
       x: 60,
@@ -399,6 +411,7 @@ function buildGraphFromTimeline(
       bg: '#E2E8F0',
       severity: 'medium',
       mitreId: 'T1190',
+      timestamp: `${narrativeTs}Z`,
     });
     nodes.push({
       id: 'narrative_gateway',
@@ -413,6 +426,7 @@ function buildGraphFromTimeline(
       severity: 'medium',
       mitreId: 'T1190',
       resourceId: '198.51.100.100',
+      timestamp: `${narrativeTs}Z`,
     });
     nodes.push({
       id: 'narrative_vpc',
@@ -426,6 +440,7 @@ function buildGraphFromTimeline(
       bg: '#BFDBFE',
       severity: 'medium',
       mitreId: 'T1021',
+      timestamp: `${narrativeTs}Z`,
     });
     nodes.push({
       id: 'narrative_cloudtrail',
@@ -439,6 +454,7 @@ function buildGraphFromTimeline(
       bg: '#A7F3D0',
       severity: 'low',
       mitreId: 'T1562',
+      timestamp: `${narrativeTs}Z`,
     });
     edges.push({ from: 'narrative_internet', to: 'narrative_gateway', color: '#475569', label: 'Traffic', delay: 0.05 });
     edges.push({ from: 'narrative_gateway', to: 'narrative_vpc', color: '#475569', label: 'Route', delay: 0.1 });
@@ -468,6 +484,7 @@ function buildGraphFromTimeline(
       ring: sev === 'CRITICAL' || sev === 'HIGH',
       mitreId,
       resourceId: actor.includes(':') ? actor : undefined,
+      timestamp: info.firstTimestamp,
     });
   });
 
@@ -508,6 +525,7 @@ function buildGraphFromTimeline(
       ring: sev === 'CRITICAL' || sev === 'HIGH',
       mitreId,
       resourceId: canonical.includes(':') ? canonical : undefined,
+      timestamp: info.firstTimestamp,
     });
   });
 
@@ -536,6 +554,7 @@ function buildGraphFromTimeline(
       severity: sev.toLowerCase() as NodeDef['severity'],
       ring: sev === 'CRITICAL',
       mitreId,
+      timestamp: info.firstTimestamp,
     });
   });
 
@@ -618,6 +637,19 @@ function buildGraphFromTimeline(
   return { nodes, edges };
 }
 
+/** Format ISO timestamp for replay display: "Jan 15, 2026 — 14:23 UTC" */
+function formatReplayTimestamp(ts: string | undefined): string {
+  if (!ts) return '—';
+  try {
+    const d = new Date(ts);
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) + ' UTC';
+    return `${date} — ${time}`;
+  } catch {
+    return ts;
+  }
+}
+
 function severityRank(sev: string): number {
   switch (sev.toUpperCase()) {
     case 'CRITICAL': return 4;
@@ -631,16 +663,16 @@ function severityRank(sev: string): number {
 // ─── Static fallback for demo mode ─────────────────────────────────────────────
 
 const DEMO_NODES: NodeDef[] = [
-  { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', detail: 'Suspicious IP: 203.0.113.42 (TOR exit node)', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190' },
-  { id: 'gateway', x: 240, y: 200, icon: Network, label: 'API Gateway', subLabel: 'Entry Point', detail: 'REST API — 847 requests in 2 minutes', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190' },
-  { id: 'vpc', x: 400, y: 200, icon: Wifi, label: 'VPC', subLabel: 'Network Layer', detail: 'vpc-0a1b2c3d — us-east-1', color: '#1D4ED8', bg: '#BFDBFE', severity: 'medium', mitreId: 'T1021' },
-  { id: 'ec2', x: 560, y: 200, icon: Server, label: 'EC2 Instance', subLabel: 'Compromised', detail: 'i-abc123 — Attacker installed crypto-miner | Severity: Critical', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1078', resourceId: 'i-abc123', riskScore: 98 },
-  { id: 'iam', x: 720, y: 200, icon: User, label: 'IAM Role', subLabel: 'Escalated', detail: 'arn:aws:iam::role/admin-temp — privilege escalation', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1078', riskScore: 92 },
-  { id: 'database', x: 880, y: 200, icon: Database, label: 'RDS Database', subLabel: 'Data Target', detail: 'db-prod-main — 2.4GB data accessed', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1041', resourceId: 'db-prod-main', riskScore: 78 },
-  { id: 'sg', x: 280, y: 80, icon: Shield, label: 'Security Group', subLabel: 'Misconfigured', detail: 'sg-0xyz — 0.0.0.0/0 on port 22 (OPEN)', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1190', resourceId: 'sg-0xyz', riskScore: 95 },
-  { id: 'ssh', x: 500, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', detail: '14 failed login attempts before breach', color: '#991B1B', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1021', riskScore: 94 },
-  { id: 'secrets', x: 720, y: 80, icon: Key, label: 'Secrets Mgr', subLabel: 'Accessed', detail: 'GetSecretValue — 3 secrets retrieved', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1552', riskScore: 85 },
-  { id: 'cloudtrail', x: 880, y: 80, icon: Eye, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'Detected by Nova Sentinel', color: '#059669', bg: '#A7F3D0', severity: 'low', mitreId: 'T1562' },
+  { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', detail: 'Suspicious IP: 203.0.113.42 (TOR exit node)', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:00Z' },
+  { id: 'gateway', x: 240, y: 200, icon: Network, label: 'API Gateway', subLabel: 'Entry Point', detail: 'REST API — 847 requests in 2 minutes', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:15Z' },
+  { id: 'vpc', x: 400, y: 200, icon: Wifi, label: 'VPC', subLabel: 'Network Layer', detail: 'vpc-0a1b2c3d — us-east-1', color: '#1D4ED8', bg: '#BFDBFE', severity: 'medium', mitreId: 'T1021', timestamp: '2026-01-15T14:20:30Z' },
+  { id: 'ec2', x: 560, y: 200, icon: Server, label: 'EC2 Instance', subLabel: 'Compromised', detail: 'i-abc123 — Attacker installed crypto-miner | Severity: Critical', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1078', resourceId: 'i-abc123', riskScore: 98, timestamp: '2026-01-15T14:21:00Z' },
+  { id: 'iam', x: 720, y: 200, icon: User, label: 'IAM Role', subLabel: 'Escalated', detail: 'arn:aws:iam::role/admin-temp — privilege escalation', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1078', riskScore: 92, timestamp: '2026-01-15T14:21:45Z' },
+  { id: 'database', x: 880, y: 200, icon: Database, label: 'RDS Database', subLabel: 'Data Target', detail: 'db-prod-main — 2.4GB data accessed', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1041', resourceId: 'db-prod-main', riskScore: 78, timestamp: '2026-01-15T14:22:30Z' },
+  { id: 'sg', x: 280, y: 80, icon: Shield, label: 'Security Group', subLabel: 'Misconfigured', detail: 'sg-0xyz — 0.0.0.0/0 on port 22 (OPEN)', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1190', resourceId: 'sg-0xyz', riskScore: 95, timestamp: '2026-01-15T14:20:45Z' },
+  { id: 'ssh', x: 500, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', detail: '14 failed login attempts before breach', color: '#991B1B', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1021', riskScore: 94, timestamp: '2026-01-15T14:21:15Z' },
+  { id: 'secrets', x: 720, y: 80, icon: Key, label: 'Secrets Mgr', subLabel: 'Accessed', detail: 'GetSecretValue — 3 secrets retrieved', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1552', riskScore: 85, timestamp: '2026-01-15T14:22:00Z' },
+  { id: 'cloudtrail', x: 880, y: 80, icon: Eye, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'Detected by Nova Sentinel', color: '#059669', bg: '#A7F3D0', severity: 'low', mitreId: 'T1562', timestamp: '2026-01-15T14:23:00Z' },
 ];
 
 const DEMO_EDGES: EdgeDef[] = [
@@ -658,6 +690,7 @@ const DEMO_EDGES: EdgeDef[] = [
 ];
 
 const ZOOM_LEVELS = [0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2];
+const NARRATIVE_ORDER: Record<string, number> = { narrative_internet: 0, narrative_gateway: 1, narrative_vpc: 2, narrative_cloudtrail: 3 };
 
 interface AttackPathDiagramProps {
   timeline?: Timeline;
@@ -682,6 +715,12 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [threatIntelData, setThreatIntelData] = useState<any>(null);
   const [threatIntelLoading, setThreatIntelLoading] = useState(false);
+  // Replay state
+  const [replayMode, setReplayMode] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(-1);
+  const [replaySpeed, setReplaySpeed] = useState(1);
+  const [replayPaused, setReplayPaused] = useState(false);
+  const [criticalFlash, setCriticalFlash] = useState(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistRef = useRef<number | null>(null);
   const graphRef = useRef<HTMLDivElement>(null);
@@ -715,6 +754,18 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
   }, [useNarrative, hasRealTimeline, props.timeline, props.orchestrationResult, includeNarrativeFrame]);
 
   const nodeMap = useMemo(() => Object.fromEntries(NODES.map(n => [n.id, n])), [NODES]);
+
+  // Replay: chronological order (by timestamp; nodes without timestamp go last)
+  const replayOrder = useMemo(() => {
+    return [...NODES].sort((a, b) => {
+      const ta = a.timestamp ?? '9999-12-31T23:59:59Z';
+      const tb = b.timestamp ?? '9999-12-31T23:59:59Z';
+      const cmp = ta.localeCompare(tb);
+      if (cmp !== 0) return cmp;
+      return (NARRATIVE_ORDER[a.id] ?? 99) - (NARRATIVE_ORDER[b.id] ?? 99);
+    });
+  }, [NODES]);
+  const replayOrderMap = useMemo(() => Object.fromEntries(replayOrder.map((n, i) => [n.id, i])), [replayOrder]);
 
   const activeNode = NODES.find(n => n.id === (selectedNode || hoveredNode));
   const detailPanelNode = NODES.find(n => n.id === selectedNode);
@@ -872,6 +923,30 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
     return () => { cancelled = true; };
   }, [detailPanelNode?.id]);
 
+  // Replay interval: advance replayIndex when playing
+  const baseDelayMs = 1500;
+  useEffect(() => {
+    if (!replayMode || replayPaused || replayIndex >= replayOrder.length - 1) return;
+    const delay = baseDelayMs / replaySpeed;
+    const id = setInterval(() => {
+      setReplayIndex((prev) => {
+        const next = prev + 1;
+        if (next >= replayOrder.length) return prev;
+        const node = replayOrder[next];
+        if (node?.severity === 'critical') setCriticalFlash(true);
+        return next;
+      });
+    }, delay);
+    return () => clearInterval(id);
+  }, [replayMode, replayPaused, replayIndex, replayOrder, replaySpeed]);
+
+  // CRITICAL flash: 500ms then clear
+  useEffect(() => {
+    if (!criticalFlash) return;
+    const t = setTimeout(() => setCriticalFlash(false), 500);
+    return () => clearTimeout(t);
+  }, [criticalFlash]);
+
   const handleNodeHover = (nodeId: string | null, ev?: React.MouseEvent) => {
     if (isDragging) return;
     setHoveredNode(nodeId);
@@ -1004,6 +1079,21 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               </div>
             )}
           </div>
+          {/* Replay Attack */}
+          {!replayMode ? (
+            <button
+              onClick={() => {
+                setReplayMode(true);
+                setReplayIndex(0);
+                setReplayPaused(false);
+                const first = replayOrder[0];
+                if (first?.severity === 'critical') setCriticalFlash(true);
+              }}
+              className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
+            >
+              <Play className="w-3.5 h-3.5" /> Replay Attack
+            </button>
+          ) : null}
           {/* Export */}
           <div className="flex gap-1">
             <button onClick={exportPng} className="px-2 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center gap-1" title="Download PNG">
@@ -1062,12 +1152,79 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
         </div>
       </div>
 
+      {/* Replay controls — in header area, above diagram (not overlaying) */}
+      {replayMode && (
+        <div className="px-6 py-3 border-b border-slate-200 bg-indigo-50/50 flex items-center gap-4 flex-wrap">
+          <button
+            onClick={() => setReplayPaused((p) => !p)}
+            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-indigo-100 text-indigo-700 transition-colors shadow-sm"
+            title={replayPaused ? 'Play' : 'Pause'}
+          >
+            {replayPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+          </button>
+          <div className="flex gap-1">
+            {[1, 2, 3].map((s) => (
+              <button
+                key={s}
+                onClick={() => setReplaySpeed(s)}
+                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-colors ${
+                  replaySpeed === s ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              setReplayIndex(0);
+              setReplayPaused(false);
+              const first = replayOrder[0];
+              if (first?.severity === 'critical') setCriticalFlash(true);
+            }}
+            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors shadow-sm"
+            title="Reset"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <div className="flex-1 min-w-[120px]">
+            <div className="text-[10px] font-semibold text-slate-600">
+              {replayIndex >= 0 && replayIndex < replayOrder.length
+                ? formatReplayTimestamp(replayOrder[replayIndex]?.timestamp)
+                : '—'}
+            </div>
+            <div className="h-1 mt-1 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all duration-300"
+                style={{
+                  width: replayOrder.length > 0 ? `${((replayIndex + 1) / replayOrder.length) * 100}%` : '0%',
+                }}
+              />
+            </div>
+          </div>
+          {replayIndex >= replayOrder.length - 1 && replayOrder.length > 0 && (
+            <span className="text-xs font-bold text-emerald-600">Replay complete</span>
+          )}
+          <button
+            onClick={() => {
+              setReplayMode(false);
+              setReplayIndex(-1);
+              setReplayPaused(false);
+              setCriticalFlash(false);
+            }}
+            className="px-2 py-1 text-[10px] font-bold rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600"
+          >
+            Exit Replay
+          </button>
+        </div>
+      )}
+
       {/* Graph — pannable and zoomable */}
       <div
         ref={containerRef}
-        className={`relative overflow-hidden flex-1 min-h-0 flex items-center justify-center select-none ${
+        className={`relative overflow-hidden flex-1 min-h-0 flex items-center justify-center select-none transition-all duration-300 ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
-        } ${isFullscreen ? 'p-4' : ''}`}
+        } ${isFullscreen ? 'p-4' : ''} ${criticalFlash ? 'replay-critical-flash' : ''}`}
         style={{
           maxHeight: isFullscreen ? 'none' : 500,
           minHeight: isFullscreen ? 400 : 300,
@@ -1122,6 +1279,10 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               const from = nodeMap[edge.from];
               const to = nodeMap[edge.to];
               if (!from || !to) return null;
+              const fromIdx = replayOrderMap[edge.from] ?? -1;
+              const toIdx = replayOrderMap[edge.to] ?? -1;
+              const edgeRevealed = !replayMode || (fromIdx <= replayIndex && toIdx <= replayIndex);
+              if (!edgeRevealed) return null;
 
               const dx = to.x - from.x;
               const dy = to.y - from.y;
@@ -1155,12 +1316,14 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                       {/* First half — line breaks at midpoint for label */}
                       <path d={path1} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
                       <path d={path1} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
-                      <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill={edge.color} fontSize="10" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" pointerEvents="none">
-                        {edge.label}
-                      </text>
                       {/* Second half — with arrow */}
                       <path d={path2} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
                       <path d={path2} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" markerEnd="url(#arrow-flow)" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
+                      {/* Label rendered last so it sits on top of dashed lines */}
+                      <rect x={mid.x - Math.max((edge.label?.length || 6) * 3.8, 22)} y={mid.y - 10} width={Math.max((edge.label?.length || 6) * 7.6, 44)} height={20} rx={10} fill="white" stroke="#94a3b8" strokeWidth="1.5" pointerEvents="none" />
+                      <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill={edge.color} stroke="white" strokeWidth="2.5" strokeLinejoin="round" paintOrder="stroke" fontSize="11" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" pointerEvents="none">
+                        {edge.label}
+                      </text>
                     </>
                   ) : (
                     <>
@@ -1173,21 +1336,30 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
             })}
 
             {/* ===== NODES ===== */}
-            {NODES.map((node, i) => {
+            {NODES.map((node) => {
               const Icon = node.icon;
               const isHovered = hoveredNode === node.id;
               const isSelected = selectedNode === node.id;
               const isActive = isHovered || isSelected;
               const isCritical = node.severity === 'critical';
               const isSearchMatch = searchLower && (node.label.toLowerCase().includes(searchLower) || node.subLabel.toLowerCase().includes(searchLower) || node.resourceId?.toLowerCase().includes(searchLower));
+              const nodeReplayIdx = replayOrderMap[node.id] ?? -1;
+              const isRevealed = !replayMode || nodeReplayIdx <= replayIndex;
 
               return (
                 <motion.g
                   key={node.id}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.1 + i * 0.06, duration: 0.4, type: 'spring', stiffness: 200 }}
+                  initial={replayMode ? false : { scale: 0, opacity: 0 }}
+                  animate={{
+                    scale: isRevealed ? 1 : 0.8,
+                    opacity: isRevealed ? 1 : 0,
+                  }}
+                  transition={{ duration: 0.35, type: 'spring', stiffness: 200 }}
                   className="cursor-pointer"
+                  style={{
+                    pointerEvents: isRevealed ? 'auto' : 'none',
+                    transformOrigin: `${node.x}px ${node.y}px`,
+                  }}
                   onMouseEnter={(e) => handleNodeHover(node.id, e)}
                   onMouseMove={(e) => hoveredNode === node.id && setTooltipPos({ x: e.clientX, y: e.clientY })}
                   onMouseLeave={() => handleNodeHover(null)}
@@ -1385,6 +1557,14 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
         .attack-path-line {
           stroke-dasharray: 8 6;
           animation: dash-flow 2s linear infinite;
+        }
+        .replay-critical-flash {
+          box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.9);
+          animation: replay-flash 0.5s ease-out;
+        }
+        @keyframes replay-flash {
+          0% { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.9); }
+          100% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.4); }
         }
       `}</style>
     </div>
