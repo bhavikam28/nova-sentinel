@@ -4,11 +4,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Shield, Brain, GitBranch, Scale, DollarSign,
-  FileText, Download, Mic, Image, Clock, Database,
-  ChevronLeft, ChevronRight as ChevronRightIcon, ArrowLeft, Menu, X, Zap, Lock
+  ChevronLeft, ChevronRight as ChevronRightIcon, ArrowLeft, Menu, X, Lock
 } from 'lucide-react';
 import NovaSentinelLogo from '../Logo';
+import {
+  IconOverview, IconTimeline, IconAttackPath, IconAgent, IconHistory,
+  IconCompliance, IconCost, IconRemediation, IconVisual, IconVoice,
+  IconDocumentation, IconExport, IconAIPipeline, IconGraph, IconChangeSet, IconHealthCheck
+} from '../ui/MinimalIcons';
 
 export interface SidebarFeature {
   id: string;
@@ -17,27 +20,32 @@ export interface SidebarFeature {
   locked: boolean;
   badge?: string;
   badgeColor?: string;
-  group: 'analysis' | 'intelligence' | 'tools' | 'ai_governance';
+  group: 'ai_security' | 'analysis' | 'intelligence' | 'tools';
   requiresAnalysis?: boolean;
 }
 
 export const SIDEBAR_FEATURES: SidebarFeature[] = [
+  // AI Security group (top — flagship differentiator)
+  { id: 'ai-pipeline', label: 'AI Security Posture', icon: IconAIPipeline, locked: false, group: 'ai_security' },
+  { id: 'security-graph', label: 'Security Graph', icon: IconGraph, locked: false, group: 'ai_security' },
+  { id: 'ai-compliance', label: 'AI Compliance', icon: IconCompliance, locked: false, group: 'ai_security' },
   // Analysis group
-  { id: 'overview', label: 'Security Overview', icon: LayoutDashboard, locked: false, group: 'analysis' },
-  { id: 'timeline', label: 'Incident Timeline', icon: Clock, locked: false, group: 'analysis' },
-  { id: 'attack-path', label: 'Attack Path', icon: GitBranch, locked: false, group: 'analysis' },
-  { id: 'agentic-query', label: 'Autonomous Agent', icon: Zap, locked: false, badge: 'NEW', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
-  { id: 'incident-history', label: 'Incident History', icon: Database, locked: false, group: 'analysis' },
+  { id: 'overview', label: 'Security Overview', icon: IconOverview, locked: false, group: 'analysis' },
+  { id: 'timeline', label: 'Incident Timeline', icon: IconTimeline, locked: false, group: 'analysis' },
+  { id: 'attack-path', label: 'Attack Path', icon: IconAttackPath, locked: false, group: 'analysis' },
+  { id: 'changeset', label: 'ChangeSet Risk', icon: IconChangeSet, locked: false, badge: 'NEW', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
+  { id: 'agentic-query', label: 'Autonomous Agent', icon: IconAgent, locked: false, badge: 'NEW', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
+  { id: 'incident-history', label: 'Incident History', icon: IconHistory, locked: false, group: 'analysis' },
   // Intelligence group
-  { id: 'compliance', label: 'Compliance Mapping', icon: Scale, locked: false, badge: '6', group: 'intelligence' },
-  { id: 'cost', label: 'Cost Impact', icon: DollarSign, locked: false, group: 'intelligence' },
-  { id: 'remediation', label: 'Remediation Engine', icon: Shield, locked: false, group: 'intelligence' },
+  { id: 'compliance', label: 'Compliance Mapping', icon: IconCompliance, locked: false, badge: '6', group: 'intelligence' },
+  { id: 'cost', label: 'Cost Impact', icon: IconCost, locked: false, group: 'intelligence' },
+  { id: 'remediation', label: 'Remediation Engine', icon: IconRemediation, locked: false, group: 'intelligence' },
+  { id: 'protocol', label: 'IR Protocol', icon: IconHealthCheck, locked: false, badge: 'NIST', badgeColor: 'bg-emerald-100 text-emerald-600', group: 'intelligence' },
   // Tools group
-  { id: 'visual', label: 'Visual Analysis', icon: Image, locked: false, group: 'tools' },
-  { id: 'aria', label: 'Aria Voice AI', icon: Mic, locked: false, group: 'tools' },
-  { id: 'documentation', label: 'Documentation', icon: FileText, locked: false, group: 'tools' },
-  { id: 'export', label: 'Export Report', icon: Download, locked: false, group: 'tools' },
-  { id: 'ai-pipeline', label: 'AI Pipeline Security', icon: Brain, locked: false, group: 'ai_governance' },
+  { id: 'visual', label: 'Architecture & STRIDE', icon: IconVisual, locked: false, group: 'tools' },
+  { id: 'aria', label: 'Aria Voice AI', icon: IconVoice, locked: false, group: 'tools' },
+  { id: 'documentation', label: 'Documentation', icon: IconDocumentation, locked: false, group: 'tools' },
+  { id: 'export', label: 'Export Report', icon: IconExport, locked: false, group: 'tools' },
 ];
 
 interface DashboardLayoutProps {
@@ -69,21 +77,21 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const groups = [
+    { key: 'ai_security', label: 'AI Security' },
     { key: 'analysis', label: 'Analysis' },
     { key: 'intelligence', label: 'Intelligence' },
     { key: 'tools', label: 'Tools' },
-    { key: 'ai_governance', label: 'AI Governance' },
   ];
 
   const renderSidebar = (isMobile = false) => (
     <div className={`flex flex-col h-full ${isMobile ? '' : ''}`}>
       {/* Sidebar Header */}
-      <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-5 border-b border-slate-200/80`}>
+      <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-5 border-b border-slate-700/50`}>
         {!collapsed && (
           <div className="flex items-center gap-2.5">
             <NovaSentinelLogo size={24} animated={false} />
             <div>
-              <h2 className="text-sm font-bold text-slate-900 leading-tight">Nova Sentinel</h2>
+              <h2 className="text-sm font-bold text-white leading-tight">Nova Sentinel</h2>
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
                 {mode === 'demo' ? 'Demo Mode' : 'Console'}
               </p>
@@ -94,7 +102,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {!isMobile && (
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+            className="p-1 hover:bg-slate-700/50 rounded-lg transition-colors text-slate-400 hover:text-slate-200"
           >
             {collapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
@@ -104,7 +112,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Connected account badge (console mode) */}
       {!collapsed && mode === 'console' && awsAccountId && (
         <div className="px-4 py-2">
-          <div className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 truncate" title={`Connected: ${awsAccountId}`}>
+          <div className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 truncate" title={`Connected: ${awsAccountId}`}>
             Connected: {awsAccountId}
           </div>
         </div>
@@ -115,7 +123,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {mode === 'demo' && hasAnalysis && onBackToScenarios ? (
             <button
               onClick={onBackToScenarios}
-              className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-center bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200/80 transition-colors cursor-pointer"
+              className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-center bg-slate-700/50 text-slate-200 border border-slate-600 hover:bg-slate-600/50 transition-colors cursor-pointer"
               title="Run a different demo scenario"
             >
               Demo Scenarios
@@ -123,8 +131,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           ) : (
             <div className={`px-3 py-2 rounded-lg text-xs font-semibold text-center ${
               mode === 'demo'
-                ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                ? 'bg-slate-700/50 text-slate-200 border border-slate-600'
+                : 'bg-slate-700/50 text-slate-200 border border-slate-600'
             }`}>
               {mode === 'demo' ? 'Demo Scenarios' : 'Live AWS Console'}
             </div>
@@ -139,7 +147,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           return (
             <div key={group.key} className="mb-4">
               {!collapsed && (
-                <p className="px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <p className="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                   {group.label}
                 </p>
               )}
@@ -160,16 +168,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       disabled={isLocked}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
                         isLocked
-                          ? 'text-slate-400 cursor-not-allowed opacity-70'
+                          ? 'text-slate-500 cursor-not-allowed opacity-70'
                           : isActive
-                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
                       } ${collapsed ? 'justify-center' : ''}`}
                     >
                       {isLocked ? (
                         <Lock className="w-4 h-4 flex-shrink-0 text-slate-400" />
                       ) : (
-                        <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`} />
+                        <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
                       )}
                       {!collapsed && (
                         <>
@@ -193,10 +201,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </nav>
 
       {/* Sidebar Footer */}
-      <div className="px-3 py-3 border-t border-slate-200/80">
+      <div className="px-3 py-3 border-t border-slate-700/50">
         <button
           onClick={onBack}
-          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all ${collapsed ? 'justify-center' : ''}`}
+          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all ${collapsed ? 'justify-center' : ''}`}
         >
           <ArrowLeft className="w-4 h-4" />
           {!collapsed && <span>Back to Home</span>}
@@ -206,9 +214,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/20 flex">
-      {/* Desktop Sidebar */}
-      <aside className={`hidden lg:flex flex-col bg-white border-r border-slate-200 transition-all duration-300 flex-shrink-0 ${
+    <div className="min-h-screen bg-[#0f172a] flex">
+      {/* Desktop Sidebar — premium dark theme (Seddle-inspired) */}
+      <aside className={`hidden lg:flex flex-col bg-slate-900/95 border-r border-slate-700/50 transition-all duration-300 flex-shrink-0 ${
         collapsed ? 'w-16' : 'w-60'
       }`}>
         {renderSidebar()}
@@ -230,11 +238,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed top-0 left-0 bottom-0 w-64 bg-white border-r border-slate-200 z-50 lg:hidden flex flex-col"
+              className="fixed top-0 left-0 bottom-0 w-64 bg-slate-900/98 border-r border-slate-700/50 z-50 lg:hidden flex flex-col"
             >
               <div className="flex items-center justify-end p-2">
-                <button onClick={() => setMobileOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg">
-                  <X className="w-5 h-5 text-slate-500" />
+                <button onClick={() => setMobileOpen(false)} className="p-2 hover:bg-slate-700/50 rounded-lg">
+                  <X className="w-5 h-5 text-slate-400" />
                 </button>
               </div>
               {renderSidebar(true)}
@@ -245,8 +253,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
+        {/* Top bar — white to match content */}
+        <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
           <div className="flex items-center justify-between h-14 px-4 lg:px-6">
             <div className="flex items-center gap-3">
               <button
@@ -259,7 +267,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <h1 className="text-sm font-bold text-slate-900">
                   {SIDEBAR_FEATURES.find(f => f.id === activeFeature)?.label || 'Dashboard'}
                 </h1>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-slate-500">
                   {mode === 'demo' ? 'Demo Mode' : 'Live AWS Analysis'}
                 </p>
               </div>
@@ -268,7 +276,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
         </header>
 
-        {/* Content */}
+        {/* Content — white main area */}
         <main className="flex-1 overflow-y-auto bg-slate-50">
           <div className="max-w-6xl mx-auto px-4 lg:px-8 py-6">
             {children}

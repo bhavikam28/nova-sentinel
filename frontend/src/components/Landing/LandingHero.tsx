@@ -37,7 +37,7 @@ const LandingHero: React.FC = () => {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 text-indigo-700 text-xs font-semibold mb-6 shadow-sm"
           >
             <Zap className="w-3.5 h-3.5 text-indigo-500" />
-            Agentic Incident Response Pipeline
+            AI Security for AWS — Incident Response
           </motion.div>
 
           <motion.h1
@@ -58,7 +58,7 @@ const LandingHero: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-base sm:text-lg text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed"
           >
-            Built for SOC analysts, cloud security engineers, and incident responders — including teams using AWS IAM Identity Center (SSO). 11,000+ alerts/day, &lt;5% investigated. Nova Sentinel closes the gap.
+            AI Security Posture Management for AWS — OWASP LLM Top 10, Bedrock inventory, Shadow AI detection, MITRE ATLAS, and agentic incident response. Powered by 5 Nova models and 6 AWS MCP servers.
           </motion.p>
 
           <motion.div
@@ -68,19 +68,19 @@ const LandingHero: React.FC = () => {
             className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
           >
             <a
-              href="#console"
+              href="#login"
               className="btn-nova group inline-flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl font-semibold text-base hover:from-indigo-700 hover:to-violet-700 transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/40"
             >
               <Shield className="w-5 h-5" />
-              Launch Console
+              Get Started
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
             <a
-              href="#demo"
+              href="#login"
               className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold text-base hover:border-indigo-300 hover:bg-indigo-50/50 transition-all shadow-sm"
             >
               <Play className="w-5 h-5 text-indigo-500" />
-              Try Demo
+              Sign In
             </a>
           </motion.div>
 
@@ -92,7 +92,7 @@ const LandingHero: React.FC = () => {
             className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto"
           >
             <a
-              href="#demo"
+              href="#login"
               className="group p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-violet-200 hover:bg-violet-50/30 transition-all text-left"
             >
               <div className="flex items-center gap-3 mb-2">
@@ -106,7 +106,7 @@ const LandingHero: React.FC = () => {
               </p>
             </a>
             <a
-              href="#console"
+              href="#login"
               className="group p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 hover:bg-emerald-50/30 transition-all text-left"
             >
               <div className="flex items-center gap-3 mb-2">
@@ -128,7 +128,7 @@ const LandingHero: React.FC = () => {
             transition={{ delay: 0.5 }}
             className="mt-10 text-sm text-slate-500 max-w-xl mx-auto"
           >
-            Not a SIEM replacement — an AI-native incident response layer showing what agentic workflows look like with Nova.
+            Built for SOC analysts and AI security teams. AI-SPM for AWS — OWASP LLM, Shadow AI detection, Bedrock Guardrails, and agentic incident response.
           </motion.p>
 
           {/* Powered by bar */}
@@ -138,13 +138,14 @@ const LandingHero: React.FC = () => {
             transition={{ delay: 0.6 }}
             className="mt-10 flex flex-wrap justify-center items-center gap-3"
           >
-            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Model specialization</span>
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">5 Nova models + Nova Act</span>
             {[
               { name: 'Nova Pro', color: 'bg-blue-50 border-blue-200 text-blue-700' },
               { name: 'Nova 2 Lite', color: 'bg-violet-50 border-violet-200 text-violet-700' },
               { name: 'Nova Micro', color: 'bg-amber-50 border-amber-200 text-amber-700' },
               { name: 'Nova 2 Sonic', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
               { name: 'Nova Canvas', color: 'bg-pink-50 border-pink-200 text-pink-700' },
+              { name: 'Nova Act', color: 'bg-rose-50 border-rose-200 text-rose-700' },
             ].map((tech) => (
               <span key={tech.name} className={`px-3 py-1 rounded-full text-[10px] font-bold border ${tech.color}`}>
                 {tech.name}

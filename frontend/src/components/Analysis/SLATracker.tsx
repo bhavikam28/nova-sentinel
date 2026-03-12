@@ -4,7 +4,8 @@
  */
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { IconHealthCheck } from '../ui/MinimalIcons';
 
 export interface SLACheckpoint {
   id: string;
@@ -33,6 +34,13 @@ function formatSLA(seconds: number): string {
   return `${Math.floor(seconds / 3600)} hr`;
 }
 
+const SLA_DESCRIPTIONS: Record<string, string> = {
+  detection: 'Time from incident start to first detection. Industry target: 15 min. Nova Sentinel meets this by analyzing CloudTrail in seconds.',
+  containment: 'Time to contain the threat (e.g., isolate resources). Target: 1 hr. We meet this by generating containment steps immediately.',
+  remediation: 'Time to full remediation plan. Target: 24 hr. Nova Sentinel produces actionable remediation with AWS CLI in minutes.',
+  documentation: 'Time to document for postmortem. Target: 48 hr. Automated JIRA/Slack/Confluence docs generated at analysis completion.',
+};
+
 export const SLATracker: React.FC<SLATrackerProps> = ({ checkpoints, compact }) => {
   if (checkpoints.length === 0) return null;
 
@@ -47,65 +55,57 @@ export const SLATracker: React.FC<SLATrackerProps> = ({ checkpoints, compact }) 
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-slate-200/50 overflow-hidden"
+      className="bg-white rounded-xl border border-slate-200 overflow-hidden"
     >
-      <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200/50">
-            <Clock className="w-5 h-5 text-indigo-600" strokeWidth={2} />
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+            <IconHealthCheck className="w-4 h-4 text-slate-600" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-800 tracking-tight">Incident Response SLA</h3>
-            <p className={`text-sm mt-1 ${allMet ? 'text-slate-600' : 'text-amber-700'}`}>
-              {summaryText}
-            </p>
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold mt-2 ${
-              allMet ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
-            }`}>
-              {allMet ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {metCount}/{totalCount} met
-            </span>
+            <h3 className="text-sm font-bold text-slate-800">Incident Response SLA</h3>
+            <p className="text-[11px] text-slate-500">{summaryText}</p>
           </div>
         </div>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+          allMet ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+        }`}>
+          {allMet ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+          {metCount}/{totalCount} met
+        </span>
       </div>
-      <div className="p-5">
-        <div className={`flex ${compact ? 'flex-wrap gap-2' : 'flex-col gap-4'}`}>
+      <div className="p-3">
+        <p className="text-[11px] text-slate-600 mb-3">Industry-standard incident response targets. Nova Sentinel measures elapsed time from analysis start to each checkpoint.</p>
+        <div className={`flex ${compact ? 'flex-wrap gap-2' : 'flex-col gap-3'}`}>
           {checkpoints.map((cp, i) => (
             <motion.div
               key={cp.id}
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.05 }}
-              className={`flex items-start gap-4 p-4 rounded-xl border transition-colors ${
+              className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
                 cp.status === 'met'
-                  ? 'bg-emerald-50/50 border-emerald-100 hover:border-emerald-200'
-                  : 'bg-red-50/50 border-red-100 hover:border-red-200'
+                  ? 'bg-emerald-50/50 border-emerald-100'
+                  : 'bg-red-50/50 border-red-100'
               } ${compact ? 'flex-1 min-w-[160px]' : ''}`}
             >
-              <div
-                className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                  cp.status === 'met' ? 'bg-emerald-100 border border-emerald-200' : 'bg-red-100 border border-red-200'
-                }`}
-              >
+              <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
+                cp.status === 'met' ? 'bg-emerald-100' : 'bg-red-100'
+              }`}>
                 {cp.status === 'met' ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" strokeWidth={2} />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={2} />
                 ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600" strokeWidth={2} />
+                  <AlertCircle className="w-4 h-4 text-red-600" strokeWidth={2} />
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800">{cp.label}</p>
-                <div className="flex items-baseline gap-2 mt-1.5 flex-wrap">
-                  <span className="font-mono text-base font-bold text-slate-800 tabular-nums">
-                    {formatDuration(cp.actualSeconds)}
-                  </span>
+                <p className="text-xs font-bold text-slate-800">{cp.label}</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">{SLA_DESCRIPTIONS[cp.id] || ''}</p>
+                <div className="flex items-baseline gap-1.5 flex-wrap text-[11px] mt-1">
+                  <span className="font-mono font-bold text-slate-800 tabular-nums">{formatDuration(cp.actualSeconds)}</span>
                   <span className="text-slate-400">·</span>
-                  <span className="text-sm text-slate-600">
-                    under {formatSLA(cp.slaSeconds)} SLA
-                  </span>
-                  {cp.status === 'met' && (
-                    <span className="text-emerald-600 font-semibold">✓</span>
-                  )}
+                  <span className="text-slate-600">target {formatSLA(cp.slaSeconds)}</span>
+                  {cp.status === 'met' && <span className="text-emerald-600">✓ met</span>}
                 </div>
               </div>
             </motion.div>

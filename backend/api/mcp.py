@@ -20,6 +20,8 @@ from mcp_servers.iam_mcp import get_iam_mcp
 from mcp_servers.cloudwatch_mcp import get_cloudwatch_mcp
 from mcp_servers.security_hub_mcp import get_security_hub_mcp
 from mcp_servers.nova_canvas_mcp import get_nova_canvas_mcp
+from mcp_servers.ai_security_mcp import get_ai_security_mcp
+from services.knowledge_base_service import is_knowledge_base_configured, retrieve_and_generate
 from utils.logger import logger
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
@@ -109,6 +111,7 @@ async def list_tools() -> Dict[str, Any]:
             "cloudwatch-mcp-server",
             "securityhub-mcp-server",
             "nova-canvas-mcp-server",
+            "ai-security-mcp-server",
         ],
     }
 
@@ -148,6 +151,10 @@ async def tool_call(request: ToolCallRequest) -> Dict[str, Any]:
             nova_canvas_generate_with_colors,
             nova_canvas_security_report_cover,
             nova_canvas_attack_path_visual,
+            ai_security_list_bedrock_models,
+            ai_security_list_bedrock_agents,
+            ai_security_guardrail_recommendations,
+            ai_security_owasp_llm_status,
         )
         
         tool_map = {
@@ -179,6 +186,11 @@ async def tool_call(request: ToolCallRequest) -> Dict[str, Any]:
             "nova_canvas_generate_with_colors": nova_canvas_generate_with_colors,
             "nova_canvas_security_report_cover": nova_canvas_security_report_cover,
             "nova_canvas_attack_path_visual": nova_canvas_attack_path_visual,
+            # AI Security MCP
+            "ai_security_list_bedrock_models": ai_security_list_bedrock_models,
+            "ai_security_list_bedrock_agents": ai_security_list_bedrock_agents,
+            "ai_security_guardrail_recommendations": ai_security_guardrail_recommendations,
+            "ai_security_owasp_llm_status": ai_security_owasp_llm_status,
         }
         
         handler = tool_map.get(request.tool_name)
@@ -351,6 +363,38 @@ async def canvas_attack_path(request: AttackPathVisualRequest) -> Dict[str, Any]
 
 
 # ================================================================
+# AI SECURITY MCP ENDPOINTS
+# ================================================================
+
+@router.get("/ai-security/bedrock-models")
+async def ai_security_bedrock_models() -> Dict[str, Any]:
+    """List Bedrock foundation models for AI-BOM inventory."""
+    ai = get_ai_security_mcp()
+    return await ai.list_bedrock_models()
+
+
+@router.get("/ai-security/bedrock-agents")
+async def ai_security_bedrock_agents() -> Dict[str, Any]:
+    """List Bedrock agents for agentic AI threat assessment."""
+    ai = get_ai_security_mcp()
+    return await ai.list_bedrock_agents()
+
+
+@router.get("/ai-security/guardrail-recommendations")
+async def ai_security_guardrails() -> Dict[str, Any]:
+    """Get guardrail configuration recommendations for LLM security."""
+    ai = get_ai_security_mcp()
+    return await ai.get_guardrail_recommendations()
+
+
+@router.get("/ai-security/owasp-llm")
+async def ai_security_owasp_llm() -> Dict[str, Any]:
+    """Get OWASP LLM Security Top 10 compliance posture."""
+    ai = get_ai_security_mcp()
+    return await ai.get_owasp_llm_status()
+
+
+# ================================================================
 # STRANDS ENDPOINTS
 # ================================================================
 
@@ -424,6 +468,38 @@ async def strands_query(request: StrandsQueryRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Agent query failed: {str(e)}")
 
 
+@router.post("/knowledge-base/query")
+async def knowledge_base_query(request: StrandsQueryRequest) -> Dict[str, Any]:
+    """
+    Optional: Query the Knowledge Base (RAG) for security playbooks.
+    Returns enhanced answers when KNOWLEDGE_BASE_ID is configured.
+    """
+    try:
+        result = await retrieve_and_generate(request.prompt)
+        return {
+            "answer": result.get("answer", ""),
+            "citations": result.get("citations", []),
+            "kb_enabled": result.get("kb_enabled", False),
+        }
+    except Exception as e:
+        logger.error(f"Knowledge Base query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/knowledge-base/status")
+async def knowledge_base_status() -> Dict[str, Any]:
+    """Check if Knowledge Base is configured (AWS Knowledge MCP and/or Bedrock KB)."""
+    try:
+        from services.aws_knowledge_mcp_service import is_aws_knowledge_mcp_enabled
+        aws_mcp = is_aws_knowledge_mcp_enabled()
+    except Exception:
+        aws_mcp = False
+    return {
+        "configured": is_knowledge_base_configured(),
+        "aws_knowledge_mcp_enabled": aws_mcp,
+    }
+
+
 @router.get("/strands/history")
 async def strands_execution_history() -> Dict[str, Any]:
     """Get Strands agent execution history."""
@@ -447,6 +523,7 @@ async def health_check() -> Dict[str, Any]:
             "iam-mcp-server",
             "cloudwatch-mcp-server",
             "nova-canvas-mcp-server",
+            "ai-security-mcp-server",
         ],
         "models": MCP_SERVER_INFO["models_used"],
     }

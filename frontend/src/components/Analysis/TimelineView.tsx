@@ -4,7 +4,8 @@
  */
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, Clock, User, Server, AlertCircle, Brain, Zap } from 'lucide-react';
+import { ChevronDown, ChevronUp, User, Server, AlertCircle, Brain, Zap, Clock } from 'lucide-react';
+import { IconTimeline } from '../ui/MinimalIcons';
 import type { Timeline, TimelineEvent } from '../../types/incident';
 
 interface TimelineViewProps {
@@ -110,12 +111,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
     return counts;
   }, [timeline.events]);
 
+  /* Premium minimal: indigo/slate for severity (no red/orange) */
   const getSeverityStyles = (severity: string) => {
     const styles: Record<string, { bg: string; text: string; border: string; dot: string; ring: string; bar: string }> = {
-      CRITICAL: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500', ring: 'ring-red-200', bar: 'bg-red-500' },
-      HIGH: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500', ring: 'ring-orange-200', bar: 'bg-orange-500' },
-      MEDIUM: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400', ring: 'ring-amber-200', bar: 'bg-amber-400' },
-      LOW: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-400', ring: 'ring-blue-200', bar: 'bg-blue-400' },
+      CRITICAL: { bg: 'bg-slate-100', text: 'text-slate-800', border: 'border-slate-200', dot: 'bg-indigo-600', ring: 'ring-indigo-200', bar: 'bg-indigo-600' },
+      HIGH: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', dot: 'bg-indigo-500', ring: 'ring-indigo-200', bar: 'bg-indigo-500' },
+      MEDIUM: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-indigo-400', ring: 'ring-slate-200', bar: 'bg-indigo-400' },
+      LOW: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400', ring: 'ring-slate-200', bar: 'bg-slate-400' },
     };
     return styles[severity] || styles.LOW;
   };
@@ -151,12 +153,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm flex-shrink-0">
-              <Clock className="w-4.5 h-4.5 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+              <IconTimeline className="w-4.5 h-4.5 text-indigo-600" />
             </div>
             <div>
-            <h3 className="text-base font-bold text-slate-900">Event Timeline</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h3 className="text-sm font-bold text-slate-900">Event Timeline</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
               {sortedEvents.length}{severityFilter !== 'all' ? ` of ${timeline.events.length}` : ''} events • {(timeline.confidence * 100).toFixed(0)}% confidence
             </p>
             </div>
@@ -175,7 +177,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
               <button
                 onClick={() => setSeverityFilter('critical-high')}
                 className={`px-3 py-1.5 text-[11px] font-bold transition-colors ${
-                  severityFilter === 'critical-high' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:text-slate-700'
+                  severityFilter === 'critical-high' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 Critical & High
@@ -200,8 +202,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
                 By Time
               </button>
             </div>
-            <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <span className="text-xs font-bold text-emerald-700">
+            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg">
+              <span className="text-xs font-bold text-slate-700">
                 {(timeline.confidence * 100).toFixed(0)}%
               </span>
             </div>
@@ -299,8 +301,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
                               {formatTimestamp(event.timestamp)}
                             </span>
                           </div>
-                          <h4 className="text-sm font-bold text-slate-900 mb-1.5">{event.action}</h4>
-                          <div className="flex items-center gap-4 text-xs text-slate-500">
+                          <h4 className="text-xs font-bold text-slate-900 mb-1">{event.action}</h4>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-500">
                             <span className="flex items-center gap-1.5">
                               <User className="w-3.5 h-3.5 text-slate-400" />
                               {event.actor}

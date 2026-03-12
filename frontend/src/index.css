@@ -385,6 +385,13 @@ html {
 }
 
 /* ============================
+   REACT FLOW — Hide attribution
+   ============================ */
+.react-flow__attribution {
+  display: none !important;
+}
+
+/* ============================
    FOCUS STATES
    ============================ */
 button:focus-visible,

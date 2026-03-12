@@ -5,8 +5,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Play, AlertCircle, CheckCircle2, Menu, X, ChevronRight,
-  Loader2, Eye, Brain, Zap, Shield, FileText, Mic, MessageSquare, Volume2
+  Play, AlertCircle, CheckCircle2, Menu, X, ChevronRight, ChevronDown,
+  Loader2, Eye, Brain, Zap, Shield, FileText, Mic, MessageSquare, Volume2,
+  Home, ArrowLeft
 } from 'lucide-react';
 import NovaSentinelLogo from './components/Logo';
 import LandingHero from './components/Landing/LandingHero';
@@ -14,11 +15,17 @@ import FeaturesSection from './components/Landing/FeaturesSection';
 import UnderTheHoodSection from './components/Landing/UnderTheHoodSection';
 import NovaModelsSection from './components/Landing/NovaModelsSection';
 import FAQSection from './components/Landing/FAQSection';
+import ScrollToTop from './components/Landing/ScrollToTop';
+import StatsCards from './components/Landing/StatsCards';
+import UseCasesSection from './components/Landing/UseCasesSection';
+import PricingSection from './components/Landing/PricingSection';
+import PlatformFeaturesSection from './components/Landing/PlatformFeaturesSection';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ScenarioPicker from './components/Dashboard/ScenarioPicker';
 import RealAWSConnect from './components/Dashboard/RealAWSConnect';
 import TimelineView from './components/Analysis/TimelineView';
 import AttackPathDiagram from './components/Visualizations/AttackPathDiagram';
+import AttackPathReactFlow from './components/Visualizations/AttackPathReactFlow';
 import VisualAnalysisUpload from './components/Analysis/VisualAnalysisUpload';
 import RemediationPlan from './components/Analysis/RemediationPlan';
 import DocumentationDisplay from './components/Analysis/DocumentationDisplay';
@@ -37,8 +44,13 @@ import AgentProgress from './components/Analysis/AgentProgress';
 import VoiceAssistant from './components/Analysis/VoiceAssistant';
 import IncidentHistory from './components/Dashboard/IncidentHistory';
 import AIPipelineSecurity from './components/Dashboard/AIPipelineSecurity';
+import AISecurityGraph from './components/Dashboard/AISecurityGraph';
+import AICompliance from './components/Dashboard/AICompliance';
 import DemoChecklist from './components/Dashboard/DemoChecklist';
 import AgenticQuery from './components/Analysis/AgenticQuery';
+import ChangeSetAnalysis from './components/Analysis/ChangeSetAnalysis';
+import ProtocolAdherence from './components/Analysis/ProtocolAdherence';
+import LoginPage from './components/Auth/LoginPage';
 import { LiveSimulation } from './components/Simulation/LiveSimulation';
 import {
   SecurityHealthCheck,
@@ -47,7 +59,7 @@ import {
   type SecurityHealthCheckResult,
 } from './components/Analysis/SecurityHealthCheck';
 
-type AppMode = 'landing' | 'demo' | 'console';
+type AppMode = 'landing' | 'login' | 'demo' | 'console';
 
 function App() {
   const [mode, setMode] = useState<AppMode>('landing');
@@ -79,6 +91,18 @@ function App() {
   const [simulationScenarioId, setSimulationScenarioId] = useState<string | null>(null);
   const [healthCheckResult, setHealthCheckResult] = useState<SecurityHealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
+  const [resourcesDropdownOpen, setResourcesDropdownOpen] = useState(false);
+  type LandingSection = 'home' | 'product' | 'features' | 'use-cases' | 'faq';
+  const [landingSection, setLandingSection] = useState<LandingSection>('home');
+
+  const getLandingSection = (h: string): LandingSection => {
+    if (h === '#product') return 'product';
+    if (h === '#features') return 'features';
+    if (h === '#use-cases') return 'use-cases';
+    if (h === '#faq') return 'faq';
+    if (h === '#pricing') return 'home'; // pricing scrolls into view on home
+    return 'home';
+  };
 
   useEffect(() => {
     if (activeFeature) setVisitedFeatures((prev) => new Set(prev).add(activeFeature));
@@ -86,18 +110,17 @@ function App() {
 
   useEffect(() => {
     loadScenarios();
-    const hash = window.location.hash;
-    if (hash === '#demo') setMode('demo');
-    else if (hash === '#console') setMode('console');
-
-    const handleHashChange = () => {
+    const updateFromHash = () => {
       const h = window.location.hash;
-      if (h === '#demo') setMode('demo');
-      else if (h === '#console') setMode('console');
-      else if (!h || h === '') setMode('landing');
+      if (h === '#demo') { setMode('demo'); return; }
+      if (h === '#console') { setMode('console'); return; }
+      if (h === '#login') { setMode('login'); return; }
+      setMode('landing');
+      setLandingSection(getLandingSection(h || ''));
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    updateFromHash();
+    window.addEventListener('hashchange', updateFromHash);
+    return () => window.removeEventListener('hashchange', updateFromHash);
   }, []);
 
   const loadScenarios = async () => {
@@ -413,6 +436,11 @@ function App() {
           {orchestrationResult && <AgentProgress agents={orchestrationResult.agents} />}
         </div>
       );
+    }
+
+    // Standalone tools — no incident analysis required
+    if (activeFeature === 'changeset') {
+      return <ChangeSetAnalysis backendOffline={backendOffline} />;
     }
 
     // No analysis yet — show scenario picker or AWS connect
@@ -824,17 +852,28 @@ function App() {
           />
         );
 
-      case 'attack-path':
+      case 'attack-path': {
+        const useNarrative = mode === 'demo' || !!orchestrationResult?.metadata?.quick_demo;
+        const isAIScenario = /shadow ai|llm|bedrock|prompt injection/i.test(orchestrationResult?.metadata?.incident_type || '');
+        if (useNarrative) {
+          return (
+            <AttackPathReactFlow
+              variant={isAIScenario ? 'ai' : 'standard'}
+              onNavigateToRemediation={() => setActiveFeature('remediation')}
+            />
+          );
+        }
         return (
           <AttackPathDiagram
             timeline={analysisResult.timeline}
             orchestrationResult={orchestrationResult}
             onNavigateToRemediation={() => setActiveFeature('remediation')}
-            useNarrativeDemoGraph={mode === 'demo' || !!orchestrationResult?.metadata?.quick_demo}
+            useNarrativeDemoGraph={false}
             eventsAnalyzed={(analysisResult as any)?.events_analyzed}
             timeRangeDays={(analysisResult as any)?.time_range_days}
           />
         );
+      }
 
       case 'compliance':
         return (
@@ -859,6 +898,21 @@ function App() {
           />
         );
 
+      case 'protocol':
+        return analysisResult ? (
+          <ProtocolAdherence
+            timeline={analysisResult.timeline}
+            remediationPlan={remediationPlan || orchestrationResult?.results?.remediation_plan}
+            documentation={documentationResult || orchestrationResult?.results?.documentation}
+            backendOffline={backendOffline}
+          />
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Run an analysis to see IR protocol adherence.</p>
+          </div>
+        );
+
       case 'remediation':
         return remediationPlan ? (
           <RemediationPlan
@@ -866,6 +920,7 @@ function App() {
             incidentId={orchestrationResult?.incident_id || analysisResult?.incident_id}
             incidentType={orchestrationResult?.metadata?.incident_type || analysisResult?.timeline?.attack_pattern || 'Security Incident'}
             rootCause={analysisResult?.timeline?.root_cause || orchestrationResult?.results?.timeline?.root_cause || 'Unknown'}
+            onNavigateToFeature={setActiveFeature}
             affectedResources={(() => {
               const tl = analysisResult?.timeline || orchestrationResult?.results?.timeline;
               const blast = tl?.blast_radius;
@@ -1048,7 +1103,13 @@ function App() {
         );
 
       case 'ai-pipeline':
-        return <AIPipelineSecurity />;
+        return <AIPipelineSecurity onNavigateToFeature={setActiveFeature} />;
+
+      case 'security-graph':
+        return <AISecurityGraph />;
+
+      case 'ai-compliance':
+        return <AICompliance />;
 
       case 'export':
         return analysisResult ? (
@@ -1077,6 +1138,32 @@ function App() {
     setSimulationScenarioId(null);
     if (id) handleSelectScenario(id);
   };
+
+  const handleLoginTryDemo = () => {
+    setMode('demo');
+    window.location.hash = '#demo';
+  };
+
+  const handleLoginConnectAWS = () => {
+    setMode('console');
+    window.location.hash = '#console';
+  };
+
+  const handleBackToHome = () => {
+    setMode('landing');
+    window.location.hash = '';
+  };
+
+  // ========== LOGIN PAGE (Premium gate) ==========
+  if (mode === 'login') {
+    return (
+      <LoginPage
+        onTryDemo={handleLoginTryDemo}
+        onConnectAWS={handleLoginConnectAWS}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
 
   // ========== DEMO or CONSOLE MODE ==========
   if (mode === 'demo' || mode === 'console') {
@@ -1115,9 +1202,9 @@ function App() {
                 />
               )}
               {analysisResult && (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg">
-                  <div className="w-2 h-2 rounded-full bg-slate-500" />
-                  <span className="text-xs font-bold text-slate-700">Analysis Complete</span>
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-emerald-700">Analysis Complete</span>
                 </div>
               )}
               {loading && (
@@ -1133,7 +1220,7 @@ function App() {
           {backendOffline && !error && (
             <div className="bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 mb-4 flex items-center gap-2">
               <span className="text-xs text-slate-600">
-                Demo mode — backend offline. Instant demo works. For full AI, start backend: <code className="bg-slate-200 px-1 rounded">cd backend && uvicorn main:app --reload</code>
+                Demo mode — backend offline. Instant demo works. For full AI, start backend: <code className="bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">cd backend && uvicorn main:app --reload</code>
               </span>
             </div>
           )}
@@ -1237,32 +1324,53 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2.5">
-              <NovaSentinelLogo size={30} animated={false} />
-              <span className="text-base font-bold text-slate-900">Nova Sentinel</span>
+              <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+                <NovaSentinelLogo size={30} animated={false} />
+                <span className="text-base font-bold text-slate-900">Nova Sentinel</span>
+              </a>
+              {landingSection !== 'home' && (
+                <a
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                  className="hidden sm:inline-flex items-center gap-1.5 ml-4 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Back to Home
+                </a>
+              )}
             </div>
 
             <div className="hidden md:flex items-center gap-6">
-              <a
-                href="https://github.com/bhavikam28/nova-sentinel"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                GitHub
+              <a href="#product" className={`text-sm font-medium transition-colors ${landingSection === 'product' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Product</a>
+              <a href="#features" className={`text-sm font-medium transition-colors ${landingSection === 'features' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Features</a>
+              <a href="#use-cases" className={`text-sm font-medium transition-colors ${landingSection === 'use-cases' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Use Cases</a>
+              <div className="relative">
+                <button
+                  onClick={() => setResourcesDropdownOpen(!resourcesDropdownOpen)}
+                  onBlur={() => setTimeout(() => setResourcesDropdownOpen(false), 150)}
+                  className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
+                >
+                  Resources
+                  <ChevronDown className={`w-4 h-4 transition-transform ${resourcesDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {resourcesDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-52 py-2 bg-white rounded-xl border border-slate-200 shadow-lg z-50">
+                    <a href="#faq" onClick={() => setResourcesDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">FAQ</a>
+                    <a href="https://github.com/bhavikam28/nova-sentinel#readme" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">Docs</a>
+                    <a href="https://github.com/bhavikam28/nova-sentinel" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">GitHub</a>
+                  </div>
+                )}
+              </div>
+              <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">Pricing</a>
+              <a href="#login" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
+                Sign In
               </a>
-              <button
-                onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
-                className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
-              >
-                Try Demo
-              </button>
-              <button
-                onClick={() => { setMode('console'); window.location.hash = '#console'; }}
+              <a
+                href="#login"
                 className="btn-nova px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors"
               >
-                Launch Console
-              </button>
+                Get Started
+              </a>
             </div>
 
             <button
@@ -1283,20 +1391,28 @@ function App() {
               className="md:hidden border-t border-slate-200 bg-white"
             >
               <div className="px-4 py-6 space-y-4">
-                <a href="https://github.com/bhavikam28/nova-sentinel" target="_blank" rel="noopener noreferrer" className="block text-slate-600 hover:text-slate-900 font-medium">GitHub</a>
+                {landingSection !== 'home' && (
+                  <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; setMobileMenuOpen(false); window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="flex items-center gap-2 text-indigo-600 font-medium">
+                    <Home className="w-4 h-4" />
+                    Back to Home
+                  </a>
+                )}
+                <a href="#product" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Product</a>
+                <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Features</a>
+                <a href="#use-cases" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Use Cases</a>
                 <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">FAQ</a>
-                <button
-                  onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
-                  className="block text-slate-600 hover:text-slate-900 font-medium w-full text-left"
+                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Pricing</a>
+                <a href="https://github.com/bhavikam28/nova-sentinel" target="_blank" rel="noopener noreferrer" className="block text-slate-600 hover:text-slate-900 font-medium">GitHub</a>
+                <a href="#login" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">
+                  Sign In
+                </a>
+                <a
+                  href="#login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block w-full btn-nova px-6 py-3 bg-indigo-600 text-white rounded-lg font-bold text-center"
                 >
-                  Try Demo
-                </button>
-                <button
-                  onClick={() => { setMode('console'); window.location.hash = '#console'; }}
-                  className="w-full btn-nova px-6 py-3 bg-indigo-600 text-white rounded-lg font-bold"
-                >
-                  Launch Console
-                </button>
+                  Get Started
+                </a>
               </div>
             </motion.div>
           )}
@@ -1305,28 +1421,79 @@ function App() {
 
       <LandingHero />
 
-      {/* Stats — premium white bar */}
-      <div className="flex justify-center gap-6 md:gap-10 py-10 bg-white border-y border-slate-200 px-4">
-        {[
-          { value: 'End-to-End', label: 'Detection to Resolution' },
-          { value: '5', label: 'Nova Models Orchestrated' },
-          { value: '22', label: 'MCP Tools Registered' },
-          { value: '$0.01', label: 'Per Incident Analysis' },
-          { value: '6', label: 'MITRE ATLAS Techniques' },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="text-center px-6 py-4 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all"
-          >
-            <div className="text-2xl font-bold text-slate-900 font-mono">{stat.value}</div>
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-1.5">{stat.label}</div>
+      {/* Content — home = full landing with key visuals; sub-pages = detailed content */}
+      {landingSection === 'home' && (
+        <>
+          <StatsCards />
+          {/* Key visuals ON landing: Pipeline, Attack Path, MCP, Dashboard */}
+          <FeaturesSection />
+          {/* Quick links to deeper content */}
+          <div className="py-10 bg-slate-50/50 border-y border-slate-200">
+            <div className="max-w-4xl mx-auto px-4 text-center">
+              <p className="text-sm text-slate-600 mb-4">Explore more</p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <a href="#product" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Product</a>
+                <a href="#features" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Features</a>
+                <a href="#use-cases" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Use Cases</a>
+                <a href="#faq" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">FAQ</a>
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
-      <FeaturesSection />
-      <NovaModelsSection />
-      <UnderTheHoodSection />
+      {landingSection === 'product' && (
+        <div id="product">
+          <div className="pt-4 pb-2 flex justify-center">
+            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </a>
+          </div>
+          <PlatformFeaturesSection />
+        </div>
+      )}
+
+      {landingSection === 'features' && (
+        <div id="features">
+          <div className="pt-4 pb-2 flex justify-center">
+            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </a>
+          </div>
+          <FeaturesSection />
+        </div>
+      )}
+
+      {landingSection === 'use-cases' && (
+        <div id="use-cases">
+          <div className="pt-4 pb-2 flex justify-center">
+            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </a>
+          </div>
+          <UseCasesSection />
+        </div>
+      )}
+
+      {landingSection === 'faq' && (
+        <div id="faq">
+          <div className="pt-4 pb-2 flex justify-center">
+            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </a>
+          </div>
+          <FAQSection />
+        </div>
+      )}
+
+      {/* Home-only: Pricing + CTA */}
+      {landingSection === 'home' && (
+        <>
+          <PricingSection />
 
       {/* CTA — premium */}
       <section className="py-28 bg-gradient-to-b from-slate-50 to-white border-t border-slate-200 relative overflow-hidden" id="cta">
@@ -1362,6 +1529,8 @@ function App() {
       </section>
 
       <FAQSection />
+        </>
+      )}
 
       <footer className="bg-white border-t border-slate-200 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1370,8 +1539,8 @@ function App() {
               <NovaSentinelLogo size={28} animated={false} />
               <span className="text-base font-bold text-slate-900">Nova Sentinel</span>
             </div>
-            <p className="text-sm text-slate-500 text-center mb-4">
-              Autonomous Security Incident Response Powered by Amazon Nova
+            <p className="text-sm text-slate-500 text-center mb-4 max-w-xl">
+              Multi-agent orchestration, CloudTrail analysis, MITRE ATLAS, Bedrock Guardrails, threat intel, compliance mapping, and automated remediation — powered by 5 Nova models and 5 AWS MCP servers.
             </p>
             <div className="flex gap-4 text-xs text-slate-500">
               <span>#AmazonNova</span>
@@ -1383,6 +1552,8 @@ function App() {
           </div>
         </div>
       </footer>
+
+      <ScrollToTop />
     </div>
   );
 }

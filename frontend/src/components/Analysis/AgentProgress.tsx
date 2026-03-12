@@ -35,7 +35,7 @@ const AgentProgress: React.FC<AgentProgressProps> = ({ agents }) => {
 
   const agentConfig = [
     { id: 'temporal', name: 'Temporal Analysis', model: 'Nova 2 Lite', icon: Timer, status: agents.temporal?.status || 'PENDING', desc: 'Builds incident timeline from CloudTrail. Identifies root cause, attack pattern, and blast radius.', iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },
-    { id: 'visual', name: 'Visual Analysis', model: 'Nova Pro', icon: ImageIcon, status: visualStatus, desc: 'Maps affected resources into a security visualization. Highlights compromised vs at-risk assets.', iconBg: 'bg-violet-100', iconColor: 'text-violet-600' },
+    { id: 'visual', name: 'Architecture & STRIDE', model: 'Nova Pro', icon: ImageIcon, status: visualStatus, desc: 'Maps affected resources into a security visualization. STRIDE threat model from diagrams.', iconBg: 'bg-violet-100', iconColor: 'text-violet-600' },
     { id: 'risk_scorer', name: 'Risk Scoring', model: 'Nova Micro', icon: Gauge, status: agents.risk_scorer?.status || 'PENDING', desc: 'Assigns severity and MITRE ATT&CK technique IDs to each event.', iconBg: 'bg-amber-100', iconColor: 'text-amber-600' },
     { id: 'remediation', name: 'Remediation', model: 'Nova 2 Lite', icon: Wrench, status: agents.remediation?.status || 'PENDING', desc: 'Generates step-by-step remediation plan with AWS CLI commands.', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
     { id: 'documentation', name: 'Documentation', model: 'Nova 2 Lite', icon: BookOpen, status: agents.documentation?.status || 'PENDING', desc: 'Creates JIRA tickets, Slack alerts, and Confluence post-incident reports.', iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },

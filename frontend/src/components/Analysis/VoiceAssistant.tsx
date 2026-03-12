@@ -201,6 +201,9 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [useNovaSonic, setUseNovaSonic] = useState(false);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -229,57 +232,6 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
       }]);
     }
   }, [isOpen]);
-
-  // Start speech recognition
-  const startListening = useCallback(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results)
-        .map((result: any) => result[0].transcript)
-        .join('');
-      
-      setInputText(transcript);
-      
-      // If final result, submit
-      if (event.results[event.results.length - 1].isFinal) {
-        handleSubmit(transcript);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [incidentContext]);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
-  }, []);
 
   // Get a female voice from available voices
   const getFemaleVoice = useCallback(() => {
@@ -358,6 +310,145 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     setIsSpeaking(false);
   }, []);
 
+  // Submit query to backend (defined early — referenced by startListening)
+  const handleSubmit = useCallback(async (text?: string) => {
+    const query = text ?? inputText;
+    if (!query.trim()) return;
+    const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: 'user', text: query.trim(), timestamp: new Date() };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputText('');
+    setIsProcessing(true);
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const data = await voiceAPI.query(query.trim(), incidentContext || null);
+        const responseText = data.response_text || '';
+        if (attempt < maxRetries && (responseText.includes('encountered an error') || responseText.includes('encountered an issue') || responseText.length < 10 || data.error)) continue;
+        const assistantMessage: ChatMessage = {
+          id: `assistant-${Date.now()}`, role: 'assistant',
+          text: responseText || data.detail || 'Let me try to help with that. Could you rephrase your question?',
+          action: data.action, severity: data.severity_assessment, suggestions: data.follow_up_suggestions,
+          timestamp: new Date(), processingTime: data.processing_time_ms,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        if (speechEnabled && responseText) speak(responseText);
+        setIsProcessing(false);
+        return;
+      } catch {
+        if (attempt < maxRetries) continue;
+      }
+    }
+    const demoResponse = getDemoResponse(query.trim(), incidentContext);
+    if (demoResponse) {
+      setMessages((prev) => [...prev, { id: `assistant-${Date.now()}`, role: 'assistant', text: demoResponse, timestamp: new Date() }]);
+      if (speechEnabled) speak(demoResponse);
+    } else {
+      setMessages((prev) => [...prev, {
+        id: `error-${Date.now()}`, role: 'assistant',
+        text: 'I had trouble processing that. Could you rephrase your question?',
+        timestamp: new Date(), suggestions: ['What is the root cause?', 'Explain the attack pattern', 'Show remediation steps'],
+      }]);
+    }
+    setIsProcessing(false);
+  }, [inputText, incidentContext, speechEnabled, speak]);
+
+  // Nova Sonic: record audio and send to backend (speech-to-speech)
+  const startNovaSonicRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const b64 = (reader.result as string).split(',')[1];
+          if (!b64) return;
+          setIsProcessing(true);
+          try {
+            const data = await voiceAPI.audioQuery(b64, 'webm', incidentContext || null);
+            const responseText = data.response_text || '';
+            const msg: ChatMessage = {
+              id: `assistant-${Date.now()}`,
+              role: 'assistant',
+              text: responseText,
+              timestamp: new Date(),
+              processingTime: data.processing_time_ms,
+            };
+            setMessages((prev) => [...prev, msg]);
+            if (data.audio_response_b64 && speechEnabled) {
+              const audio = new Audio(`data:audio/mpeg;base64,${data.audio_response_b64}`);
+              audio.onplay = () => setIsSpeaking(true);
+              audio.onended = () => setIsSpeaking(false);
+              audio.play().catch(() => speak(responseText));
+            } else if (speechEnabled && responseText) {
+              speak(responseText);
+            }
+          } catch {
+            setMessages((prev) => [...prev, { id: `err-${Date.now()}`, role: 'assistant', text: 'Nova Sonic unavailable. Try text mode.', timestamp: new Date() }]);
+          } finally {
+            setIsProcessing(false);
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsListening(true);
+    } catch (e) {
+      console.error('Nova Sonic recording failed:', e);
+      setIsListening(false);
+    }
+  }, [incidentContext, speechEnabled, speak]);
+
+  const stopNovaSonicRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    setIsListening(false);
+  }, []);
+
+  // Start speech recognition (browser STT) or Nova Sonic recording
+  const startListening = useCallback(() => {
+    if (useNovaSonic) {
+      startNovaSonicRecording();
+      return;
+    }
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results).map((result: any) => result[0].transcript).join('');
+      setInputText(transcript);
+      if (event.results[event.results.length - 1].isFinal) handleSubmit(transcript);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [incidentContext, useNovaSonic, startNovaSonicRecording, handleSubmit]);
+
+  const stopListening = useCallback(() => {
+    if (useNovaSonic) {
+      stopNovaSonicRecording();
+      return;
+    }
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  }, [useNovaSonic, stopNovaSonicRecording]);
+
   // Brief Me — generate and speak narrative from timeline (no backend)
   const handleBriefMe = useCallback(() => {
     const narrative = buildBriefMeNarrative(incidentContext);
@@ -370,87 +461,6 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
     setMessages(prev => [...prev, msg]);
     if (speechEnabled) speak(narrative);
   }, [incidentContext, speechEnabled, speak]);
-
-  // Submit query to backend
-  const handleSubmit = async (text?: string) => {
-    const query = text || inputText;
-    if (!query.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      text: query.trim(),
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
-    setIsProcessing(true);
-
-    const maxRetries = 2;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const data = await voiceAPI.query(query.trim(), incidentContext || null);
-        
-        // Check if response indicates an error/empty response — retry if so
-        const responseText = data.response_text || '';
-        if (attempt < maxRetries && (
-          responseText.includes('encountered an error') || 
-          responseText.includes('encountered an issue') ||
-          responseText.length < 10 ||
-          data.error
-        )) {
-          continue; // Retry
-        }
-        
-        const assistantMessage: ChatMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          text: responseText || data.detail || 'Let me try to help with that. Could you rephrase your question?',
-          action: data.action,
-          severity: data.severity_assessment,
-          suggestions: data.follow_up_suggestions,
-          timestamp: new Date(),
-          processingTime: data.processing_time_ms
-        };
-
-        setMessages(prev => [...prev, assistantMessage]);
-        
-        // Speak the response
-        if (speechEnabled && responseText) {
-          speak(responseText);
-        }
-        setIsProcessing(false);
-        return; // Success — exit
-      } catch (err) {
-        if (attempt < maxRetries) continue; // Retry on network error
-      }
-    }
-
-    // All retries exhausted — try demo fallback
-    const demoResponse = getDemoResponse(query.trim(), incidentContext);
-    if (demoResponse) {
-      const assistantMessage: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        text: demoResponse,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      if (speechEnabled) speak(demoResponse);
-    } else {
-      const errorMessage: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        text: 'I had trouble processing that. Could you try rephrasing your question? For example, ask about "the attack pattern" or "remediation steps".',
-        timestamp: new Date(),
-        suggestions: ['What is the root cause?', 'Explain the attack pattern', 'Show remediation steps']
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    }
-    setIsProcessing(false);
-  };
 
   // Handle suggestion click
   const handleSuggestion = (suggestion: string) => {
@@ -527,7 +537,9 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Aria</h3>
-                  <p className="text-[10px] text-white/70" title="Nova 2 Lite for NLU + browser speech synthesis. Nova Sonic: integration-ready (WebSocket streaming).">Nova 2 Lite + browser TTS</p>
+                  <p className="text-[10px] text-white/70">
+                    {useNovaSonic ? 'Nova Sonic (speech-to-speech)' : 'Nova 2 Lite + browser TTS'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -552,6 +564,13 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete }: Voi
                   ) : (
                     <ChevronUp className="w-4 h-4 text-white/80" />
                   )}
+                </button>
+                <button
+                  onClick={() => setUseNovaSonic(!useNovaSonic)}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${useNovaSonic ? 'bg-white/30 text-white' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+                  title={useNovaSonic ? 'Nova Sonic: speech-to-speech (click to switch to text mode)' : 'Click for Nova Sonic speech-to-speech'}
+                >
+                  Sonic
                 </button>
                 <button
                   onClick={() => setSpeechEnabled(!speechEnabled)}

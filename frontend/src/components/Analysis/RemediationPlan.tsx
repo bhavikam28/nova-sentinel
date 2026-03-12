@@ -5,9 +5,10 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, CheckCircle2, AlertTriangle, ChevronDown,
-  ChevronUp, Play, Clock, Terminal, Copy, Brain, FileText, Zap, ExternalLink
+  ChevronUp, Play, Clock, Terminal, Copy, Brain, FileText, Zap, ExternalLink,
+  BookOpen, Lock
 } from 'lucide-react';
-import { remediationAPI, novaActAPI } from '../../services/api';
+import { remediationAPI, novaActAPI, rubricAPI, healthCheck } from '../../services/api';
 
 function ProofCloudTrail({ event }: { event: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(false);
@@ -56,13 +57,29 @@ interface RemediationPlanProps {
   onApprove?: (plan: RemediationPlanData) => void;
   onExecute?: (stepIndex: number) => void;
   executing?: boolean;
+  /** Navigate to another feature (e.g. AI Compliance when AI incident) */
+  onNavigateToFeature?: (featureId: string) => void;
 }
 
 type StepStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
+/** Detect AI-related incidents (Bedrock, prompt injection, bias, LLM, shadow AI) */
+function isAIIncident(incidentType?: string, rootCause?: string): boolean {
+  const text = `${incidentType || ''} ${rootCause || ''}`.toLowerCase();
+  return /bedrock|prompt injection|bias|llm|shadow ai|model drift|hallucination|jailbreak|ai security/i.test(text);
+}
+
+/** AI-specific remediation steps injected when incident is AI-related */
+const AI_INCIDENT_STEPS = [
+  { order: 1, action: 'Validate Bedrock Guardrails configuration', target: 'Bedrock Guardrails', reason: 'Ensure guardrails were not bypassed. Check content filters, PII redaction, and denied topics.', risk: 'HIGH' as const, classification: 'APPROVAL' as const, api_call: 'aws bedrock get-guardrail --guardrail-identifier <id> --guardrail-version <ver> --region us-east-1' },
+  { order: 2, action: 'Run bias assessment on affected model outputs', target: 'Bedrock model / inference logs', reason: 'AI incidents may involve discriminatory or biased outputs. Assess fairness metrics before remediation.', risk: 'HIGH' as const, classification: 'APPROVAL' as const, api_call: 'aws bedrock list-foundation-models --region us-east-1' },
+  { order: 3, action: 'Check regulatory escalation (EU AI Act, etc.)', target: 'Compliance team', reason: 'High-risk AI systems may require notification to regulators under EU AI Act or similar frameworks.', risk: 'MEDIUM' as const, classification: 'MANUAL' as const },
+  { order: 4, action: 'Recommend model retraining or validation', target: 'MLOps / Model registry', reason: 'If bias or prompt injection was exploited, validate or retrain the model with updated guardrails.', risk: 'MEDIUM' as const, classification: 'MANUAL' as const },
+];
+
 const RemediationPlan: React.FC<RemediationPlanProps> = ({
   plan, incidentId, incidentType = 'Security Incident', rootCause = 'Unknown', affectedResources = [], demoMode = false,
-  onApprove, onExecute, executing = false
+  onApprove, onExecute, executing = false, onNavigateToFeature
 }) => {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const [approved, setApproved] = useState(false);
@@ -71,6 +88,8 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
   const [novaActPlan, setNovaActPlan] = useState<any>(null);
   const [novaActLoading, setNovaActLoading] = useState(false);
   const [novaActExpanded, setNovaActExpanded] = useState(false);
+  const [rubricScore, setRubricScore] = useState<{ overall_score: number; summary: string } | null>(null);
+  const [rubricLoading, setRubricLoading] = useState(false);
 
   const toggleStep = (step: number) => {
     const newExpanded = new Set(expandedSteps);
@@ -128,8 +147,10 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
     else if (Array.isArray(plan)) { steps = plan; }
   }
 
+  const isAI = isAIIncident(incidentType, rootCause);
+  const allSteps = isAI ? [...AI_INCIDENT_STEPS, ...steps.map((s: any, i: number) => ({ ...s, order: (s.order ?? s.step_number ?? i + 1) + AI_INCIDENT_STEPS.length }))] : steps;
   const completedCount = Object.values(stepStatuses).filter(s => s === 'completed').length;
-  const progressPct = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+  const progressPct = allSteps.length > 0 ? Math.round((completedCount / allSteps.length) * 100) : 0;
 
   if (!plan || steps.length === 0) {
     return (
@@ -148,8 +169,8 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
       <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm flex-shrink-0">
-              <Shield className="w-4.5 h-4.5 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+              <Shield className="w-4.5 h-4.5 text-indigo-600" />
             </div>
             <div>
             <div className="flex items-center gap-3 flex-wrap">
@@ -160,10 +181,60 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
                 <Brain className="w-3 h-3" /> Generated by RemediationAgent (Nova 2 Lite)
               </span>
+              {rubricScore && (
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                  rubricScore.overall_score >= 70 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                  rubricScore.overall_score >= 50 ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                  'bg-red-100 text-red-700 border-red-200'
+                }`} title={rubricScore.summary}>
+                  Quality: {rubricScore.overall_score}%
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-500 mt-1">{steps.length} remediation steps</p>
+            <p className="text-xs text-slate-500 mt-1">{allSteps.length} remediation steps{isAI ? ' (incl. AI-specific)' : ''}</p>
             </div>
           </div>
+        {steps.some((s: any) => {
+          const t = `${(s.action || '')} ${(s.target || '')}`.toLowerCase();
+          return t.includes('iam') || t.includes('role') || t.includes('policy') || t.includes('permission');
+        }) && (
+          <a href="https://aegis-iam.vercel.app/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300">
+            <ExternalLink className="w-3.5 h-3.5" /> Analyze IAM with Aegis IAM
+          </a>
+        )}
+        {isAI && onNavigateToFeature && (
+          <button
+            type="button"
+            onClick={() => onNavigateToFeature('ai-compliance')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-violet-100 hover:bg-violet-200 text-violet-700 border border-violet-300"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> AI Compliance (EU AI Act, OWASP LLM)
+          </button>
+        )}
+        {!rubricScore && (
+          <button
+            type="button"
+            onClick={async () => {
+              setRubricLoading(true);
+              setRubricScore(null);
+              try {
+                const ok = await healthCheck();
+                if (ok) {
+                  const res = await rubricAPI.evaluatePlan(plan);
+                  setRubricScore({ overall_score: res.overall_score, summary: res.summary || '' });
+                }
+              } catch {
+                setRubricScore({ overall_score: 0, summary: 'Backend offline.' });
+              } finally {
+                setRubricLoading(false);
+              }
+            }}
+            disabled={rubricLoading}
+            className="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 disabled:opacity-70"
+          >
+            {rubricLoading ? 'Evaluating...' : 'Evaluate Quality'}
+          </button>
+        )}
         {!approved && onApprove ? (
           <button
             onClick={handleApprove}
@@ -179,6 +250,32 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
         ) : null}
         </div>
 
+        {/* AI Incident — Restore Order Flow */}
+        {isAI && (
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="flex items-center gap-2 mb-3">
+              <Brain className="w-3.5 h-3.5 text-violet-600" />
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">AI Incident — Restore Order</span>
+            </div>
+            <div className="flex items-center flex-wrap gap-2">
+              {[
+                { id: 'containment', label: 'Containment', icon: Lock },
+                { id: 'investigation', label: 'Investigation', icon: FileText },
+                { id: 'remediation', label: 'Remediation', icon: Shield },
+                { id: 'documentation', label: 'Documentation', icon: BookOpen },
+              ].map((phase, i) => (
+                <div key={phase.id} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="text-slate-300">→</span>}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 border border-violet-200">
+                    <phase.icon className="w-3 h-3 text-violet-600" />
+                    <span className="text-[10px] font-bold text-violet-800">{phase.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Execution Timeline */}
         <div className="mt-4 pt-4 border-t border-slate-200">
           <div className="flex items-center gap-2 mb-3">
@@ -186,12 +283,12 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
           </div>
           <div className="flex items-center">
             {[
-              { id: 'plan', label: 'Plan', done: steps.length > 0, icon: FileText },
+              { id: 'plan', label: 'Plan', done: allSteps.length > 0, icon: FileText },
               { id: 'approved', label: 'Approved', done: approved, icon: CheckCircle2 },
               { id: 'executed', label: Object.keys(stepProofs).length > 0 ? 'Executed' : 'Awaiting', done: Object.keys(stepProofs).length > 0, icon: Play },
             ].map((phase, i) => {
               const Icon = phase.icon;
-              const prevPhaseDone = i === 0 ? true : [steps.length > 0, approved, Object.keys(stepProofs).length > 0][i - 1];
+              const prevPhaseDone = i === 0 ? true : [allSteps.length > 0, approved, Object.keys(stepProofs).length > 0][i - 1];
               return (
                 <React.Fragment key={phase.id}>
                   {i > 0 && <div className={`w-12 sm:w-16 h-0.5 ${prevPhaseDone ? 'bg-emerald-300' : 'bg-slate-200'}`} />}
@@ -321,9 +418,9 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
         </div>
       </div>
 
-      {/* Steps - preserve order */}
+      {/* Steps - preserve order (AI steps first when applicable) */}
       <div className="p-6 space-y-2">
-        {[...steps].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)).map((step: any, index: number) => {
+        {[...allSteps].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)).map((step: any, index: number) => {
           const stepNumber = (step.order ?? index + 1);
           const action = step.action || step.command || step.description || 'Remediation Action';
           const target = step.target || step.resource || step.resource_name;

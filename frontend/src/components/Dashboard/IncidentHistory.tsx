@@ -32,8 +32,8 @@ interface IncidentHistoryProps {
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
-  CRITICAL: 'bg-red-100 text-red-700',
-  HIGH: 'bg-orange-100 text-orange-700',
+  CRITICAL: 'bg-slate-100 text-slate-800',
+  HIGH: 'bg-slate-100 text-slate-700',
   MEDIUM: 'bg-amber-100 text-amber-700',
   LOW: 'bg-emerald-100 text-emerald-700',
 };
@@ -117,8 +117,8 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
         <div className="p-5 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
-              <Database className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center">
+              <Database className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">Cross-Incident Memory</h2>

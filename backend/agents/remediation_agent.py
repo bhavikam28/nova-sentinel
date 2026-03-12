@@ -51,6 +51,19 @@ class RemediationAgent:
                 for event in timeline_events[:10]  # Limit to first 10 events
             ])
             
+            # Detect AI-related incidents — add AI-specific remediation steps
+            incident_type = str(incident_analysis.get("incident_type", "") or attack_pattern or "").lower()
+            is_ai_incident = any(
+                k in incident_type for k in ("bedrock", "prompt injection", "bias", "llm", "shadow ai", "model drift", "hallucination", "jailbreak", "ai security")
+            )
+            ai_incident_note = ""
+            if is_ai_incident:
+                ai_incident_note = """
+IMPORTANT: This is an AI-related security incident (Bedrock, LLM, prompt injection, bias, etc.).
+- Include steps for: (1) bias assessment on affected model outputs, (2) regulatory escalation check (EU AI Act), (3) model retraining or validation recommendation.
+- Order: AI-specific steps first, then standard remediation.
+"""
+            
             # Detect AWS service principals — avoid irrelevant steps like "Rotate all IAM credentials"
             actors = [str(e.get('actor', '')).lower() for e in timeline_events]
             has_aws_service = any('.amazonaws.com' in a for a in actors)
@@ -69,6 +82,7 @@ INCIDENT DETAILS:
 Root Cause: {root_cause}
 Attack Pattern: {attack_pattern}
 Blast Radius: {blast_radius}
+{ai_incident_note}
 {aws_service_note}
 TIMELINE EVENTS:
 {events_summary}

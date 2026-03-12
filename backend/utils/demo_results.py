@@ -161,9 +161,9 @@ def _build_demo_documentation(incident_id: str, incident_type: str, scenario: Di
     steps = scenario.get("remediation", {}).get("steps", [])
     step_list = "\n".join(f"- {s.get('action', 'Unknown')} ({s.get('severity', 'MEDIUM')})" for s in steps) or "- Review incident and remediate"
     event_lines = "\n".join(
-        f"{i + 1}. {e.get('timestamp', '')} - {e.get('action', 'Event')} ({e.get('severity', 'N/A')})"
+        f"* {e.get('timestamp', 'N/A')} — {e.get('action', 'Event')} (Severity: {e.get('severity', 'N/A')})"
         for i, e in enumerate(events[:8])
-    ) or "No events"
+    ) or "No events recorded"
     return {
         "documentation": {
             "jira": {
@@ -185,31 +185,51 @@ def _build_demo_documentation(incident_id: str, incident_type: str, scenario: Di
 **Assignee:** Security Team""",
             },
             "slack": {
-                "title": "Security Alert",
-                "content": f"""🚨 *Security Incident* `{incident_id}`
-Post to #security-incidents
+                "title": "Security Incident Report",
+                "content": f"""*Security Incident Report — {incident_id}*
 
-*Root Cause:* {root_cause[:200]}{'...' if len(root_cause) > 200 else ''}
-*Remediation:* {len(steps)} steps
+*Classification:* Critical
+*Channel:* #security-incidents
+
+*Executive Summary*
+{root_cause[:280]}{'…' if len(root_cause) > 280 else ''}
+
+*Incident Type:* {incident_type}
+
+*Attack Pattern*
+{attack_pattern[:180]}{'…' if len(attack_pattern) > 180 else ''}
+
+*Blast Radius*
+{blast_radius[:150]}{'…' if len(blast_radius) > 150 else ''}
+
+*Remediation*
+{len(steps)} steps identified. Full details in Nova Sentinel.
+
+*Link*
 <https://nova-sentinel.app/incidents/{incident_id}|View in Nova Sentinel>""",
             },
             "confluence": {
                 "title": f"Incident Postmortem: {incident_id}",
-                "content": f"""= Incident Postmortem: {incident_id} =
+                "content": f"""h1. Incident Postmortem: {incident_id}
 
-h3. Timeline
+h2. Executive Summary
+Security incident {incident_id} was identified and analyzed. Root cause: {root_cause[:120]}{'…' if len(root_cause) > 120 else ''}
+
+h2. Timeline
 {event_lines}
 
-h3. Impact Analysis
+h2. Impact Analysis
 *Blast Radius:* {blast_radius}
+*Attack Pattern:* {attack_pattern}
 
-h3. Remediation
+h2. Remediation Steps
 {step_list}
 
-h3. Lessons Learned
-- Review least privilege for contractor/external roles
-- Enforce MFA for sensitive operations
-- Monitor security group changes""",
+h2. Lessons Learned
+* Review least privilege for contractor and external roles
+* Enforce MFA for sensitive operations
+* Monitor security group and IAM policy changes
+* Document incident timeline for audit trail""",
             },
         }
     }

@@ -9,8 +9,12 @@ import {
   Eye, Brain, Zap, Mic, FileText, Shield,
   Network, Target, Lock, Cpu, BarChart3
 } from 'lucide-react';
+import {
+  IconCloudTrail, IconIAM, IconCloudWatch, IconSecurityHub, IconNovaCanvas,
+} from '../ui/MinimalIcons';
 import NovaFlowDiagram from '../Visualizations/NovaFlowDiagram';
 import AttackPathVisualization from '../Visualizations/AttackPathVisualization';
+import DashboardPreview from './DashboardPreview';
 
 const FeaturesSection: React.FC = () => {
   return (
@@ -51,9 +55,9 @@ const FeaturesSection: React.FC = () => {
                   </div>
                   <span className="px-2.5 py-1 bg-white/10 border border-white/20 rounded-full text-[10px] font-bold">Nova Pro</span>
                 </div>
-                <h3 className="text-lg font-bold mb-2">Visual Architecture Analysis</h3>
+                <h3 className="text-lg font-bold mb-2">Architecture & STRIDE</h3>
                 <p className="text-blue-100 text-sm leading-relaxed mb-4 flex-1">
-                  Upload architecture diagrams — Nova Pro identifies misconfigurations, open ports, and IAM issues in seconds.
+                  Upload architecture diagrams — Nova Pro identifies misconfigurations and generates STRIDE threat models in seconds.
                 </p>
                 <div className="flex gap-5">
                   <div><div className="text-xl font-bold">50+</div><div className="text-[10px] text-blue-200">Check types</div></div>
@@ -350,45 +354,37 @@ const FeaturesSection: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {[
-              { name: 'CloudTrail MCP', source: 'awslabs/mcp pattern', tools: ['Event Lookup', 'Trail Status', 'Anomaly Scan'],
-                color: 'from-orange-500 to-amber-600', bgColor: 'bg-orange-50 border-orange-200 text-orange-600',
-                textColor: 'text-orange-600', description: 'Security event analysis and real-time anomaly detection across your AWS environment' },
-              { name: 'IAM MCP', source: 'awslabs/mcp pattern', tools: ['User Audit', 'Role Audit', 'Policy Analysis', 'Account Summary'],
-                color: 'from-blue-500 to-indigo-600', bgColor: 'bg-blue-50 border-blue-200 text-blue-600',
-                textColor: 'text-blue-600', description: 'IAM security auditing — MFA compliance, access key rotation, admin access detection' },
-              { name: 'CloudWatch MCP', source: 'awslabs/mcp pattern', tools: ['Security Alarms', 'API Metrics', 'EC2 Security', 'Billing Anomalies'],
-                color: 'from-emerald-500 to-teal-600', bgColor: 'bg-emerald-50 border-emerald-200 text-emerald-600',
-                textColor: 'text-emerald-600', description: 'Monitoring crypto-mining, data exfiltration, and billing anomalies via CloudWatch metrics' },
-              { name: 'Security Hub MCP', source: 'awslabs/mcp pattern', tools: ['Findings', 'GuardDuty', 'Inspector', 'Pre-correlation'],
-                color: 'from-amber-500 to-orange-600', bgColor: 'bg-amber-50 border-amber-200 text-amber-600',
-                textColor: 'text-amber-600', description: 'Security Hub findings — GuardDuty, Inspector, and pre-correlated security events' },
-              { name: 'Nova Canvas MCP', source: 'awslabs/mcp official', tools: ['Image Generation', 'Report Covers', 'Attack Path Visuals'],
-                color: 'from-violet-500 to-purple-600', bgColor: 'bg-violet-50 border-violet-200 text-violet-600',
-                textColor: 'text-violet-600', description: 'Visual report generation using Amazon Nova Canvas — incident covers and diagrams' },
-            ].map((server, i) => (
+              { name: 'CloudTrail MCP', source: 'awslabs/mcp pattern', tools: ['Event Lookup', 'Trail Status', 'Anomaly Scan'], description: 'Security event analysis and real-time anomaly detection across your AWS environment', icon: IconCloudTrail },
+              { name: 'IAM MCP', source: 'awslabs/mcp pattern', tools: ['User Audit', 'Role Audit', 'Policy Analysis', 'Account Summary'], description: 'IAM security auditing — MFA compliance, access key rotation, admin access detection', icon: IconIAM },
+              { name: 'CloudWatch MCP', source: 'awslabs/mcp pattern', tools: ['Security Alarms', 'API Metrics', 'EC2 Security', 'Billing Anomalies'], description: 'Monitoring crypto-mining, data exfiltration, and billing anomalies via CloudWatch metrics', icon: IconCloudWatch },
+              { name: 'Security Hub MCP', source: 'awslabs/mcp pattern', tools: ['Findings', 'GuardDuty', 'Inspector', 'Pre-correlation'], description: 'Security Hub findings — GuardDuty, Inspector, and pre-correlated security events', icon: IconSecurityHub },
+              { name: 'Nova Canvas MCP', source: 'awslabs/mcp official', tools: ['Image Generation', 'Report Covers', 'Attack Path Visuals'], description: 'Visual report generation using Amazon Nova Canvas — incident covers and diagrams', icon: IconNovaCanvas },
+            ].map((server, i) => {
+              const Icon = server.icon;
+              return (
               <motion.div
                 key={server.name}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
-                className="relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-5 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all group"
+                className="relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-5 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all group"
               >
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${server.color} flex items-center justify-center shadow-md mb-3`}>
-                  <Network className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center mb-3">
+                  <Icon className="w-5 h-5 text-indigo-600" />
                 </div>
                 <h4 className="font-bold text-slate-900 text-sm mb-0.5">{server.name}</h4>
-                <p className={`text-[10px] font-semibold ${server.textColor} mb-2`}>{server.source}</p>
+                <p className="text-[10px] font-semibold text-slate-500 mb-2">{server.source}</p>
                 <p className="text-xs text-slate-600 mb-3 leading-relaxed">{server.description}</p>
                 <div className="flex flex-wrap gap-1">
                   {server.tools.map((tool) => (
-                    <span key={tool} className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border ${server.bgColor}`}>
+                    <span key={tool} className="px-2 py-0.5 text-[10px] font-semibold rounded-lg bg-slate-50 border border-slate-200 text-slate-600">
                       {tool}
                     </span>
                   ))}
                 </div>
               </motion.div>
-            ))}
+            );})}
           </div>
 
           <motion.div
@@ -414,28 +410,40 @@ const FeaturesSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Dashboard at a Glance */}
-      <div className="py-16 bg-white border-t border-slate-200" id="demo">
+      {/* Dashboard Preview — Seddle-style embedded screenshot */}
+      <div className="py-20 bg-gradient-to-b from-slate-50 to-white border-t border-slate-200" id="demo">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-10"
+            className="text-center mb-12"
           >
-            <h2 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-2 tracking-tight">
+            <div className="text-[11px] font-semibold text-indigo-600 uppercase tracking-[0.2em] mb-3">
+              Premium Console
+            </div>
+            <h2 className="text-2xl lg:text-4xl font-bold text-slate-900 mb-3 tracking-tight">
               Inside the Console
             </h2>
-            <p className="text-slate-600 text-sm max-w-lg mx-auto">
+            <p className="text-slate-600 text-base max-w-xl mx-auto">
               Timeline · Attack Path · Remediation · AI Pipeline Security · Incident History — same premium experience for Demo & Real AWS
             </p>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="max-w-4xl mx-auto"
+          >
+            <DashboardPreview />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: 0.1 }}
-            className="flex flex-wrap justify-center gap-3"
+            transition={{ delay: 0.2 }}
+            className="mt-8 flex flex-wrap justify-center gap-3"
           >
             {['Timeline', 'Attack Path', 'Compliance', 'Cost Impact', 'Remediation', 'AI Pipeline', 'Incident History'].map((label) => (
               <span

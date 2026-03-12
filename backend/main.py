@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 
-from api import analysis, demo, visual, remediation, voice, orchestration, storage, documentation, auth, mcp, nova_act, incident_history, ai_security, threat_intel, report
+from api import analysis, demo, visual, remediation, voice, orchestration, storage, documentation, auth, mcp, nova_act, incident_history, ai_security, threat_intel, report, changeset, rubric, protocol
 from utils.config import get_settings
 from utils.logger import logger
 
@@ -156,6 +156,9 @@ app.include_router(incident_history.router)
 app.include_router(ai_security.router)
 app.include_router(threat_intel.router)
 app.include_router(report.router)
+app.include_router(changeset.router)
+app.include_router(rubric.router)
+app.include_router(protocol.router)
 
 # Mount MCP SSE endpoint for standard MCP clients
 # This provides a standards-compliant MCP interface alongside our REST API

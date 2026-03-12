@@ -167,23 +167,48 @@ ${remediation_steps.map((s) => `${s.order}. ${s.action}`).join("\n")}
 
 **Assignee:** [Security Team]`;
 
-  const slackContent = `🚨 *Security Incident* \`${incidentId}\`
-*Type:* ${incident_type}
-*Root Cause:* ${(timeline.root_cause || "").substring(0, 120)}...
-*Remediation:* ${remediation_steps.length} steps
+  const slackContent = `*Security Incident Report — ${incidentId}*
+
+*Classification:* Critical
+*Channel:* #security-incidents
+
+*Executive Summary*
+${(timeline.root_cause || "").substring(0, 280)}${(timeline.root_cause || "").length > 280 ? "…" : ""}
+
+*Incident Type:* ${incident_type}
+
+*Attack Pattern*
+${(timeline.attack_pattern || "").substring(0, 180)}${(timeline.attack_pattern || "").length > 180 ? "…" : ""}
+
+*Blast Radius*
+${(timeline.blast_radius || "See timeline").substring(0, 150)}${(timeline.blast_radius || "").length > 150 ? "…" : ""}
+
+*Remediation*
+${remediation_steps.length} steps identified. Full details in Nova Sentinel.
+
+*Link*
 <https://nova-sentinel.app/incidents/${incidentId}|View in Nova Sentinel>`;
 
-  const confluenceContent = `= Incident Postmortem: ${incidentId} =
+  const confluenceContent = `h1. Incident Postmortem: ${incidentId}
 
-h3. Timeline
-${(timeline.events || []).slice(0, 5).map((e: any, i: number) => `${i + 1}. ${e.timestamp} - ${e.action} (${e.severity})`).join("\n")}
+h2. Executive Summary
+Security incident ${incidentId} was identified and analyzed. Root cause: ${(timeline.root_cause || "").substring(0, 120)}${(timeline.root_cause || "").length > 120 ? "…" : ""}
 
-h3. Impact Analysis
-*Blast Radius:* ${(timeline.blast_radius || "").substring(0, 200)}...
+h2. Timeline
+${(timeline.events || []).slice(0, 8).map((e: any, i: number) => `* ${e.timestamp || "N/A"} — ${e.action || "Event"} (Severity: ${e.severity || "N/A"})`).join("\n") || "No events recorded"}
 
-h3. Lessons Learned
-- Least privilege enforcement
-- Credential rotation and MFA`;
+h2. Impact Analysis
+*Blast Radius:* ${timeline.blast_radius || "See timeline"}
+*Attack Pattern:* ${timeline.attack_pattern || "See timeline"}
+
+h2. Remediation Steps
+${remediation_steps.map((s) => `* ${s.order}. ${s.action}`).join("\n")}
+
+h2. Lessons Learned
+* Review least privilege for contractor and external roles
+* Enforce MFA for sensitive operations
+* Monitor security group and IAM policy changes
+* Document incident timeline for audit trail`;
 
   return {
     incident_id: incidentId,
@@ -206,7 +231,7 @@ h3. Lessons Learned
       },
       documentation: {
         jira: { title: `SEC-${incidentId}`, content: jiraContent },
-        slack: { title: "Security Alert", content: slackContent },
+        slack: { title: "Security Incident Report", content: slackContent },
         confluence: { title: `Incident ${incidentId}`, content: confluenceContent },
       },
     },

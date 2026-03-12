@@ -1,12 +1,13 @@
 /**
- * Live Simulation — Full-screen animated attack replay
- * 45-second cinematic demo of incident detection and containment
+ * Live Simulation — Training / What-If mode
+ * Run tabletop exercises with adjustable parameters (blast radius, mitigation, etc.)
+ * Distinct from Attack Path: this is for training, not real incident replay.
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { getQuickDemoResult } from '../../data/quickDemoResult';
-import { ArchitectureCanvas } from './ArchitectureCanvas';
+import { ArchitectureCanvasReactFlow } from './ArchitectureCanvasReactFlow';
 import { EventFeed } from './EventFeed';
 import { DetectionBar } from './DetectionBar';
 import { useSimulationNarrator } from './SimulationNarrator';
@@ -77,8 +78,15 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({ scenarioId, onCo
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
+  const [whatIfParam, setWhatIfParam] = useState<'default' | 'mfa-enabled' | 'reduced-privilege'>('default');
   const lastNarrationRef = useRef(-1);
   const { speak, stop } = useSimulationNarrator(muted ? 0 : volume);
+
+  const WHAT_IF_LABELS: Record<string, string> = {
+    default: 'Default scenario',
+    'mfa-enabled': 'What if MFA was enabled?',
+    'reduced-privilege': 'What if role had less privilege?',
+  };
 
   // Derive all state from simTime (ms)
   const phase = simTime < 3000 ? 0 : simTime < 5000 ? 1 : 2;
@@ -143,12 +151,13 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({ scenarioId, onCo
 
   const riskLevel = visibleEvents >= 5 ? 'CRITICAL' : visibleEvents >= 3 ? 'HIGH' : visibleEvents >= 1 ? 'MEDIUM' : 'LOW';
 
-  // Real-time attack cost ticker: ~$0.20/sec during attack, stops at containment
-  const attackStartMs = 5000; // when events start
+  // Real-time attack cost — what-if adjusts outcome
+  const attackStartMs = 5000;
   const attackDurationMs = Math.max(0, simTime - attackStartMs);
   const costRatePerSec = 0.2;
-  const liveCost = contained ? 0 : Math.min(2400, Math.round(attackDurationMs / 1000 * costRatePerSec * 100) / 100);
-  const projectedDailyCost = 2400; // savings when contained (avoided cost)
+  const baseCost = Math.min(2400, Math.round(attackDurationMs / 1000 * costRatePerSec * 100) / 100);
+  const liveCost = contained ? 0 : baseCost;
+  const projectedDailyCost = whatIfParam === 'mfa-enabled' ? 0 : whatIfParam === 'reduced-privilege' ? 800 : 2400;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-gradient-to-br from-slate-950 via-slate-950 to-indigo-950/20">
@@ -228,10 +237,12 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({ scenarioId, onCo
           { label: 'Risk', value: contained ? 'CONTAINED' : riskLevel, mono: false, highlight: contained ? 'text-emerald-400' : riskLevel === 'CRITICAL' ? 'text-red-400' : riskLevel === 'HIGH' ? 'text-orange-400' : 'text-amber-400' },
           {
             label: contained ? 'Savings' : 'Cost',
-            value: contained ? `$${projectedDailyCost.toLocaleString()}/day` : `$${liveCost.toFixed(2)}`,
+            value: contained
+              ? (whatIfParam === 'mfa-enabled' ? '$0' : `$${projectedDailyCost.toLocaleString()}/day`)
+              : `$${liveCost.toFixed(2)}`,
             mono: true,
             highlight: contained ? 'text-emerald-400' : 'text-rose-400',
-            sub: contained ? 'avoided' : 'accumulating',
+            sub: contained ? (whatIfParam === 'mfa-enabled' ? 'attack blocked' : 'avoided') : 'accumulating',
           },
         ].map((m) => (
           <div key={m.label} className="rounded-xl px-4 py-2.5 bg-slate-900/70 backdrop-blur-sm border border-slate-700/50 shadow-lg min-w-[80px]">
@@ -260,7 +271,7 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({ scenarioId, onCo
       <div className="flex-1 flex flex-col md:flex-row gap-4 p-4 pt-16 pb-24 min-h-0">
         {/* Architecture — full width on mobile, flex on desktop */}
         <div className="flex-1 min-w-0 min-h-[280px] md:min-h-[320px] overflow-visible rounded-xl border border-slate-700/40 bg-slate-900/30 backdrop-blur-sm">
-          <ArchitectureCanvas
+          <ArchitectureCanvasReactFlow
             scenarioId={scenarioId}
             attackerPosition={attackerPos}
             compromisedResources={compromised}
@@ -276,10 +287,36 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({ scenarioId, onCo
         </div>
       </div>
 
-      {/* What this does — dedicated info bar above detection */}
+      {/* What-if parameters */}
+      <div className="mx-4 mb-2 px-4 py-2 rounded-xl bg-slate-900/60 backdrop-blur-sm border border-slate-600/40 shrink-0 flex flex-wrap items-center gap-3">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">What if</span>
+        <div className="flex gap-2">
+          {(['default', 'mfa-enabled', 'reduced-privilege'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setWhatIfParam(p)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                whatIfParam === p
+                  ? 'bg-indigo-600 text-white border border-indigo-500'
+                  : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-600/50'
+              }`}
+            >
+              {WHAT_IF_LABELS[p]}
+            </button>
+          ))}
+        </div>
+        {whatIfParam !== 'default' && (
+          <span className="text-[10px] text-slate-400">
+            {whatIfParam === 'mfa-enabled' && '→ AssumeRole would fail; attack blocked at entry'}
+            {whatIfParam === 'reduced-privilege' && '→ Limited blast radius; fewer resources at risk'}
+          </span>
+        )}
+      </div>
+
+      {/* What this does — training / what-if differentiation */}
       <div className="mx-4 mb-2 px-4 py-3 rounded-xl bg-slate-900/80 backdrop-blur-sm border border-slate-600/50 shrink-0">
         <p className="text-xs text-slate-300 leading-relaxed max-w-4xl">
-          <strong className="text-slate-200">What this does:</strong> Watch the attack move through your AWS resources while Aria explains each step in plain language. The Event Feed shows live CloudTrail events. Hover diagram nodes for MITRE ATT&CK details. When Nova detects the threat, the pipeline activates — see &quot;What Nova is doing&quot; below. Then click &quot;View Full Analysis&quot; for the full report.
+          <strong className="text-slate-200">Training Mode:</strong> This is a what-if tabletop exercise — explore attack paths and blast radius without real data. Use the parameters above to see &quot;What if MFA was enabled?&quot; or &quot;What if the role had less privilege?&quot; Aria explains each step. The Attack Path (in the dashboard) shows your real incidents; this is for training and scenario exploration.
         </p>
       </div>
 
@@ -330,7 +367,7 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({ scenarioId, onCo
               <ul className="text-xs text-slate-300 space-y-2 leading-relaxed">
                 <li className="flex gap-2"><span className="text-slate-500">—</span> Attack path: Internet → IAM → {scenarioId === 'crypto-mining' ? 'EC2' : 'S3'}</li>
                 <li className="flex gap-2"><span className="text-slate-500">—</span> Nova detected, scored risk, and contained autonomously</li>
-                <li className="flex gap-2"><span className="text-slate-500">—</span> Savings: ~${projectedDailyCost.toLocaleString()}/day avoided</li>
+                <li className="flex gap-2"><span className="text-slate-500">—</span> {whatIfParam === 'mfa-enabled' ? 'With MFA: attack blocked at entry — $0 impact' : whatIfParam === 'reduced-privilege' ? `Reduced privilege: ~$${projectedDailyCost.toLocaleString()}/day at risk (vs $2,400 baseline)` : `Savings: ~$${projectedDailyCost.toLocaleString()}/day avoided`}</li>
               </ul>
             </motion.div>
           </motion.div>

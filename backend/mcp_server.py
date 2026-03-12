@@ -33,6 +33,7 @@ from mcp_servers.iam_mcp import get_iam_mcp
 from mcp_servers.cloudwatch_mcp import get_cloudwatch_mcp
 from mcp_servers.security_hub_mcp import get_security_hub_mcp
 from mcp_servers.nova_canvas_mcp import get_nova_canvas_mcp
+from mcp_servers.ai_security_mcp import get_ai_security_mcp
 from utils.logger import logger
 from utils.mock_data import generate_crypto_mining_scenario, generate_data_exfiltration_scenario
 
@@ -252,6 +253,48 @@ async def securityhub_get_findings(
     """
     sh = get_security_hub_mcp()
     return await sh.get_findings(severity=severity, max_results=max_results, days_back=days_back)
+
+
+# ================================================================
+# AI SECURITY MCP SERVER TOOLS
+# Bedrock inventory, OWASP LLM, guardrail recommendations
+# ================================================================
+
+@mcp_server.tool()
+async def ai_security_list_bedrock_models() -> dict:
+    """List Bedrock foundation models for AI-BOM inventory.
+    
+    Use when assessing AI security posture or building AI asset inventory.
+    """
+    ai = get_ai_security_mcp()
+    return await ai.list_bedrock_models()
+
+
+@mcp_server.tool()
+async def ai_security_list_bedrock_agents() -> dict:
+    """List Bedrock agents for agentic AI threat assessment.
+    
+    Use when assessing agentic AI risks or excessive agency.
+    """
+    ai = get_ai_security_mcp()
+    return await ai.list_bedrock_agents()
+
+
+@mcp_server.tool()
+async def ai_security_guardrail_recommendations() -> dict:
+    """Get guardrail configuration recommendations for LLM security.
+    
+    Returns recommendations like 'Guardrail should protect against Prompt Injections'.
+    """
+    ai = get_ai_security_mcp()
+    return await ai.get_guardrail_recommendations()
+
+
+@mcp_server.tool()
+async def ai_security_owasp_llm_status() -> dict:
+    """Get OWASP LLM Security Top 10 compliance posture."""
+    ai = get_ai_security_mcp()
+    return await ai.get_owasp_llm_status()
 
 
 # ================================================================

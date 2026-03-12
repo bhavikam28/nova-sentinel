@@ -1,13 +1,9 @@
 """
-AI Pipeline Security Monitor — Monitors Nova Sentinel's OWN AI pipeline for threats.
+AI Pipeline Security Monitor — Monitors Nova Sentinel's AI pipeline for threats.
 
-Mapped to MITRE ATLAS:
-- AML.T0051: Prompt Injection
-- AML.T0016: Obtain Capabilities
-- AML.T0040: ML Inference API Access
-- AML.T0043: Craft Adversarial Data
-- AML.T0024: Exfiltration via Inference API
-- AML.T0048: Transfer Learning Attack
+Frameworks:
+- MITRE ATLAS: AML.T0051, AML.T0016, AML.T0040, AML.T0043, AML.T0024, AML.T0048
+- OWASP LLM Top 10: LLM01–LLM10 (via ai_security_service)
 """
 import re
 from typing import Dict, Any, List
@@ -101,8 +97,6 @@ def _get_demo_invocation_overlay() -> Dict[str, Any]:
 def generate_atlas_report() -> Dict[str, Any]:
     """Generate MITRE ATLAS threat assessment and NIST AI RMF mapping."""
     inv = monitor_invocation_patterns()
-    # When no real invocations, use display-only overlay so AML.T0040 shows WARNING
-    # without polluting _invocation_counts (avoids inflated counts after real pipeline runs)
     overlay = _get_demo_invocation_overlay()
     is_simulated = overlay is not None
     if overlay is not None:
@@ -121,3 +115,9 @@ def generate_atlas_report() -> Dict[str, Any]:
         "invocation_summary": inv,
         "is_simulated": is_simulated,
     }
+
+
+def get_owasp_llm_report(injection_result: Dict = None, output_validation: Dict = None, guardrail_active: bool = False) -> Dict[str, Any]:
+    """Get OWASP LLM Top 10 report. Delegates to ai_security_service."""
+    from services.ai_security_service import generate_owasp_llm_report
+    return generate_owasp_llm_report(injection_result, output_validation, guardrail_active)

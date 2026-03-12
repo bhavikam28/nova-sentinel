@@ -40,7 +40,8 @@ The user `secops-lens-pro` needs CloudTrail, Bedrock, and DynamoDB permissions f
             ],
             "Resource": [
                 "arn:aws:bedrock:us-east-1::foundation-model/*",
-                "arn:aws:bedrock:us-east-1:ACCOUNT_ID:inference-profile/*"
+                "arn:aws:bedrock:us-east-1:ACCOUNT_ID:inference-profile/*",
+                "*"
             ]
         },
         {
@@ -101,11 +102,18 @@ aws iam put-user-policy \
   --policy-name NovaSentinelBedrock \
   --policy-document '{
     "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:ListFoundationModels"],
-      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/*"
-    }]
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": ["bedrock:InvokeModel", "bedrock:ListFoundationModels"],
+        "Resource": "arn:aws:bedrock:us-east-1::foundation-model/*"
+      },
+      {
+        "Effect": "Allow",
+        "Action": "bedrock:ListGuardrails",
+        "Resource": "*"
+      }
+    ]
   }'
 ```
 
@@ -127,8 +135,8 @@ aws iam put-user-policy \
       },
       {
         "Effect": "Allow",
-        "Action": ["bedrock:InvokeModel", "bedrock:ListFoundationModels"],
-        "Resource": "arn:aws:bedrock:us-east-1::foundation-model/*"
+        "Action": ["bedrock:InvokeModel", "bedrock:ListFoundationModels", "bedrock:ListGuardrails"],
+        "Resource": ["arn:aws:bedrock:us-east-1::foundation-model/*", "*"]
       },
       {
         "Effect": "Allow",

@@ -185,7 +185,7 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
 
   const healthConfig = getHealthColor(metrics.healthScore);
 
-  const [showMethodology, setShowMethodology] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(true);
   const [showWhatIf, setShowWhatIf] = useState(true); // Expanded by default for visibility
   const [whatIfQuestion, setWhatIfQuestion] = useState('');
   const [whatIfResult, setWhatIfResult] = useState<any>(null);
@@ -329,18 +329,6 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             }}
           />
         </div>
-      </section>
-
-      {/* Incident Response SLA */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Incident Response SLA</h2>
-        <SLATracker
-          checkpoints={deriveSLACheckpoints(
-            orchestrationResult?.analysis_time_ms ?? 0,
-            !!orchestrationResult?.results?.remediation_plan,
-            !!orchestrationResult?.results?.documentation
-          )}
-        />
       </section>
 
       {/* What If — Scenario Simulation (AI-Powered Tabletop Exercise) */}
@@ -624,29 +612,96 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
           ))}
         </div>
         </div>
+
+        {/* How we calculate — right after Security Posture */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mt-6">
+          <button
+            onClick={() => setShowMethodology(!showMethodology)}
+            className="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+          >
+            <span className="text-sm font-semibold text-slate-700">How we calculate these numbers</span>
+            {showMethodology ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+          </button>
+          {showMethodology && (
+            <div className="px-5 pb-5 pt-4 border-t border-slate-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                    <Gauge className="w-5 h-5 text-slate-600" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">Security Health</h4>
+                    <p className="text-xs text-slate-600 mb-3">Weighted by severity. Higher score = healthier posture.</p>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">Critical 40</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">High 25</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">Medium 10</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">Low 3</span>
+                    </div>
+                    <code className="text-[10px] font-mono text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">100 − (avg ÷ 40)×100</code>
+                  </div>
+                </div>
+                <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                    <Target className="w-5 h-5 text-slate-600" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">Risk Score</h4>
+                    <p className="text-xs text-slate-600 mb-3">Each severity maps to a numeric score. Mean of all events.</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">CRITICAL→95</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">HIGH→75</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">MEDIUM→50</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">LOW→25</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                    <Brain className="w-5 h-5 text-slate-600" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">AI Confidence</h4>
+                    <p className="text-xs text-slate-600">TemporalAgent outputs 0–1 based on event coverage and correlation strength. Higher = more reliable analysis.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                    <Activity className="w-5 h-5 text-slate-600" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">Events Analyzed</h4>
+                    <p className="text-xs text-slate-600">CloudTrail events from this analysis, grouped by severity in the Risk Distribution below.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* Risk Distribution — single chart with links to events */}
+      {/* Risk Distribution — compact chart */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-md shadow-slate-100"
+        className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm"
       >
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-sm font-bold text-slate-700 tracking-wide">Risk Distribution</h3>
           <span className="text-xs font-medium text-slate-500">{metrics.totalEvents} events</span>
         </div>
-        <p className="text-[11px] text-slate-500 mb-4">CloudTrail events from this analysis, grouped by severity. Click a severity to view events.</p>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={85}
+        <p className="text-[11px] text-slate-500 mb-2">CloudTrail events by severity. Click to view in Timeline.</p>
+        <div className="h-36 flex items-center gap-4">
+          <div className="w-32 h-32 flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={32}
+                  outerRadius={48}
                 paddingAngle={2}
                 dataKey="value"
                 stroke="none"
@@ -664,8 +719,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               />
             </PieChart>
           </ResponsiveContainer>
-        </div>
-        <div className="flex flex-wrap justify-center gap-4 mt-2">
+          </div>
+          <div className="flex flex-wrap gap-3 flex-1">
           {[
             { label: 'Critical', count: metrics.criticalCount, color: '#ef4444' },
             { label: 'High', count: metrics.highCount, color: '#f97316' },
@@ -680,28 +735,42 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
             >
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
               <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-800">{item.label}</span>
-              <span className="text-xs font-bold text-slate-800 tabular-nums group-hover:text-indigo-600">{item.count}</span>
+              <span className="text-xs font-bold text-slate-800 tabular-nums group-hover:text-slate-900">{item.count}</span>
             </button>
           ))}
+          </div>
         </div>
         {onNavigateToTimeline && (
           <button
             onClick={onNavigateToTimeline}
-            className="mt-4 w-full flex items-center justify-between gap-4 text-left rounded-xl border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 px-4 py-3 transition-all group"
+            className="mt-4 w-full flex items-center justify-between gap-4 text-left rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-4 py-3 transition-all group"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center">
-                <Activity className="w-4 h-4 text-indigo-600" />
+              <div className="w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center">
+                <Activity className="w-4 h-4 text-slate-600" />
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900">View events in Timeline</h4>
                 <p className="text-xs text-slate-500">See full CloudTrail events with timestamps and actions</p>
               </div>
             </div>
-            <ArrowRight className="w-5 h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="w-5 h-5 text-slate-600 group-hover:translate-x-1 transition-transform" />
           </button>
         )}
       </motion.div>
+
+      {/* Incident Response SLA — moved below key sections for better flow */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Incident Response SLA</h2>
+        <SLATracker
+          checkpoints={deriveSLACheckpoints(
+            orchestrationResult?.analysis_time_ms ?? 0,
+            !!orchestrationResult?.results?.remediation_plan,
+            !!orchestrationResult?.results?.documentation
+          )}
+          compact
+        />
+      </section>
 
       {/* Cost Impact CTA */}
       {onNavigateToCostImpact && (
@@ -729,83 +798,6 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
         </motion.div>
       )}
 
-      {/* How we calculate — visual, scannable methodology */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowMethodology(!showMethodology)}
-          className="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
-        >
-          <span className="text-sm font-semibold text-slate-700">How we calculate these numbers</span>
-          {showMethodology ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-        </button>
-        {showMethodology && (
-          <div className="px-5 pb-5 pt-4 border-t border-slate-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Security Health */}
-              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-                  <Gauge className="w-5 h-5 text-indigo-600" strokeWidth={2} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800 mb-2">Security Health</h4>
-                  <p className="text-xs text-slate-600 mb-3">Weighted by severity. Higher score = healthier posture.</p>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">Critical 40</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">High 25</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">Medium 10</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">Low 3</span>
-                  </div>
-                  <code className="text-[10px] font-mono text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">100 − (avg ÷ 40)×100</code>
-                </div>
-              </div>
-
-              {/* Avg Risk Score */}
-              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
-                  <Target className="w-5 h-5 text-violet-600" strokeWidth={2} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800 mb-2">Avg Risk Score</h4>
-                  <p className="text-xs text-slate-600 mb-3">Each severity maps to a numeric score. Mean of all events.</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">CRITICAL→95</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">HIGH→75</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">MEDIUM→50</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">LOW→25</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Confidence */}
-              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                  <Brain className="w-5 h-5 text-emerald-600" strokeWidth={2} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800 mb-2">AI Confidence</h4>
-                  <p className="text-xs text-slate-600">TemporalAgent outputs 0–1 based on event coverage and correlation strength. Higher = more reliable analysis.</p>
-                </div>
-              </div>
-
-              {/* Remediation Ready */}
-              <div className="flex gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                  <Wrench className="w-5 h-5 text-amber-600" strokeWidth={2} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800 mb-2">Remediation Ready</h4>
-                  <p className="text-xs text-slate-600">Yes = step-by-step remediation plan with AWS CLI commands exists. Pending = still generating.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 px-4 py-3 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-center gap-3">
-              <Activity className="w-4 h-4 text-indigo-600 shrink-0" />
-              <p className="text-xs text-slate-700"><span className="font-semibold">Events</span> = CloudTrail security-relevant APIs. <span className="font-semibold">Analysis Time</span> = pipeline elapsed.</p>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };

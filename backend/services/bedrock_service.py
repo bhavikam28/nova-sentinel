@@ -104,7 +104,17 @@ class BedrockService:
                 "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
             }
             if system_prompt:
-                converse_params["system"] = [{"text": system_prompt}]
+                # Prompt caching: cache long system prompts for faster repeat invocations (Nova supports it)
+                sys_content: List[Dict[str, Any]] = [{"text": system_prompt}]
+                if len(system_prompt) >= 1024:  # ~256+ tokens; Nova min for cache
+                    sys_content.append({"cachePoint": {"type": "default"}})
+                converse_params["system"] = sys_content
+            # Nova 2 extended thinking — improves agentic tool-use reasoning
+            effort = (self.settings.nova_reasoning_effort or "medium").lower()
+            if effort in ("low", "medium", "high"):
+                converse_params["additionalModelRequestFields"] = {
+                    "reasoningConfig": {"type": "enabled", "maxReasoningEffort": effort}
+                }
             guardrail_cfg = _guardrail_config(self.settings)
             if guardrail_cfg:
                 converse_params["guardrailConfig"] = guardrail_cfg
@@ -129,7 +139,11 @@ class BedrockService:
 
             output = response.get("output", {})
             msg_content = output.get("message", {}).get("content", [])
-            text = msg_content[0].get("text", "") if msg_content else ""
+            # Extended thinking may include reasoningContent blocks before final text
+            text = ""
+            for item in msg_content:
+                if "text" in item:
+                    text = item.get("text", "")
             try:
                 record_invocation(self.settings.nova_lite_model_id)
             except Exception:

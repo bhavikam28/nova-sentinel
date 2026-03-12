@@ -10,9 +10,10 @@ import { motion } from 'framer-motion';
 import {
   Shield, AlertTriangle, Key, Network,
   Wifi, Server, User, Database, Eye, Lock, Cloud, Zap,
-  ZoomIn, ZoomOut, Maximize2, Minimize2, Search, Download, Target,
-  Play, Pause, RotateCcw
+  ZoomIn, ZoomOut, Maximize2, Minimize2, Search, Download,
+  Play, Pause, RotateCcw, Globe, MapPin
 } from 'lucide-react';
+import { IconAttackPath, IconLock, IconShield } from '../ui/MinimalIcons';
 import {
   AmazonCloudFront,
   AmazonApiGateway,
@@ -96,7 +97,10 @@ function extractService(arnOrSource: string): string {
   return '';
 }
 
-/** AWS service → official AWS Architecture Icon (from @nxavis/aws-icons) */
+/** AWS service → official AWS Architecture Icon (from @nxavis/aws-icons).
+ * We use a curated map for common services (EC2, S3, IAM, RDS, etc.). For the 200+ AWS services
+ * we don't map individually — fallback: SERVICE_CATEGORIES → Lucide (Server, Database, Network, etc.).
+ * No MCP/agentic: icons are resolved at compile time. Add more to AWS_SERVICE_ICONS as needed. */
 const AWS_SERVICE_ICONS: Record<string, React.ComponentType<Record<string, unknown>>> = {
   ec2: AmazonEc2,
   s3: AmazonSimpleStorageService,
@@ -111,6 +115,18 @@ const AWS_ICON_SET = new Set([
   AmazonCloudFront,
   AmazonApiGateway,
 ]);
+
+/** Generic (non-AWS) terms → Lucide icons. Use for Internet, IP, etc. */
+const GENERIC_TERM_ICONS: Record<string, React.ComponentType<Record<string, unknown>>> = {
+  internet: Globe,
+  external: Globe,
+  ip: MapPin,
+  'ip address': MapPin,
+  'external origin': Globe,
+  'entry point': Network,
+  attacker: AlertTriangle,
+  unknown: User,
+};
 
 /** Map service name to icon category — fallback when no AWS icon. */
 const SERVICE_TO_ICON: Record<string, any> = {
@@ -140,9 +156,19 @@ function getIconCategory(service: string): keyof typeof SERVICE_TO_ICON {
   return cat || 'other';
 }
 
+function getIconForGenericTerm(label: string): React.ComponentType<Record<string, unknown>> | null {
+  const key = label.toLowerCase().trim();
+  if (GENERIC_TERM_ICONS[key]) return GENERIC_TERM_ICONS[key];
+  if (/^internet$/i.test(key) || key === 'external origin') return Globe;
+  if (IPV4_REGEX.test(label) || /\bip\b|ip address|external ip/i.test(key)) return MapPin;
+  return null;
+}
+
 function getIconForActor(actor: string, severity?: string): any {
   const a = actor.toLowerCase();
   const sev = (severity || '').toUpperCase();
+  if (IPV4_REGEX.test(actor)) return Globe;
+  if (a.includes('internet') || a.includes('external') && !a.includes('.amazonaws.com')) return Globe;
   if (a.includes('root')) {
     // Root user: AlertTriangle for HIGH/CRITICAL (threat), Shield for MEDIUM/LOW (best-practice violation)
     return sev === 'HIGH' || sev === 'CRITICAL' ? AlertTriangle : Shield;
@@ -154,6 +180,8 @@ function getIconForActor(actor: string, severity?: string): any {
 }
 
 function getIconForResource(resource: string, action: string): any {
+  const generic = getIconForGenericTerm(resource);
+  if (generic) return generic;
   const service = extractService(resource) || extractService(action);
   if (service) {
     const awsIcon = AWS_SERVICE_ICONS[service];
@@ -171,12 +199,12 @@ function getIconForResource(resource: string, action: string): any {
   return Network;
 }
 
-/** Severity colors */
+/** Severity colors — attack-focused red/rose (matches attack visualization) */
 const SEVERITY_STYLES: Record<string, { color: string; bg: string }> = {
-  CRITICAL: { color: '#B91C1C', bg: '#FECACA' },
-  HIGH:     { color: '#EA580C', bg: '#FED7AA' },
-  MEDIUM:   { color: '#1D4ED8', bg: '#BFDBFE' },
-  LOW:      { color: '#059669', bg: '#A7F3D0' },
+  CRITICAL: { color: '#DC2626', bg: '#FEE2E2' },
+  HIGH:     { color: '#EA580C', bg: '#FFEDD5' },
+  MEDIUM:   { color: '#B91C1C', bg: '#FEF2F2' },
+  LOW:      { color: '#64748B', bg: '#F8FAFC' },
 };
 
 /** Humanize long/cryptic resource strings into readable labels (real CloudTrail + demo) */
@@ -433,7 +461,7 @@ function buildGraphFromTimeline(
       id: 'narrative_internet',
       x: 60,
       y: flowY,
-      icon: AmazonCloudFront,
+      icon: Globe,
       label: 'Internet',
       subLabel: 'External Origin',
       detail: 'Traffic enters from external sources before reaching your AWS environment.',
@@ -486,8 +514,8 @@ function buildGraphFromTimeline(
       mitreId: 'T1562',
       timestamp: `${narrativeTs}Z`,
     });
-    edges.push({ from: 'narrative_internet', to: 'narrative_gateway', color: '#475569', label: 'Traffic', delay: 0.05 });
-    edges.push({ from: 'narrative_gateway', to: 'narrative_vpc', color: '#475569', label: 'Route', delay: 0.1 });
+    edges.push({ from: 'narrative_internet', to: 'narrative_gateway', color: '#DC2626', label: 'Traffic', delay: 0.05 });
+    edges.push({ from: 'narrative_gateway', to: 'narrative_vpc', color: '#DC2626', label: 'Route', delay: 0.1 });
   }
 
   actorIds.forEach((actor, i) => {
@@ -595,7 +623,7 @@ function buildGraphFromTimeline(
     actorIds.forEach((actor) => {
       const actorId = nodeIdMap.get(actor);
       if (actorId && !seenEdges.has(`narrative_vpc->${actorId}`)) {
-        edges.push({ from: 'narrative_vpc', to: actorId, color: '#475569', label: 'Entry', delay });
+        edges.push({ from: 'narrative_vpc', to: actorId, color: '#DC2626', label: 'Entry', delay });
         seenEdges.add(`narrative_vpc->${actorId}`);
         delay += 0.05;
       }
@@ -628,7 +656,7 @@ function buildGraphFromTimeline(
     seenEdges.add(mergeKey);
 
     const sev = info.severity.toUpperCase();
-    const edgeColor = sev === 'CRITICAL' ? '#B91C1C' : sev === 'HIGH' ? '#EA580C' : sev === 'MEDIUM' ? '#1D4ED8' : '#475569';
+    const edgeColor = sev === 'CRITICAL' ? '#DC2626' : sev === 'HIGH' ? '#EA580C' : sev === 'MEDIUM' ? '#B91C1C' : '#94A3B8';
     const actionLabel = info.actions.size > 1 ? 'Multiple' : info.action;
     let label = info.count > 1 ? `${actionLabel} (${info.count}×)` : actionLabel;
     if (label.length > 28) label = label.slice(0, 25) + '…';
@@ -693,30 +721,48 @@ function severityRank(sev: string): number {
 // ─── Static fallback for demo mode ─────────────────────────────────────────────
 
 const DEMO_NODES: NodeDef[] = [
-  { id: 'internet', x: 80, y: 200, icon: AmazonCloudFront, label: 'Internet', subLabel: 'External Origin', detail: 'Suspicious IP: 203.0.113.42 (TOR exit node)', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:00Z' },
+  { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', detail: 'Suspicious IP: 203.0.113.42 (TOR exit node)', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:00Z' },
   { id: 'gateway', x: 240, y: 200, icon: AmazonApiGateway, label: 'API Gateway', subLabel: 'Entry Point', detail: 'REST API — 847 requests in 2 minutes', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:15Z' },
-  { id: 'vpc', x: 400, y: 200, icon: AmazonVirtualPrivateCloud, label: 'VPC', subLabel: 'Network Layer', detail: 'vpc-0a1b2c3d — us-east-1', color: '#1D4ED8', bg: '#BFDBFE', severity: 'medium', mitreId: 'T1021', timestamp: '2026-01-15T14:20:30Z' },
-  { id: 'ec2', x: 560, y: 200, icon: AmazonEc2, label: 'EC2 Instance', subLabel: 'Compromised', detail: 'i-abc123 — Attacker installed crypto-miner | Severity: Critical', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1078', resourceId: 'i-abc123', riskScore: 98, timestamp: '2026-01-15T14:21:00Z' },
-  { id: 'iam', x: 720, y: 200, icon: AwsIdentityAndAccessManagement, label: 'IAM Role', subLabel: 'Escalated', detail: 'arn:aws:iam::role/admin-temp — privilege escalation', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1078', riskScore: 92, timestamp: '2026-01-15T14:21:45Z' },
-  { id: 'database', x: 880, y: 200, icon: AmazonRds, label: 'RDS Database', subLabel: 'Data Target', detail: 'db-prod-main — 2.4GB data accessed', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1041', resourceId: 'db-prod-main', riskScore: 78, timestamp: '2026-01-15T14:22:30Z' },
-  { id: 'sg', x: 280, y: 80, icon: AwsShield, label: 'Security Group', subLabel: 'Misconfigured', detail: 'sg-0xyz — 0.0.0.0/0 on port 22 (OPEN)', color: '#B91C1C', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1190', resourceId: 'sg-0xyz', riskScore: 95, timestamp: '2026-01-15T14:20:45Z' },
-  { id: 'ssh', x: 500, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', detail: '14 failed login attempts before breach', color: '#991B1B', bg: '#FECACA', severity: 'critical', ring: true, mitreId: 'T1021', riskScore: 94, timestamp: '2026-01-15T14:21:15Z' },
-  { id: 'secrets', x: 720, y: 80, icon: AwsSecretsManager, label: 'Secrets Mgr', subLabel: 'Accessed', detail: 'GetSecretValue — 3 secrets retrieved', color: '#EA580C', bg: '#FED7AA', severity: 'high', mitreId: 'T1552', riskScore: 85, timestamp: '2026-01-15T14:22:00Z' },
-  { id: 'cloudtrail', x: 880, y: 80, icon: AwsCloudTrail, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'Detected by Nova Sentinel', color: '#059669', bg: '#A7F3D0', severity: 'low', mitreId: 'T1562', timestamp: '2026-01-15T14:23:00Z' },
+  { id: 'vpc', x: 400, y: 200, icon: AmazonVirtualPrivateCloud, label: 'VPC', subLabel: 'Network Layer', detail: 'vpc-0a1b2c3d — us-east-1', color: '#B91C1C', bg: '#FEF2F2', severity: 'medium', mitreId: 'T1021', timestamp: '2026-01-15T14:20:30Z' },
+  { id: 'ec2', x: 560, y: 200, icon: AmazonEc2, label: 'EC2 Instance', subLabel: 'Compromised', detail: 'i-abc123 — Attacker installed crypto-miner | Severity: Critical', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'T1078', resourceId: 'i-abc123', riskScore: 98, timestamp: '2026-01-15T14:21:00Z' },
+  { id: 'iam', x: 720, y: 200, icon: AwsIdentityAndAccessManagement, label: 'IAM Role', subLabel: 'Escalated', detail: 'arn:aws:iam::role/admin-temp — privilege escalation', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'T1078', riskScore: 92, timestamp: '2026-01-15T14:21:45Z' },
+  { id: 'database', x: 880, y: 200, icon: AmazonRds, label: 'RDS Database', subLabel: 'Data Target', detail: 'db-prod-main — 2.4GB data accessed', color: '#EA580C', bg: '#FFEDD5', severity: 'high', mitreId: 'T1041', resourceId: 'db-prod-main', riskScore: 78, timestamp: '2026-01-15T14:22:30Z' },
+  { id: 'sg', x: 280, y: 80, icon: AwsShield, label: 'Security Group', subLabel: 'Misconfigured', detail: 'sg-0xyz — 0.0.0.0/0 on port 22 (OPEN)', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'T1190', resourceId: 'sg-0xyz', riskScore: 95, timestamp: '2026-01-15T14:20:45Z' },
+  { id: 'ssh', x: 500, y: 80, icon: AlertTriangle, label: 'SSH Exposed', subLabel: 'Port 22 Open', detail: '14 failed login attempts before breach', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'T1021', riskScore: 94, timestamp: '2026-01-15T14:21:15Z' },
+  { id: 'secrets', x: 720, y: 80, icon: AwsSecretsManager, label: 'Secrets Mgr', subLabel: 'Accessed', detail: 'GetSecretValue — 3 secrets retrieved', color: '#EA580C', bg: '#FFEDD5', severity: 'high', mitreId: 'T1552', riskScore: 85, timestamp: '2026-01-15T14:22:00Z' },
+  { id: 'cloudtrail', x: 880, y: 80, icon: AwsCloudTrail, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'Detected by Nova Sentinel', color: '#64748B', bg: '#F8FAFC', severity: 'low', mitreId: 'T1562', timestamp: '2026-01-15T14:23:00Z' },
+];
+
+/** AI attack path: Internet → API → Bedrock → IAM → S3 (OWASP LLM, Shadow AI) */
+const DEMO_NODES_AI: NodeDef[] = [
+  { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', detail: 'Prompt injection or Shadow AI traffic', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:00Z' },
+  { id: 'gateway', x: 220, y: 200, icon: AmazonApiGateway, label: 'API Gateway', subLabel: 'Entry Point', detail: 'REST API — InvokeModel requests', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:15Z' },
+  { id: 'bedrock', x: 380, y: 200, icon: Zap, label: 'Amazon Bedrock', subLabel: 'AI/ML', detail: 'InvokeModel — LLM01 prompt injection risk', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'AML.T0051', riskScore: 88, timestamp: '2026-01-15T14:20:45Z' },
+  { id: 'iam', x: 540, y: 200, icon: AwsIdentityAndAccessManagement, label: 'IAM Role', subLabel: 'Model Access', detail: 'Bedrock Agent assumes role — excessive agency (LLM06)', color: '#EA580C', bg: '#FFEDD5', severity: 'high', mitreId: 'T1078', riskScore: 75, timestamp: '2026-01-15T14:21:15Z' },
+  { id: 's3', x: 700, y: 200, icon: AmazonSimpleStorageService, label: 'S3 Bucket', subLabel: 'Data Target', detail: 'Exfiltration via inference (LLM02) — training data, PII', color: '#EA580C', bg: '#FFEDD5', severity: 'high', mitreId: 'T1530', riskScore: 72, timestamp: '2026-01-15T14:21:45Z' },
+  { id: 'cloudtrail', x: 860, y: 200, icon: AwsCloudTrail, label: 'CloudTrail', subLabel: 'Monitoring', detail: 'InvokeModel logged — Shadow AI detection', color: '#059669', bg: '#A7F3D0', severity: 'low', mitreId: 'T1562', timestamp: '2026-01-15T14:22:00Z' },
 ];
 
 const DEMO_EDGES: EdgeDef[] = [
-  { from: 'internet', to: 'gateway', color: '#475569', label: 'HTTP/S', delay: 0.3 },
-  { from: 'gateway', to: 'vpc', color: '#475569', label: 'Route', delay: 0.5 },
-  { from: 'vpc', to: 'ec2', color: '#B91C1C', label: 'SSH:22', delay: 0.7 },
-  { from: 'ec2', to: 'iam', color: '#B91C1C', label: 'AssumeRole', delay: 0.9 },
+  { from: 'internet', to: 'gateway', color: '#DC2626', label: 'HTTP/S', delay: 0.3 },
+  { from: 'gateway', to: 'vpc', color: '#DC2626', label: 'Route', delay: 0.5 },
+  { from: 'vpc', to: 'ec2', color: '#DC2626', label: 'SSH:22', delay: 0.7 },
+  { from: 'ec2', to: 'iam', color: '#DC2626', label: 'AssumeRole', delay: 0.9 },
   { from: 'iam', to: 'database', color: '#EA580C', label: 'Query', delay: 1.1 },
-  { from: 'vpc', to: 'sg', color: '#B91C1C', delay: 1.3 },
-  { from: 'sg', to: 'ssh', color: '#991B1B', label: 'Exploit', delay: 1.5 },
-  { from: 'ec2', to: 'ssh', color: '#B91C1C', delay: 1.6 },
+  { from: 'vpc', to: 'sg', color: '#DC2626', delay: 1.3 },
+  { from: 'sg', to: 'ssh', color: '#DC2626', label: 'Exploit', delay: 1.5 },
+  { from: 'ec2', to: 'ssh', color: '#DC2626', delay: 1.6 },
   { from: 'ssh', to: 'secrets', color: '#EA580C', label: 'Exfil', delay: 1.7 },
   { from: 'iam', to: 'secrets', color: '#EA580C', delay: 1.8 },
-  { from: 'iam', to: 'cloudtrail', color: '#059669', label: 'Logged', delay: 1.9 },
+  { from: 'iam', to: 'cloudtrail', color: '#64748B', label: 'Logged', delay: 1.9 },
+];
+
+const DEMO_EDGES_AI: EdgeDef[] = [
+  { from: 'internet', to: 'gateway', color: '#DC2626', label: 'InvokeModel', delay: 0.3 },
+  { from: 'gateway', to: 'bedrock', color: '#DC2626', label: 'API', delay: 0.5 },
+  { from: 'bedrock', to: 'iam', color: '#EA580C', label: 'AssumeRole', delay: 0.7 },
+  { from: 'iam', to: 's3', color: '#EA580C', label: 'GetObject', delay: 0.9 },
+  { from: 'iam', to: 'cloudtrail', color: '#059669', label: 'Logged', delay: 1.1 },
 ];
 
 const ZOOM_LEVELS = [0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2];
@@ -728,6 +774,8 @@ interface AttackPathDiagramProps {
   onNavigateToRemediation?: () => void;
   /** Use narrative graph (Internet → VPC → EC2 → IAM → RDS) for easy comprehension. Default true for demo only. */
   useNarrativeDemoGraph?: boolean;
+  /** Use AI attack path (Internet → API → Bedrock → IAM → S3) for AI security scenarios. */
+  variant?: 'standard' | 'ai';
   /** Dynamic: events analyzed from real AWS — shown in subtitle */
   eventsAnalyzed?: number;
   /** Dynamic: days of logs analyzed — shown in subtitle */
@@ -773,7 +821,9 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
   const includeNarrativeFrame = !lowConfidence;
 
   // Build dynamic or use static
+  const variant = props.variant ?? 'standard';
   const { nodes: NODES, edges: EDGES } = useMemo(() => {
+    if (useNarrative && variant === 'ai') return { nodes: DEMO_NODES_AI, edges: DEMO_EDGES_AI };
     if (useNarrative) return { nodes: DEMO_NODES, edges: DEMO_EDGES };
     if (hasRealTimeline && props.timeline) {
       const riskScores = props.orchestrationResult?.results?.risk_scores;
@@ -781,7 +831,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
       if (graph.nodes.length > 0) return graph;
     }
     return { nodes: DEMO_NODES, edges: DEMO_EDGES };
-  }, [useNarrative, hasRealTimeline, props.timeline, props.orchestrationResult, includeNarrativeFrame]);
+  }, [useNarrative, variant, hasRealTimeline, props.timeline, props.orchestrationResult, includeNarrativeFrame]);
 
   const nodeMap = useMemo(() => Object.fromEntries(NODES.map(n => [n.id, n])), [NODES]);
 
@@ -1053,8 +1103,8 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-rose-500 to-orange-600 flex items-center justify-center shadow-sm flex-shrink-0">
-            <Target className="w-4.5 h-4.5 text-white" />
+          <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+            <IconAttackPath className="w-4.5 h-4.5 text-indigo-600" />
           </div>
           <div>
           <div className="flex items-center gap-2">
@@ -1278,15 +1328,15 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
         >
           <svg ref={svgRef} width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="relative z-10" preserveAspectRatio="xMidYMid meet">
             <defs>
-              <marker id="arrow-flow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#64748b" opacity="0.7" />
+              <marker id="arrow-flow" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+                <path d="M 0 0 L 8 2.5 L 0 5 Z" fill="#DC2626" fillOpacity="0.85" stroke="none" />
               </marker>
               <filter id="dash-shadow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000" floodOpacity="0.1" />
               </filter>
               <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="3" result="blur" />
-                <feFlood floodColor="#B91C1C" floodOpacity="0.2" />
+                <feFlood floodColor="#4F46E5" floodOpacity="0.2" />
                 <feComposite in2="blur" operator="in" />
                 <feMerge>
                   <feMergeNode />
@@ -1304,7 +1354,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               </linearGradient>
             </defs>
 
-            {/* ===== EDGES with animated flow ===== */}
+            {/* ===== EDGES with animated flow — arrow stops at node edge (no overlap) ===== */}
             {EDGES.map((edge, i) => {
               const from = nodeMap[edge.from];
               const to = nodeMap[edge.to];
@@ -1316,16 +1366,19 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
 
               const dx = to.x - from.x;
               const dy = to.y - from.y;
-              const dist = Math.hypot(dx, dy);
+              const dist = Math.hypot(dx, dy) || 1;
+              const NODE_RADIUS = 30;
+              const stopX = to.x - (dx / dist) * NODE_RADIUS;
+              const stopY = to.y - (dy / dist) * NODE_RADIUS;
               const curveOffset = dist < 80 ? 0 : (Math.abs(dy) > 80 ? (dx > 0 ? -20 : 20) : (dy > 0 ? 24 : -24));
               const cpx = (from.x + to.x) / 2 + (Math.abs(dy) > 50 ? curveOffset : 0);
               const cpy = (from.y + to.y) / 2 + (Math.abs(dy) <= 50 ? curveOffset : 0);
               const t = 0.5;
               const t1 = 0.48;
               const t2 = 0.52;
-              const bezier = (t: number) => ({
-                x: (1 - t) ** 2 * from.x + 2 * (1 - t) * t * cpx + t ** 2 * to.x,
-                y: (1 - t) ** 2 * from.y + 2 * (1 - t) * t * cpy + t ** 2 * to.y,
+              const bezier = (tVal: number) => ({
+                x: (1 - tVal) ** 2 * from.x + 2 * (1 - tVal) * tVal * cpx + tVal ** 2 * to.x,
+                y: (1 - tVal) ** 2 * from.y + 2 * (1 - tVal) * tVal * cpy + tVal ** 2 * to.y,
               });
               const mid = bezier(t);
               const p1 = bezier(t1);
@@ -1335,8 +1388,8 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               const q2x = (1 - t2) * cpx + t2 * to.x;
               const q2y = (1 - t2) * cpy + t2 * to.y;
               const path1 = `M ${from.x} ${from.y} Q ${q1x} ${q1y} ${p1.x} ${p1.y}`;
-              const path2 = `M ${p2.x} ${p2.y} Q ${q2x} ${q2y} ${to.x} ${to.y}`;
-              const pathFull = `M ${from.x} ${from.y} Q ${cpx} ${cpy} ${to.x} ${to.y}`;
+              const path2 = `M ${p2.x} ${p2.y} Q ${q2x} ${q2y} ${stopX} ${stopY}`;
+              const pathFull = `M ${from.x} ${from.y} Q ${cpx} ${cpy} ${stopX} ${stopY}`;
               const hasLabel = !!edge.label;
 
               return (
@@ -1349,9 +1402,9 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                       {/* Second half — with arrow */}
                       <path d={path2} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
                       <path d={path2} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" markerEnd="url(#arrow-flow)" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
-                      {/* Label rendered last so it sits on top of dashed lines */}
-                      <rect x={mid.x - Math.max((edge.label?.length || 6) * 3.8, 22)} y={mid.y - 10} width={Math.max((edge.label?.length || 6) * 7.6, 44)} height={20} rx={10} fill="white" stroke="#94a3b8" strokeWidth="1.5" pointerEvents="none" />
-                      <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill={edge.color} stroke="white" strokeWidth="2.5" strokeLinejoin="round" paintOrder="stroke" fontSize="11" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" pointerEvents="none">
+                      {/* Label — offset perpendicular to line to avoid clashing with arrow */}
+                      <rect x={mid.x - Math.max((edge.label?.length || 6) * 3.5, 20)} y={mid.y - 22} width={Math.max((edge.label?.length || 6) * 7, 40)} height={18} rx={9} fill="white" stroke="#e2e8f0" strokeWidth="1" pointerEvents="none" />
+                      <text x={mid.x} y={mid.y - 13} textAnchor="middle" dominantBaseline="middle" fill="#334155" stroke="none" fontSize="10" fontWeight="600" fontFamily="Inter, system-ui, sans-serif" pointerEvents="none">
                         {edge.label}
                       </text>
                     </>
@@ -1371,7 +1424,6 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               const isHovered = hoveredNode === node.id;
               const isSelected = selectedNode === node.id;
               const isActive = isHovered || isSelected;
-              const isCritical = node.severity === 'critical';
               const isSearchMatch = searchLower && (node.label.toLowerCase().includes(searchLower) || node.subLabel.toLowerCase().includes(searchLower) || node.resourceId?.toLowerCase().includes(searchLower));
               const nodeReplayIdx = replayOrderMap[node.id] ?? -1;
               const isRevealed = !replayMode || nodeReplayIdx <= replayIndex;
@@ -1395,46 +1447,35 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                   onMouseLeave={() => handleNodeHover(null)}
                   onClick={(e) => handleNodeClick(e, node.id)}
                 >
-                  {node.ring && (
+                  {(isSelected || isHovered || (searchLower && isSearchMatch)) && (
                     <circle
                       cx={node.x}
                       cy={node.y}
-                      r={30}
+                      r={26}
                       fill="none"
-                      stroke={node.color}
-                      strokeWidth="1.5"
-                      opacity={0.2}
-                      className="animate-pulse"
+                      stroke={isSearchMatch && !isActive ? '#3B82F6' : node.color}
+                      strokeWidth={isSelected ? 3 : 2}
+                      opacity={0.4}
                     />
                   )}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={isActive ? 26 : 24}
-                    fill={node.bg}
-                    stroke={isSearchMatch && !isActive ? '#3B82F6' : node.color}
-                    strokeWidth={isSelected ? 4 : isHovered ? 3 : isSearchMatch ? 3 : 2}
-                    filter={isCritical ? 'url(#glow-red)' : 'url(#dash-shadow)'}
-                    style={{ transition: 'r 0.2s, stroke-width 0.2s', opacity: searchLower && !isSearchMatch ? 0.35 : 1 }}
-                  />
-                  <foreignObject x={node.x - 11} y={node.y - 11} width="22" height="22">
+                  <foreignObject x={node.x - 24} y={node.y - 24} width="48" height="48">
                     <div className="flex items-center justify-center h-full w-full" style={{ color: node.color }}>
                       {AWS_ICON_SET.has(Icon as any)
-                        ? <Icon size={20} color={node.color} />
-                        : <Icon className="w-5 h-5" strokeWidth={1.8} />
+                        ? <Icon size={40} color={node.color} />
+                        : <Icon className="w-10 h-10" strokeWidth={1.8} />
                       }
                     </div>
                   </foreignObject>
-                  <text x={node.x} y={node.y + 40} textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" style={{ letterSpacing: '0.02em' }}>
+                  <text x={node.x} y={node.y + 38} textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="700" fontFamily="Inter, system-ui, sans-serif" style={{ letterSpacing: '0.02em' }}>
                     {node.label}
                   </text>
-                  <text x={node.x} y={node.y + 55} textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="600" fontFamily="Inter, system-ui, sans-serif">
+                  <text x={node.x} y={node.y + 52} textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="600" fontFamily="Inter, system-ui, sans-serif">
                     {node.subLabel}
                   </text>
                   {(node.mitreId || node.riskScore != null) && (
                     <text
                       x={node.x}
-                      y={node.y + 64}
+                      y={node.y + 61}
                       textAnchor="middle"
                       fill="#64748b"
                       fontSize="8"
@@ -1466,7 +1507,7 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                 return <path key={i} d={pathD} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.4" />;
               })}
               {NODES.map((node) => (
-                <circle key={node.id} cx={node.x} cy={node.y} r={8} fill={node.bg} stroke={node.color} strokeWidth="1" />
+                <rect key={node.id} x={node.x - 6} y={node.y - 6} width={12} height={12} rx={2} fill={node.bg} stroke={node.color} strokeWidth="1" />
               ))}
             </svg>
           </div>
@@ -1499,15 +1540,17 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
       )}
 
       {/* Detail Panel (bottom) — only when node is clicked/selected, so user can reach the View Remediation button */}
-      {detailPanelNode && (
+      {detailPanelNode && (() => {
+        const DetailIcon = /secret|credential|key|lock/i.test(detailPanelNode.label + detailPanelNode.subLabel) ? IconLock : IconShield;
+        return (
         <motion.div
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           className="px-6 py-3 border-t border-slate-100 bg-slate-50/50"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: detailPanelNode.bg }}>
-              <detailPanelNode.icon className="w-4 h-4" style={{ color: detailPanelNode.color }} />
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
+              <DetailIcon className="w-4 h-4 text-indigo-600" />
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -1580,7 +1623,8 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
             </div>
           </div>
         </motion.div>
-      )}
+        );
+      })()}
 
       <style>{`
         @keyframes dash-flow {

@@ -170,10 +170,12 @@ interface IncidentArchitectureDiagramProps {
   timeline: Timeline;
   orchestrationResult?: any;
   securityFindings?: string[];
+  /** When true, adds attack path overlay (pulsing ring) on critical/compromised nodes */
+  showAttackPathOverlay?: boolean;
 }
 
 const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = ({
-  timeline, orchestrationResult: _orchestrationResult, securityFindings,
+  timeline, orchestrationResult: _orchestrationResult, securityFindings, showAttackPathOverlay = false,
 }) => {
   const nodes = useMemo(() => {
     const events = timeline?.events || [];
@@ -265,7 +267,9 @@ const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = 
   return (
     <div className="w-full rounded-xl overflow-hidden border border-slate-100 bg-white shadow-sm">
       <div className="px-4 py-2.5 bg-gradient-to-r from-slate-50 to-indigo-50/30 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-600">Auto-generated from incident findings</span>
+        <span className="text-xs font-semibold text-slate-600">
+          {showAttackPathOverlay ? 'Attack path overlay — compromised nodes highlighted' : 'Auto-generated from incident findings'}
+        </span>
         <span className="flex items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Compromised</span>
           <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> At-risk</span>
@@ -300,7 +304,7 @@ const IncidentArchitectureDiagram: React.FC<IncidentArchitectureDiagramProps> = 
                     return (
                       <div
                         key={n.id}
-                        className={`relative rounded-lg border-l-[3px] px-3 py-2.5 cursor-pointer transition-all bg-white border border-slate-100 w-full min-w-0 ${isHovered ? 'shadow-md ring-1 ring-slate-200/60' : 'shadow-sm hover:shadow'}`}
+                        className={`relative rounded-lg border-l-[3px] px-3 py-2.5 cursor-pointer transition-all bg-white border border-slate-100 w-full min-w-0 ${isHovered ? 'shadow-md ring-1 ring-slate-200/60' : 'shadow-sm hover:shadow'} ${showAttackPathOverlay && n.severity === 'critical' ? 'ring-2 ring-red-500 ring-offset-1 animate-pulse' : ''}`}
                         style={{ borderLeftColor: colors.border }}
                         onMouseEnter={(e) => { setHoveredNode(n.id); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
                         onMouseMove={(e) => hoveredNode === n.id && setTooltipPos({ x: e.clientX, y: e.clientY })}

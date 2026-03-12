@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Loader2, Shield, Zap, AlertTriangle, Lock, Play } from 'lucide-react';
+import { ArrowRight, Loader2, Shield, AlertTriangle, Play } from 'lucide-react';
 import type { DemoScenario } from '../../types/incident';
 
 interface ScenarioPickerProps {
@@ -16,19 +16,23 @@ interface ScenarioPickerProps {
   onUseFullAIChange?: (v: boolean) => void;
 }
 
+const SvgIcon = ({ children, className = 'w-5 h-5' }: { children: React.ReactNode; className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+);
 const SCENARIO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  'crypto-mining': Zap,
-  'data-exfiltration': AlertTriangle,
-  'privilege-escalation': Lock,
-  'unauthorized-access': Shield,
+  'crypto-mining': (p) => <SvgIcon className={p.className || 'w-5 h-5'}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 6h8M8 12h8M8 18h4" /></SvgIcon>,
+  'data-exfiltration': (p) => <SvgIcon className={p.className || 'w-5 h-5'}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></SvgIcon>,
+  'privilege-escalation': (p) => <SvgIcon className={p.className || 'w-5 h-5'}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></SvgIcon>,
+  'unauthorized-access': (p) => <SvgIcon className={p.className || 'w-5 h-5'}><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></SvgIcon>,
 };
 
+/* Premium minimal palette — indigo/slate only (no red/orange) */
 const getSeverityConfig = (severity: string) => {
   const configs: Record<string, { bg: string; text: string; border: string; dot: string; iconBg: string }> = {
-    CRITICAL: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500', iconBg: 'bg-gradient-to-br from-red-500 to-red-600' },
-    HIGH: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500', iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600' },
-    MEDIUM: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', iconBg: 'bg-gradient-to-br from-amber-500 to-amber-600' },
-    LOW: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500', iconBg: 'bg-gradient-to-br from-emerald-500 to-emerald-600' },
+    CRITICAL: { bg: 'bg-slate-100', text: 'text-slate-800', border: 'border-slate-200', dot: 'bg-indigo-600', iconBg: 'bg-slate-100 border border-slate-200' },
+    HIGH: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', dot: 'bg-indigo-500', iconBg: 'bg-slate-100 border border-slate-200' },
+    MEDIUM: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-indigo-400', iconBg: 'bg-slate-50 border border-slate-200' },
+    LOW: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400', iconBg: 'bg-slate-50 border border-slate-200' },
   };
   return configs[severity] || configs.MEDIUM;
 };
@@ -45,9 +49,9 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-1">Select a Scenario</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-1">Training Mode — What-If Scenarios</h2>
         <p className="text-sm text-slate-500">
-          Choose a simulated AWS security incident to analyze with the multi-agent pipeline.
+          Run tabletop exercises: explore attack paths, blast radius, and Nova&apos;s response with different parameters. Unlike the Attack Path (real incidents), this is for training and what-if analysis.
         </p>
       </div>
 
@@ -55,7 +59,7 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
       <div className="grid gap-3">
         {scenarios.map((scenario, index) => {
           const config = getSeverityConfig(scenario.severity);
-          const Icon = SCENARIO_ICONS[scenario.id] || Shield;
+          const Icon = SCENARIO_ICONS[scenario.id] || SCENARIO_ICONS['crypto-mining'];
 
           return (
             <motion.div
@@ -71,9 +75,9 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
                 className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-4">
-                  {/* Icon */}
-                  <div className={`w-11 h-11 rounded-xl ${(config as any).iconBg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                    <Icon className="w-5 h-5 text-white" />
+                  {/* Icon — minimal */}
+                  <div className={`w-11 h-11 rounded-xl ${(config as any).iconBg} flex items-center justify-center flex-shrink-0`}>
+                    <Icon className="w-5 h-5 text-indigo-600" />
                   </div>
 
                   {/* Content */}
@@ -99,14 +103,15 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({
                 </div>
               </button>
 
-              {/* Watch Live Simulation */}
+              {/* Run What-If Simulation */}
               {onStartSimulation && !loading && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onStartSimulation(scenario.id); }}
                   className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 rounded-md border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 transition-colors"
+                  title="Run what-if training simulation with adjustable parameters"
                 >
                   <Play className="w-3 h-3" strokeWidth={2.5} />
-                  Watch Live
+                  Run What-If
                 </button>
               )}
             </motion.div>

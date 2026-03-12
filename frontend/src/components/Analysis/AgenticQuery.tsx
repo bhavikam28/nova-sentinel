@@ -10,13 +10,14 @@ import { orchestrationAPI } from '../../services/api';
 
 const MAX_HISTORY_EXCHANGES = 5; // Keep last 5 user+assistant pairs for multi-turn context
 
+/* Premium minimal palette — single accent (indigo) for Wiz.io-style consistency */
 const SUGGESTED_PROMPTS: { label: string; icon: React.ComponentType<{ className?: string }>; color: string; bg: string }[] = [
-  { label: 'Audit all IAM users for security issues', icon: Wrench, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200 hover:bg-blue-100' },
-  { label: 'Scan CloudTrail for anomalies in the last 24 hours', icon: Activity, color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200 hover:bg-orange-100' },
-  { label: 'Get Security Hub findings (GuardDuty, Inspector)', icon: Shield, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200 hover:bg-amber-100' },
-  { label: 'Check CloudWatch for billing anomalies', icon: Activity, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100' },
-  { label: 'Investigate IAM roles for privilege escalation', icon: Shield, color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200 hover:bg-violet-100' },
-  { label: 'Investigate cross-account role assumptions', icon: Database, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100' },
+  { label: 'Audit all IAM users for security issues', icon: Wrench, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
+  { label: 'Scan CloudTrail for anomalies in the last 24 hours', icon: Activity, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
+  { label: 'Get Security Hub findings (GuardDuty, Inspector)', icon: Shield, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
+  { label: 'Check CloudWatch for billing anomalies', icon: Activity, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
+  { label: 'Investigate IAM roles for privilege escalation', icon: Shield, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
+  { label: 'Investigate cross-account role assumptions', icon: Database, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
 ];
 
 /**
@@ -24,18 +25,19 @@ const SUGGESTED_PROMPTS: { label: string; icon: React.ComponentType<{ className?
  * This is a lightweight alternative to full OpenTelemetry tracing — we infer
  * tool usage from the agent's natural-language output.
  */
+/* Tool badges — minimal indigo/slate palette */
 const TOOL_SIGNATURES: { pattern: RegExp; tool: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
-  { pattern: /cloudtrail|cloud trail|lookupevents|event lookup|trail/i, tool: 'CloudTrail Lookup', icon: Activity, color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  { pattern: /anomal|anomaly scan|security anomal/i, tool: 'CloudTrail Anomaly Scan', icon: Shield, color: 'text-red-600 bg-red-50 border-red-200' },
-  { pattern: /iam.*(user|audit)|user.*audit|mfa.*(compliance|status)|access.key.age/i, tool: 'IAM User Audit', icon: Wrench, color: 'text-blue-600 bg-blue-50 border-blue-200' },
-  { pattern: /iam.*(role|audit.*role)|role.*(audit|trust|policy)|cross.account/i, tool: 'IAM Role Audit', icon: Wrench, color: 'text-blue-600 bg-blue-50 border-blue-200' },
-  { pattern: /policy.*(analy|review)|wildcard.*action|overly.*broad/i, tool: 'IAM Policy Analysis', icon: Shield, color: 'text-violet-600 bg-violet-50 border-violet-200' },
-  { pattern: /cloudwatch|alarm|billing.*anomal|ec2.*metric|estimated.*charge/i, tool: 'CloudWatch Security Check', icon: Activity, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-  { pattern: /security.hub|guardduty|inspector|finding.*severity|pre.correlat/i, tool: 'Security Hub Findings', icon: Shield, color: 'text-amber-600 bg-amber-50 border-amber-200' },
+  { pattern: /cloudtrail|cloud trail|lookupevents|event lookup|trail/i, tool: 'CloudTrail Lookup', icon: Activity, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /anomal|anomaly scan|security anomal/i, tool: 'CloudTrail Anomaly Scan', icon: Shield, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /iam.*(user|audit)|user.*audit|mfa.*(compliance|status)|access.key.age/i, tool: 'IAM User Audit', icon: Wrench, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /iam.*(role|audit.*role)|role.*(audit|trust|policy)|cross.account/i, tool: 'IAM Role Audit', icon: Wrench, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /policy.*(analy|review)|wildcard.*action|overly.*broad/i, tool: 'IAM Policy Analysis', icon: Shield, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /cloudwatch|alarm|billing.*anomal|ec2.*metric|estimated.*charge/i, tool: 'CloudWatch Security Check', icon: Activity, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /security.hub|guardduty|inspector|finding.*severity|pre.correlat/i, tool: 'Security Hub Findings', icon: Shield, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
   { pattern: /incident.*history|past.*incident|campaign|correlat/i, tool: 'Incident History Query', icon: Database, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
-  { pattern: /timeline.*analy|temporal|root.cause|attack.pattern|blast.radius/i, tool: 'Timeline Analysis', icon: Brain, color: 'text-purple-600 bg-purple-50 border-purple-200' },
-  { pattern: /risk.*(score|level|assess)|severity.*(score|rating)/i, tool: 'Risk Scoring', icon: Shield, color: 'text-rose-600 bg-rose-50 border-rose-200' },
-  { pattern: /remediat|fix|patch|mitigat/i, tool: 'Remediation Planning', icon: Wrench, color: 'text-teal-600 bg-teal-50 border-teal-200' },
+  { pattern: /timeline.*analy|temporal|root.cause|attack.pattern|blast.radius/i, tool: 'Timeline Analysis', icon: Brain, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /risk.*(score|level|assess)|severity.*(score|rating)/i, tool: 'Risk Scoring', icon: Shield, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  { pattern: /remediat|fix|patch|mitigat/i, tool: 'Remediation Planning', icon: Wrench, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
 ];
 
 function detectToolsUsed(text: string): { tool: string; icon: React.ComponentType<{ className?: string }>; color: string }[] {
@@ -317,8 +319,8 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
         <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-violet-50/50">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg flex-shrink-0">
-                <Zap className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                <Zap className="w-6 h-6 text-indigo-600" />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">

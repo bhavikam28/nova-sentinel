@@ -264,6 +264,19 @@ npm run dev
 # App runs on http://localhost:5173
 ```
 
+### Optional: Knowledge Base (RAG) for Enhanced Playbooks
+
+Nova Sentinel works without a Knowledge Base. For enhanced incident response playbook retrieval (RAG), you can optionally deploy:
+
+1. **Terraform** — Creates S3 bucket and uploads sample playbooks:
+   ```bash
+   cd terraform && terraform init && terraform apply
+   ```
+2. **Bedrock Console** — Create a Knowledge Base with **S3 Vectors** (Quick create), connect to the Terraform-created bucket, sync.
+3. **Configure** — Set `KNOWLEDGE_BASE_ID` in `.env`.
+
+See [terraform/README.md](terraform/README.md) for step-by-step instructions. Judges and users can skip this; the Agent will use inline prompts when KB is not configured.
+
 ### Demo Flow
 1. Open http://localhost:5173
 2. Click **Launch Console** or **Try Demo**

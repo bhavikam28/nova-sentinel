@@ -35,7 +35,9 @@ from mcp_servers.iam_mcp import get_iam_mcp
 from mcp_servers.cloudwatch_mcp import get_cloudwatch_mcp
 from mcp_servers.security_hub_mcp import get_security_hub_mcp
 from mcp_servers.nova_canvas_mcp import get_nova_canvas_mcp
+from mcp_servers.ai_security_mcp import get_ai_security_mcp
 from services.incident_memory import get_incident_memory
+from services.knowledge_base_service import is_knowledge_base_configured, retrieve_and_generate as kb_retrieve_and_generate
 from utils.config import get_settings
 from utils.logger import logger
 
@@ -464,6 +466,78 @@ def nova_canvas_generate_report_cover(incident_type: str, severity: str = "CRITI
 
 
 @tool
+def ai_security_list_bedrock_models() -> str:
+    """List Bedrock foundation models for AI-BOM inventory (AI Security MCP).
+    
+    Use when assessing AI security posture, building AI-BOM, or inventorying AI assets.
+    
+    Returns:
+        JSON with models (modelId, modelName, provider, lifecycle).
+    """
+    try:
+        ai = get_ai_security_mcp()
+        result = _run_async(ai.list_bedrock_models())
+        return json.dumps(result)
+    except Exception as e:
+        logger.warning(f"ai_security_list_bedrock_models failed: {e}")
+        return json.dumps({"error": str(e), "models": [], "source": "ai-security-mcp"})
+
+
+@tool
+def ai_security_list_bedrock_agents() -> str:
+    """List Bedrock agents for agentic AI threat assessment (AI Security MCP).
+    
+    Use when assessing agentic AI risks, excessive agency, or agent inventory.
+    
+    Returns:
+        JSON with agents (agentId, agentName, agentStatus).
+    """
+    try:
+        ai = get_ai_security_mcp()
+        result = _run_async(ai.list_bedrock_agents())
+        return json.dumps(result)
+    except Exception as e:
+        logger.warning(f"ai_security_list_bedrock_agents failed: {e}")
+        return json.dumps({"error": str(e), "agents": [], "source": "ai-security-mcp"})
+
+
+@tool
+def ai_security_guardrail_recommendations() -> str:
+    """Get guardrail configuration recommendations (AI Security MCP).
+    
+    Use when user asks about LLM guardrails, prompt injection protection, or securing AI.
+    
+    Returns:
+        JSON with recommendations (e.g. Guardrail should protect against Prompt Injections).
+    """
+    try:
+        ai = get_ai_security_mcp()
+        result = _run_async(ai.get_guardrail_recommendations())
+        return json.dumps(result)
+    except Exception as e:
+        logger.warning(f"ai_security_guardrail_recommendations failed: {e}")
+        return json.dumps({"error": str(e), "recommendations": [], "source": "ai-security-mcp"})
+
+
+@tool
+def ai_security_owasp_llm_status() -> str:
+    """Get OWASP LLM Security Top 10 compliance posture (AI Security MCP).
+    
+    Use when user asks about OWASP LLM, LLM security posture, or compliance status.
+    
+    Returns:
+        JSON with categories (LLM01–LLM10), passed count, posture_percent.
+    """
+    try:
+        ai = get_ai_security_mcp()
+        result = _run_async(ai.get_owasp_llm_status())
+        return json.dumps(result)
+    except Exception as e:
+        logger.warning(f"ai_security_owasp_llm_status failed: {e}")
+        return json.dumps({"error": str(e), "categories": [], "source": "ai-security-mcp"})
+
+
+@tool
 def query_incident_history(account_id: str = "demo-account", limit: int = 5) -> str:
     """Query recent incidents from cross-incident memory (DynamoDB).
     
@@ -485,6 +559,33 @@ def query_incident_history(account_id: str = "demo-account", limit: int = 5) -> 
         return json.dumps({"error": str(e), "incidents": [], "account_id": account_id})
 
 
+@tool
+def get_security_playbook(query: str) -> str:
+    """Retrieve security playbooks and best practices from the Knowledge Base (RAG).
+    
+    Use when the user asks about incident response procedures, remediation steps,
+    AWS security best practices, MITRE ATT&CK mappings, or "how do I respond to X".
+    Only available when KNOWLEDGE_BASE_ID is configured (optional Terraform + console setup).
+    
+    Args:
+        query: Natural language question (e.g. "How to respond to cryptomining?",
+               "IAM privilege escalation remediation", "Data exfiltration playbook")
+    
+    Returns:
+        Answer with citations to playbook sources, or message if KB not configured.
+    """
+    try:
+        result = _run_async(kb_retrieve_and_generate(query))
+        answer = result.get("answer", "")
+        citations = result.get("citations", [])
+        if citations:
+            answer += "\n\nSources: " + "; ".join(citations[:3])
+        return answer
+    except Exception as e:
+        logger.warning(f"get_security_playbook failed: {e}")
+        return f"Playbook retrieval failed: {e}. Ensure KNOWLEDGE_BASE_ID is set and KB is synced."
+
+
 # ========== ALL STRANDS TOOLS ==========
 STRANDS_TOOLS = [
     # Core Nova agent tools
@@ -494,6 +595,7 @@ STRANDS_TOOLS = [
     generate_incident_documentation,
     query_security_incident,
     query_incident_history,
+    get_security_playbook,
     # AWS MCP server tools
     cloudtrail_lookup,
     cloudtrail_anomaly_scan,
@@ -503,6 +605,10 @@ STRANDS_TOOLS = [
     cloudwatch_billing_check,
     securityhub_get_findings,
     nova_canvas_generate_report_cover,
+    # AI Security MCP
+    ai_security_list_bedrock_models,
+    ai_security_list_bedrock_agents,
+    ai_security_guardrail_recommendations,
 ]
 
 
@@ -520,16 +626,21 @@ CORE ANALYSIS (Nova AI Models):
 4. generate_incident_documentation — JIRA/Slack/Confluence docs (Nova 2 Lite)
 5. query_security_incident — Answer questions about incidents (Nova 2 Lite)
 6. query_incident_history — Query past incidents from cross-incident memory (campaign correlation)
+7. get_security_playbook — Retrieve incident response playbooks from Knowledge Base (optional RAG)
 
 AWS MCP SERVER TOOLS:
-7. cloudtrail_lookup — Lookup CloudTrail events by category (cloudtrail-mcp-server)
-8. cloudtrail_anomaly_scan — Scan for security anomalies (cloudtrail-mcp-server)
-9. iam_audit — Audit IAM users/roles for issues (iam-mcp-server)
-10. iam_policy_analysis — Analyze specific IAM policies (iam-mcp-server)
-11. cloudwatch_security_check — Monitor security alarms and EC2 metrics (cloudwatch-mcp-server)
-12. cloudwatch_billing_check — Detect billing anomalies (cloudwatch-mcp-server)
-13. securityhub_get_findings — Get pre-correlated Security Hub findings (GuardDuty, Inspector)
-14. nova_canvas_generate_report_cover — Generate visual report covers (nova-canvas-mcp-server)
+8. cloudtrail_lookup — Lookup CloudTrail events by category (cloudtrail-mcp-server)
+9. cloudtrail_anomaly_scan — Scan for security anomalies (cloudtrail-mcp-server)
+10. iam_audit — Audit IAM users/roles for issues (iam-mcp-server)
+11. iam_policy_analysis — Analyze specific IAM policies (iam-mcp-server)
+12. cloudwatch_security_check — Monitor security alarms and EC2 metrics (cloudwatch-mcp-server)
+13. cloudwatch_billing_check — Detect billing anomalies (cloudwatch-mcp-server)
+14. securityhub_get_findings — Get pre-correlated Security Hub findings (GuardDuty, Inspector)
+15. nova_canvas_generate_report_cover — Generate visual report covers (nova-canvas-mcp-server)
+16. ai_security_list_bedrock_models — List Bedrock models for AI-BOM (ai-security-mcp)
+17. ai_security_list_bedrock_agents — List Bedrock agents for agentic AI assessment (ai-security-mcp)
+18. ai_security_guardrail_recommendations — Guardrail recommendations for LLM security (ai-security-mcp)
+19. ai_security_owasp_llm_status — OWASP LLM Top 10 compliance posture (ai-security-mcp)
 
 When analyzing an incident:
 - Start with cloudtrail_lookup or analyze_security_timeline to understand the attack
@@ -540,6 +651,8 @@ When analyzing an incident:
 - Create documentation for the incident response team
 - Use securityhub_get_findings for pre-correlated GuardDuty/Inspector findings
 - Use nova_canvas_generate_report_cover for visual reports
+- Use get_security_playbook for incident response procedures and AWS best practices (when KB configured)
+- Use ai_security_* tools when the user asks about AI security, Bedrock models, guardrails, or agentic AI threats
 
 Be concise, actionable, and security-focused in your responses."""
 
@@ -574,7 +687,7 @@ class StrandsOrchestrator:
         self.execution_history: List[Dict[str, Any]] = []
         self._agent = None
         logger.info(f"StrandsOrchestrator initialized with {len(STRANDS_TOOLS)} Strands tools "
-                     f"(6 core Nova + 8 AWS MCP server tools)")
+                     f"(6 core Nova + 8 AWS MCP + 3 AI Security MCP)")
     
     @property
     def agent(self) -> Agent:
@@ -825,9 +938,20 @@ class StrandsOrchestrator:
                     + prompt
                 )
         try:
-            # Run the Strands Agent in a thread (it's synchronous)
-            result = await asyncio.to_thread(self.agent, effective_prompt)
+            # Run the Strands Agent in a thread (it's synchronous).
+            # Timeout prevents runaway tool loops (Strands has no max_turns param).
+            AGENT_QUERY_TIMEOUT_SEC = 120
+            result = await asyncio.wait_for(
+                asyncio.to_thread(self.agent, effective_prompt),
+                timeout=AGENT_QUERY_TIMEOUT_SEC,
+            )
             return str(result)
+        except asyncio.TimeoutError:
+            logger.warning(f"Agent query timed out after {AGENT_QUERY_TIMEOUT_SEC}s")
+            return (
+                "The agent took too long to respond. Try a simpler query or narrow the scope. "
+                "You can also use the pipeline analysis for structured incident analysis."
+            )
         except Exception as e:
             logger.error(f"Strands agent query failed: {e}")
             return f"Agent error: {str(e)}"

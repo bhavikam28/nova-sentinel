@@ -4,7 +4,8 @@
  */
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, TrendingUp, Clock, AlertTriangle, Server, Database, Scale, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { TrendingUp, Clock, AlertTriangle, Server, Database, Scale, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { IconCost } from '../ui/MinimalIcons';
 import type { Timeline } from '../../types/incident';
 
 interface CostImpactProps {
@@ -260,8 +261,8 @@ const CostImpact: React.FC<CostImpactProps> = ({
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm flex-shrink-0">
-              <DollarSign className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+              <IconCost className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
             <h3 className="text-lg font-bold text-slate-800 tracking-tight">Cost Impact Estimation</h3>
@@ -279,39 +280,30 @@ const CostImpact: React.FC<CostImpactProps> = ({
           </button>
         </div>
 
-        {/* Real-time cost ticker — animated counter with methodology */}
-        <div className="mb-4 rounded-xl overflow-hidden border border-slate-200 shadow-lg">
-          <div className="px-5 py-4 bg-slate-900 text-white">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Total Incident Cost — Live Ticker</p>
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-3xl font-bold font-mono tabular-nums tracking-tight">
-                  ${tickerValue.toLocaleString()}
-                  {!tickerComplete && <span className="ml-1.5 inline-block w-2.5 h-5 bg-rose-500 animate-pulse rounded-sm" />}
-                </p>
-                <p className="text-xs text-slate-400 mt-1.5">
-                  {tickerComplete ? 'Total exposure without Nova Sentinel' : 'Counting up — simulating attack duration'}
-                </p>
-              </div>
-              {tickerComplete && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="px-5 py-3 rounded-xl bg-emerald-500/25 border border-emerald-400/40"
-                >
-                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Nova Saves</p>
-                  <p className="text-xl font-bold text-emerald-200 font-mono tabular-nums">${novaSentinelSavings.toLocaleString()}</p>
-                </motion.div>
-              )}
-            </div>
-            {/* What's included + methodology */}
-            <div className="mt-4 pt-4 border-t border-slate-700/60">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">What&apos;s included</p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Sum of: {costs.map((c) => `${c.label} ($${c.amount.toLocaleString()})`).join(' + ')}. Based on {timeline.events?.length || 0} CloudTrail events, incident type &quot;{incidentType || 'security incident'}&quot;. Uses AWS pricing, IBM Cost of Data Breach, Gartner downtime research, BLS labor rates. Expand categories below for full methodology.
+        {/* Compact cost ticker — minimal dark bar */}
+        <div className="mb-4 rounded-lg overflow-hidden border border-slate-200">
+          <div className="px-4 py-3 bg-slate-800 text-white flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Incident Cost</p>
+              <p className="text-xl font-bold font-mono tabular-nums tracking-tight">
+                ${tickerValue.toLocaleString()}
+                {!tickerComplete && <span className="ml-1 inline-block w-2 h-4 bg-rose-500 animate-pulse rounded" />}
               </p>
             </div>
+            {tickerComplete && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-400/30"
+              >
+                <p className="text-[9px] font-bold text-emerald-300 uppercase">Nova Saves</p>
+                <p className="text-base font-bold text-emerald-200 font-mono">${novaSentinelSavings.toLocaleString()}</p>
+              </motion.div>
+            )}
           </div>
+          <p className="px-4 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-slate-100">
+            {costs.map((c) => `${c.label} ($${c.amount.toLocaleString()})`).join(' + ')} · {timeline.events?.length || 0} events · Expand below for methodology
+          </p>
         </div>
 
         {/* Before/After comparison */}

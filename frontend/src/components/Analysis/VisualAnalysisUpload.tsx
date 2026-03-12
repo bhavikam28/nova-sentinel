@@ -466,7 +466,7 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
         <div>
           <h3 className="text-base font-bold text-slate-900">
-            {!displayResult && !selectedFile ? 'Upload a Diagram to Analyze' : 'Visual Architecture Analysis'}
+            {!displayResult && !selectedFile ? 'Upload a Diagram to Analyze' : 'Architecture & STRIDE'}
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             {!displayResult && !selectedFile
@@ -609,6 +609,7 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
                       timeline={timeline}
                       orchestrationResult={orchestrationResult}
                       securityFindings={displayResult?.analysis?.security_findings}
+                      showAttackPathOverlay
                     />
                   </div>
                 )}
@@ -762,7 +763,7 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
                           </div>
                         </div>
                       )}
-                    </div>
+                  </div>
                   </>
                 ) : (
                   <>

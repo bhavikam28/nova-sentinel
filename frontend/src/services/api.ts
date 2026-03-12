@@ -388,6 +388,98 @@ export const voiceAPI = {
     const response = await api.get('/api/voice/health');
     return response.data;
   },
+
+  /**
+   * Send audio to Nova Sonic (speech-to-speech) — returns audio + text
+   */
+  audioQuery: async (
+    audioBase64: string,
+    audioFormat: string,
+    incidentContext?: any,
+    accountId?: string
+  ): Promise<{ response_text: string; audio_response_b64?: string; processing_time_ms?: number }> => {
+    const response = await api.post('/api/voice/audio', {
+      audio_b64: audioBase64,
+      audio_format: audioFormat,
+      incident_context: incidentContext,
+      account_id: accountId || 'demo-account',
+    });
+    return response.data;
+  },
+};
+
+export const changesetAPI = {
+  /**
+   * List ChangeSets for a stack (for dropdown selection)
+   */
+  listChangeSets: async (stackName: string, region?: string): Promise<{ stack_name: string; change_sets: Array<{ change_set_name: string; change_set_id: string; status: string; execution_status: string }> }> => {
+    const params = new URLSearchParams({ stack_name: stackName });
+    if (region) params.append('region', region);
+    const response = await api.get(`/api/changeset/list?${params}`);
+    return response.data;
+  },
+
+  /**
+   * Analyze a CloudFormation ChangeSet for attack path risk
+   */
+  analyze: async (
+    stackName: string,
+    changeSetName: string,
+    region?: string
+  ): Promise<{
+    stack_name: string;
+    change_set_name: string;
+    change_set_status?: string;
+    risk_score: number;
+    risk_level: string;
+    risky_changes: Array<{
+      logical_id: string;
+      resource_type: string;
+      action: string;
+      physical_id: string;
+      risk_score: number;
+      reason: string;
+    }>;
+    attack_path_implication: string;
+    total_changes: number;
+    recommendation: string;
+    error?: string;
+  }> => {
+    const response = await api.post('/api/changeset/analyze', {
+      stack_name: stackName,
+      change_set_name: changeSetName,
+      region: region || undefined,
+    });
+    return response.data;
+  },
+};
+
+export const rubricAPI = {
+  evaluatePlan: async (plan: any): Promise<{ overall_score: number; scores: Record<string, number>; summary: string }> => {
+    const response = await api.post('/api/rubric/evaluate-plan', { plan });
+    return response.data;
+  },
+  evaluateTimeline: async (timeline: any): Promise<{ overall_score: number; scores: Record<string, number>; summary: string }> => {
+    const response = await api.post('/api/rubric/evaluate-timeline', { timeline });
+    return response.data;
+  },
+};
+
+export const protocolAPI = {
+  adherence: async (timeline: any, remediationPlan?: any, documentation?: any): Promise<{
+    overall_score: number;
+    phases: Array<{ id: string; label: string; completed: boolean; evidence: string }>;
+    phases_completed: number;
+    phases_total: number;
+    recommendation: string;
+  }> => {
+    const response = await api.post('/api/protocol/adherence', {
+      timeline,
+      remediation_plan: remediationPlan,
+      documentation,
+    });
+    return response.data;
+  },
 };
 
 export const novaActAPI = {

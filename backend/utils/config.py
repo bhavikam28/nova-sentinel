@@ -26,7 +26,19 @@ class Settings(BaseSettings):
     # Amazon Bedrock Guardrails — optional; when set, all Converse invocations use this guardrail
     guardrail_identifier: str = ""   # Guardrail ID or ARN from Bedrock console
     guardrail_version: str = "1"     # Version (e.g. "1") or "DRAFT"
-    
+
+    # Shadow AI detection — comma-separated ARNs of principals allowed to call InvokeModel
+    shadow_ai_allowed_principals: str = ""  # e.g. "arn:aws:iam::123:role/NovaSentinel,arn:aws:iam::123:role/MyApp"
+
+    # Nova 2 Lite extended thinking — low/medium/high; medium is best for agentic workflows
+    nova_reasoning_effort: str = "medium"  # low | medium | high
+
+    # Optional: Bedrock Knowledge Base (S3 Vectors) for RAG playbook retrieval
+    knowledge_base_id: str = ""  # Set after deploying terraform/ and creating KB in console
+
+    # Optional: AWS Knowledge MCP (remote, no Terraform) — real-time AWS docs
+    use_aws_knowledge_mcp: bool = False  # Set USE_AWS_KNOWLEDGE_MCP=true to enable
+
     # Nova Act — uses its own SDK, not Bedrock API
     # Requires NOVA_ACT_API_KEY environment variable
     nova_act_api_key: str = ""

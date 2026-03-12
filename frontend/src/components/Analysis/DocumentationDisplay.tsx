@@ -4,22 +4,27 @@
  * Renders platform-specific content as professional, readable output (not raw JSON).
  */
 import React, { useMemo, useState, useCallback } from 'react';
-import { FileText, MessageSquare, Book, Copy, CheckCircle2, ExternalLink, Loader2, Sparkles } from 'lucide-react';
+import { FileText, MessageSquare, Book, Copy, CheckCircle2, ExternalLink, Loader2, Sparkles, HelpCircle } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
 
-// Render platform content with bold (**text**) and newlines — professional, human-readable
+// Strip unprofessional emojis from API-returned content
+const EMOJI_PATTERN = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{1F900}-\u{1F9FF}]|🚨|⚠️|🔴|🟡|🟢|📌|📋|✅|❌|❗|‼️/gu;
+function sanitizeDocContent(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text.replace(EMOJI_PATTERN, '').trim();
+}
+
+// Render platform content: **text** (Markdown/Jira) and *text* (Slack) = bold
 function FormattedDocContent({ text }: { text: string }) {
   if (!text || typeof text !== 'string') return null;
-  const segments = text.split(/(\*\*[^*]+\*\*)/g);
+  const segments = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return (
     <div className="text-slate-700 text-[13px] leading-relaxed whitespace-pre-wrap">
-      {segments.map((seg, i) =>
-        seg.match(/^\*\*[^*]+\*\*$/) ? (
-          <strong key={i} className="font-semibold text-slate-900">{seg.slice(2, -2)}</strong>
-        ) : (
-          <span key={i}>{seg}</span>
-        )
-      )}
+      {segments.map((seg, i) => {
+        if (seg.match(/^\*\*[^*]+\*\*$/)) return <strong key={i} className="font-semibold text-slate-900">{seg.slice(2, -2)}</strong>;
+        if (seg.match(/^\*[^*]+\*$/)) return <strong key={i} className="font-semibold text-slate-900">{seg.slice(1, -1)}</strong>;
+        return <span key={i}>{seg}</span>;
+      })}
     </div>
   );
 }
@@ -47,6 +52,13 @@ const DocumentationDisplay: React.FC<DocumentationDisplayProps> = ({
   const [activeTab, setActiveTab] = useState<'jira' | 'slack' | 'confluence'>('jira');
   const [copied, setCopied] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [showEnvHelp, setShowEnvHelp] = useState(false);
+
+  const envVarsNeeded = [
+    'VITE_JIRA_BASE_URL — your Atlassian URL (e.g. https://your-org.atlassian.net)',
+    'VITE_SLACK_CHANNEL_URL — Slack channel URL (copy from browser when in #security-incidents)',
+    'VITE_CONFLUENCE_BASE_URL — Confluence base URL (e.g. https://your-org.atlassian.net/wiki)',
+  ];
 
   const getSteps = () => {
     const plan = remediationPlan?.plan;
@@ -86,28 +98,49 @@ ${stepList}
 **Assignee:** [Security Team]`,
       },
       slack: {
-        title: 'Security Alert',
-        content: `🚨 *Security Incident* \`${incidentId}\`
-Post to #security-incidents
+        title: 'Security Incident Report',
+        content: `*Security Incident Report — ${incidentId}*
 
-*Root Cause:* ${rootCause.substring(0, 200)}${rootCause.length > 200 ? '...' : ''}
-*Remediation:* ${steps.length || 0} steps
+*Classification:* Critical
+*Channel:* #security-incidents
+
+*Executive Summary*
+${rootCause.substring(0, 300)}${rootCause.length > 300 ? '...' : ''}
+
+*Attack Pattern*
+${attackPattern.substring(0, 200)}${attackPattern.length > 200 ? '...' : ''}
+
+*Blast Radius*
+${blastRadius}
+
+*Remediation*
+${steps.length || 0} steps identified. Full details in Nova Sentinel.
+
+*Link*
 <https://nova-sentinel.app/incidents/${incidentId}|View in Nova Sentinel>`,
       },
       confluence: {
         title: `Incident Postmortem: ${incidentId}`,
-        content: `= Incident Postmortem: ${incidentId} =
+        content: `h1. Incident Postmortem: ${incidentId}
 
-h3. Timeline
-${events.slice(0, 8).map((e: any, i: number) => `${i + 1}. ${e.timestamp || ''} - ${e.action || 'Event'} (${e.severity || 'N/A'})`).join('\n') || 'No events'}
+h2. Executive Summary
+Security incident ${incidentId} was identified and analyzed. Root cause: ${rootCause.substring(0, 150)}${rootCause.length > 150 ? '...' : ''}
 
-h3. Impact Analysis
+h2. Timeline
+${events.slice(0, 10).map((e: any) => `* ${e.timestamp || 'N/A'} — ${e.action || 'Event'} (Severity: ${e.severity || 'N/A'})`).join('\n') || 'No events recorded'}
+
+h2. Impact Analysis
 *Blast Radius:* ${blastRadius}
+*Attack Pattern:* ${attackPattern}
 
-h3. Lessons Learned
-- Review least privilege for contractor/external roles
-- Enforce MFA for sensitive operations
-- Monitor security group changes`,
+h2. Remediation Steps
+${stepList}
+
+h2. Lessons Learned
+* Review least privilege for contractor and external roles
+* Enforce MFA for sensitive operations
+* Monitor security group and IAM policy changes
+* Document incident timeline for audit trail`,
       },
     };
   }, [timeline, remediationPlan, incidentId]);
@@ -140,10 +173,11 @@ h3. Lessons Learned
   const getContent = useCallback((): string => {
     const doc = effectiveDoc[activeTab];
     if (!doc) return '';
-    if (typeof doc === 'string') return doc;
+    if (typeof doc === 'string') return sanitizeDocContent(doc);
     // Prefer human-readable platform content; never show raw JSON
     const text = doc.content || doc.description || doc.message;
-    return (text && String(text).trim()) ? String(text) : '';
+    const raw = (text && String(text).trim()) ? String(text) : '';
+    return sanitizeDocContent(raw);
   }, [effectiveDoc, activeTab]);
 
   const getTitle = () => {
@@ -168,8 +202,8 @@ h3. Lessons Learned
     <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden max-w-4xl">
       <div className="px-5 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/30 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm flex-shrink-0">
-            <FileText className="w-4.5 h-4.5 text-white" />
+          <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-4.5 h-4.5 text-indigo-600" />
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900">Automated Documentation</h3>
@@ -253,20 +287,58 @@ h3. Lessons Learned
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {copied === activeTab ? (
-              <><CheckCircle2 className="w-3.5 h-3.5" /> Copied for {tabs.find(t => t.id === activeTab)?.label}</>
+              <><CheckCircle2 className="w-3.5 h-3.5" /> Copied</>
             ) : (
-              <><Copy className="w-3.5 h-3.5" /> Copy for {tabs.find(t => t.id === activeTab)?.label}</>
+              <><Copy className="w-3.5 h-3.5" /> Copy</>
             )}
           </button>
-          {activeTab === 'jira' && (import.meta.env.VITE_JIRA_BASE_URL as string) && (
-            <a
-              href={`${(import.meta.env.VITE_JIRA_BASE_URL as string).replace(/\/$/, '')}/secure/CreateIssue.jspa?summary=${encodeURIComponent(getTitle())}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> Open in JIRA
-            </a>
+          {activeTab === 'jira' && (
+            import.meta.env.VITE_JIRA_BASE_URL ? (
+              <a
+                href={`${(import.meta.env.VITE_JIRA_BASE_URL as string).replace(/\/$/, '')}/secure/CreateIssue.jspa?summary=${encodeURIComponent(getTitle())}&description=${encodeURIComponent(content)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Open in JIRA
+              </a>
+            ) : (
+              <span title="Add VITE_JIRA_BASE_URL to .env to enable" className="px-4 py-2 bg-slate-50 text-slate-400 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-slate-200 cursor-not-allowed" aria-label="Configure VITE_JIRA_BASE_URL in .env to enable">
+                <ExternalLink className="w-3.5 h-3.5" /> Open in JIRA <span className="text-[9px] font-normal opacity-75">(set env)</span>
+              </span>
+            )
+          )}
+          {activeTab === 'slack' && (
+            import.meta.env.VITE_SLACK_CHANNEL_URL ? (
+              <a
+                href={(import.meta.env.VITE_SLACK_CHANNEL_URL as string)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Open in Slack
+              </a>
+            ) : (
+              <span title="Add VITE_SLACK_CHANNEL_URL to .env to enable" className="px-4 py-2 bg-slate-50 text-slate-400 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-slate-200 cursor-not-allowed" aria-label="Configure VITE_SLACK_CHANNEL_URL in .env to enable">
+                <ExternalLink className="w-3.5 h-3.5" /> Open in Slack <span className="text-[9px] font-normal opacity-75">(set env)</span>
+              </span>
+            )
+          )}
+          {activeTab === 'confluence' && (
+            import.meta.env.VITE_CONFLUENCE_BASE_URL ? (
+              <a
+                href={`${(import.meta.env.VITE_CONFLUENCE_BASE_URL as string).replace(/\/$/, '')}/spaces/${encodeURIComponent((import.meta.env.VITE_CONFLUENCE_SPACE_KEY as string) || 'SEC')}/pages/create`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Open in Confluence
+              </a>
+            ) : (
+              <span title="Add VITE_CONFLUENCE_BASE_URL to .env to enable" className="px-4 py-2 bg-slate-50 text-slate-400 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-slate-200 cursor-not-allowed" aria-label="Configure VITE_CONFLUENCE_BASE_URL in .env to enable">
+                <ExternalLink className="w-3.5 h-3.5" /> Open in Confluence <span className="text-[9px] font-normal opacity-75">(set env)</span>
+              </span>
+            )
           )}
           <button
             onClick={() => {
@@ -284,7 +356,26 @@ h3. Lessons Learned
           >
             <FileText className="w-3.5 h-3.5" /> Export Markdown
           </button>
+          <button
+            onClick={() => setShowEnvHelp((v) => !v)}
+            className="px-4 py-2 bg-slate-50 text-slate-500 rounded-lg text-xs font-medium hover:bg-slate-100 transition-colors flex items-center gap-1.5 border border-slate-200"
+            title="How to enable Open in Jira/Slack/Confluence"
+          >
+            <HelpCircle className="w-3.5 h-3.5" /> How to enable
+          </button>
         </div>
+        {showEnvHelp && (
+          <div className="mt-3 p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-left">
+            <p className="text-xs font-semibold text-indigo-800 mb-2">Enable Open in Jira / Slack / Confluence</p>
+            <p className="text-xs text-indigo-700 mb-2">Add these to your project root <code className="bg-indigo-100 px-1 rounded">.env</code> file:</p>
+            <ul className="text-xs text-indigo-700 space-y-1 list-disc list-inside">
+              {envVarsNeeded.map((v) => (
+                <li key={v}>{v}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-indigo-600 mt-2">Restart the frontend dev server after changing .env. See <code className="bg-indigo-100 px-1 rounded">docs/DOCUMENTATION_INTEGRATIONS.md</code> for details.</p>
+          </div>
+        )}
       </div>
     </div>
   );

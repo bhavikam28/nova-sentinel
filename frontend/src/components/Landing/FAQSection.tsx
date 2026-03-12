@@ -50,6 +50,10 @@ const FAQSection: React.FC = () => {
       a: 'Nova Sentinel uses MITRE ATLAS for AI pipeline security — prompt injection detection, API abuse monitoring, output validation. Amazon Bedrock Guardrails add a complementary layer: content filters, prompt-attack blocking, PII masking at the API level. We recommend enabling Guardrails for defense in depth. See the AI Pipeline Security tab for details.',
     },
     {
+      q: 'What agents does Nova Sentinel use?',
+      a: 'Nova Sentinel uses 5 specialized pipeline agents (Detect, Investigate, Classify, Remediate, Document) plus an Agentic Query agent that autonomously picks tools from 5 AWS MCP servers (CloudTrail, IAM, CloudWatch, Security Hub, Nova Canvas). Security Health Check runs 5 agent queries with no incident required. All orchestrated via Strands Agents SDK.',
+    },
+    {
       q: 'What does "agentic" mean?',
       a: 'Multiple AI models work together with shared state. Nova Sentinel uses 5 Nova models: Temporal (timeline), Risk Scorer (severity), Remediation (action plan), Documentation (JIRA/Slack/Confluence), plus an Autonomous Agent that picks its own tools. Each does what it\'s best at — no manual triage.',
     },
