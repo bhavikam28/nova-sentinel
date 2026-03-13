@@ -60,9 +60,9 @@ export const getSeverityColor = (severity?: SeverityLevel): string => {
 export const getSeverityBadgeColor = (severity?: SeverityLevel): string => {
   switch (severity) {
     case 'CRITICAL':
-      return 'bg-red-600 text-white';
+      return 'bg-red-600 text-white badge-critical-pulse';
     case 'HIGH':
-      return 'bg-orange-500 text-white';
+      return 'bg-orange-500 text-white badge-high-pulse';
     case 'MEDIUM':
       return 'bg-yellow-500 text-white';
     case 'LOW':

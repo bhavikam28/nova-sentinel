@@ -3,9 +3,9 @@
  * The Agent decides which tools to call (CloudTrail, IAM, CloudWatch, etc.)
  * based on your prompt — real agentic reasoning.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Send, Loader2, MessageSquare, ChevronRight, Clock, Wrench, Brain, Shield, Activity, Database, Trash2 } from 'lucide-react';
+import { Zap, Send, Loader2, ChevronRight, Clock, Wrench, Brain, Shield, Activity, Database, Trash2, User, Bot } from 'lucide-react';
 import { orchestrationAPI } from '../../services/api';
 
 const MAX_HISTORY_EXCHANGES = 5; // Keep last 5 user+assistant pairs for multi-turn context
@@ -237,7 +237,6 @@ type ConversationMessage = { role: 'user' | 'assistant'; content: string };
 
 export default function AgenticQuery({ backendOffline = false }: AgenticQueryProps) {
   const [prompt, setPrompt] = useState('');
-  const [response, setResponse] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
@@ -245,6 +244,11 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
   const [isDemoFallback, setIsDemoFallback] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   const startRef = useRef<number>(0);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversationHistory, loading]);
 
   const runQuery = async (text: string) => {
     const trimmed = text.trim();
@@ -254,7 +258,6 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
     setSubmittedPrompt(trimmed);
     setLoading(true);
     setError(null);
-    setResponse(null);
     setElapsedMs(null);
     setIsDemoFallback(false);
     startRef.current = Date.now();
@@ -268,7 +271,6 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
           await new Promise(r => setTimeout(r, delay));
           const varied = varyDemoResponse(fallback, trimmed);
           setElapsedMs(Date.now() - startRef.current);
-          setResponse(varied);
           setIsDemoFallback(true);
           setConversationHistory((prev) => {
             const next = [...prev, { role: 'user' as const, content: trimmed }, { role: 'assistant' as const, content: varied }];
@@ -282,7 +284,6 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
         const result = await orchestrationAPI.agentQuery(trimmed, conversationHistory);
         const resp = result.response || 'No response.';
         setElapsedMs(Date.now() - startRef.current);
-        setResponse(resp);
         setConversationHistory((prev) => {
           const next = [...prev, { role: 'user' as const, content: trimmed }, { role: 'assistant' as const, content: resp }];
           return next.slice(-MAX_HISTORY_EXCHANGES * 2);
@@ -294,7 +295,6 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
         await new Promise(r => setTimeout(r, 1200 + Math.random() * 400));
         const varied = varyDemoResponse(fallback, trimmed);
         setElapsedMs(Date.now() - startRef.current);
-        setResponse(varied);
         setIsDemoFallback(true);
         setConversationHistory((prev) => {
           const next = [...prev, { role: 'user' as const, content: trimmed }, { role: 'assistant' as const, content: varied }];
@@ -309,7 +309,6 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
     }
   };
 
-  const toolsUsed = response ? detectToolsUsed(response) : [];
   const historyCount = Math.floor(conversationHistory.length / 2);
 
   /** Highlight severity keywords in response text */
@@ -362,7 +361,7 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
             </div>
             {historyCount > 0 && (
               <button
-                onClick={() => { setConversationHistory([]); setResponse(null); setError(null); }}
+                onClick={() => { setConversationHistory([]); setError(null); }}
                 className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -433,96 +432,152 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
           </div>
         </div>
 
-        {/* Loading state */}
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="px-5 py-4 border-b border-slate-100 bg-indigo-50/30"
-            >
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Brain className="w-6 h-6 text-indigo-600" />
-                  <motion.div
-                    className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500"
-                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
-                    transition={{ duration: 1.2, repeat: Infinity }}
-                  />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-1">
-                    Agent planning and executing tools
-                    <span className="inline-flex gap-0.5">
+        {/* Chat thread — conversation history as bubbles */}
+        {conversationHistory.length > 0 && (
+          <div className="px-5 py-4 space-y-4 max-h-[520px] overflow-y-auto border-b border-slate-100 bg-gradient-to-b from-slate-50/50 to-white">
+            {conversationHistory.map((msg, idx) => {
+              const isUser = msg.role === 'user';
+              const isLastAssistant = !isUser && idx === conversationHistory.length - 1;
+              const msgTools = !isUser ? detectToolsUsed(msg.content) : [];
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                >
+                  {/* Avatar */}
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    isUser ? 'bg-indigo-600' : 'bg-slate-100 border border-slate-200'
+                  }`}>
+                    {isUser
+                      ? <User className="w-4 h-4 text-white" />
+                      : <Bot className="w-4 h-4 text-indigo-600" />
+                    }
+                  </div>
+                  {/* Bubble */}
+                  <div className={`flex-1 max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                    {isUser ? (
+                      <div className="self-end bg-indigo-600 text-white text-sm px-4 py-2.5 rounded-2xl rounded-tr-sm shadow-sm max-w-full">
+                        <p className="leading-relaxed">{msg.content}</p>
+                      </div>
+                    ) : (
+                      <div className="self-start bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm overflow-hidden w-full">
+                        {isLastAssistant && msgTools.length > 0 && (
+                          <div className="px-4 pt-3 pb-1 flex flex-wrap gap-1.5">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider self-center">Tools:</span>
+                            {msgTools.map(({ tool, icon: Icon, color }) => (
+                              <span key={tool} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-semibold ${color}`}>
+                                <Icon className="w-2.5 h-2.5" />{tool}
+                              </span>
+                            ))}
+                            {isLastAssistant && elapsedMs !== null && (
+                              <span className="inline-flex items-center gap-1 ml-auto text-[9px] font-medium text-slate-400">
+                                <Clock className="w-2.5 h-2.5" />
+                                {elapsedMs < 1000 ? `${elapsedMs}ms` : `${(elapsedMs / 1000).toFixed(1)}s`}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <div className="px-4 py-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                          {formatResponse(msg.content)}
+                        </div>
+                        {isLastAssistant && (
+                          <div className="px-4 pb-2 flex items-center gap-2">
+                            <span className="text-[9px] text-slate-400">{isDemoFallback ? 'Demo mode' : 'Strands Agents SDK · Nova Pro'}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+
+            {/* Thinking bubble */}
+            <AnimatePresence>
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="flex gap-3"
+                >
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm px-4 py-3 flex items-center gap-2">
+                    <div className="relative">
+                      <Brain className="w-4 h-4 text-indigo-500" />
+                      <motion.div
+                        className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-indigo-400"
+                        animate={{ scale: [1, 1.4, 1] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 flex items-center gap-0.5">
+                      Planning tools
                       <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.6, repeat: Infinity }}>.</motion.span>
                       <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}>.</motion.span>
                       <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}>.</motion.span>
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-500">Deciding which tools to call for: &quot;{submittedPrompt?.slice(0, 60)}{(submittedPrompt?.length || 0) > 60 ? '...' : ''}&quot;</p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* Response */}
-        <AnimatePresence>
-          {(response || error) && !loading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-5 space-y-4"
-            >
-              {error && (
-                <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 font-medium">
+            {/* Error bubble */}
+            {error && !loading && (
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 border border-red-200 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-red-500" />
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-red-700 font-medium">
                   {error}
                 </div>
-              )}
-              {response && (
-                <>
-                  {/* Tools detected + timing bar */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {toolsUsed.length > 0 && (
-                      <>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tools used:</span>
-                        {toolsUsed.map(({ tool, icon: Icon, color }) => (
-                          <span
-                            key={tool}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-semibold ${color}`}
-                          >
-                            <Icon className="w-3 h-3" />
-                            {tool}
-                          </span>
-                        ))}
-                      </>
-                    )}
-                    {elapsedMs !== null && (
-                      <span className="inline-flex items-center gap-1 ml-auto text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
-                        <Clock className="w-3.5 h-3.5" />
-                        {elapsedMs < 1000 ? `${elapsedMs}ms` : `${(elapsedMs / 1000).toFixed(1)}s`}
-                      </span>
-                    )}
-                  </div>
+              </div>
+            )}
 
-                  {/* Agent response — with severity highlighting */}
-                  <div className="rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/50 to-white overflow-hidden">
-                    <div className="px-4 py-2.5 bg-gradient-to-r from-indigo-100 to-violet-50 border-b border-indigo-200 flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4 text-indigo-600" />
-                      <span className="text-xs font-bold text-slate-800">Agent response</span>
-                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">Autonomous</span>
-                      <span className="text-[10px] text-slate-500 ml-auto">{isDemoFallback ? 'Demo mode' : 'Strands Agents SDK'}</span>
-                    </div>
-                    <div className="p-4 text-sm text-slate-700 leading-relaxed max-h-[480px] overflow-y-auto whitespace-pre-wrap">
-                      {formatResponse(response)}
-                    </div>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            <div ref={chatEndRef} />
+          </div>
+        )}
+
+        {/* Empty state + loading (first message) */}
+        {conversationHistory.length === 0 && loading && (
+          <div className="px-5 py-4 border-b border-slate-100 bg-indigo-50/30">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Brain className="w-6 h-6 text-indigo-600" />
+                <motion.div
+                  className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500"
+                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-700 flex items-center gap-1">
+                  Agent planning and executing tools
+                  <span className="inline-flex gap-0.5">
+                    <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.6, repeat: Infinity }}>.</motion.span>
+                    <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}>.</motion.span>
+                    <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}>.</motion.span>
+                  </span>
+                </p>
+                <p className="text-xs text-slate-500">Deciding which tools to call for: &quot;{submittedPrompt?.slice(0, 60)}{(submittedPrompt?.length || 0) > 60 ? '...' : ''}&quot;</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error (no history yet) */}
+        {error && conversationHistory.length === 0 && !loading && (
+          <div className="px-5 py-4">
+            <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 font-medium">
+              {error}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* How it works — matches RemediationPlan style */}

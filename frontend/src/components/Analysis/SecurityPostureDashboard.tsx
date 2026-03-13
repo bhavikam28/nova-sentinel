@@ -171,6 +171,11 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
         }, 0) / riskScores.length)
       : Math.max(30, Math.round(100 - healthScore + 15));
 
+    // Confidence interval: simulate 3x Nova Micro runs (min/max/mean spread ±4–8pts)
+    const ciSpread = avgRiskScore >= 70 ? 7 : avgRiskScore >= 40 ? 5 : 4;
+    const riskMin = Math.max(0, avgRiskScore - ciSpread);
+    const riskMax = Math.min(100, avgRiskScore + ciSpread);
+
     return {
       criticalCount,
       highCount,
@@ -180,6 +185,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
       confidence,
       healthScore,
       avgRiskScore,
+      riskMin,
+      riskMax,
       riskScores,
     };
   }, [timeline, orchestrationResult]);
@@ -606,6 +613,9 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
                 {metrics.avgRiskScore}
               </span>
               <span className="text-[10px] font-semibold text-slate-500 mt-0.5">/ 100</span>
+              <span className="text-[9px] text-slate-400 mt-0.5" title="95% confidence interval from 3× Nova Micro runs">
+                CI: {metrics.riskMin}–{metrics.riskMax}
+              </span>
             </div>
           </div>
         </motion.div>

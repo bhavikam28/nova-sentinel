@@ -4,7 +4,7 @@
  * Renders platform-specific content as professional, readable output (not raw JSON).
  */
 import React, { useMemo, useState, useCallback } from 'react';
-import { FileText, MessageSquare, Book, Copy, CheckCircle2, ExternalLink, Loader2, Sparkles, HelpCircle } from 'lucide-react';
+import { FileText, MessageSquare, Book, Copy, CheckCircle2, ExternalLink, Loader2, Sparkles, HelpCircle, AlertTriangle, CheckCircle } from 'lucide-react';
 import type { Timeline } from '../../types/incident';
 
 // Strip unprofessional emojis from API-returned content
@@ -25,6 +25,104 @@ function FormattedDocContent({ text }: { text: string }) {
         if (seg.match(/^\*[^*]+\*$/)) return <strong key={i} className="font-semibold text-slate-900">{seg.slice(1, -1)}</strong>;
         return <span key={i}>{seg}</span>;
       })}
+    </div>
+  );
+}
+
+/**
+ * Realistic Slack message card — looks like what #security-incidents actually shows.
+ * No real Slack API needed; this is a visual mock for demo purposes.
+ */
+function SlackMessageCard({ content, incidentId }: { content: string; incidentId: string }) {
+  const lines = content.split('\n').filter(l => l.trim());
+  const title = lines[0]?.replace(/^\*|\*$/g, '') || `Security Incident ${incidentId}`;
+  const severity = content.toLowerCase().includes('critical') ? 'CRITICAL' : content.toLowerCase().includes('high') ? 'HIGH' : 'MEDIUM';
+  const severityColor = severity === 'CRITICAL' ? '#E53E3E' : severity === 'HIGH' ? '#DD6B20' : '#D69E2E';
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const extractSection = (label: string): string => {
+    const idx = lines.findIndex(l => l.toLowerCase().includes(label.toLowerCase()));
+    if (idx < 0) return '';
+    return lines.slice(idx + 1, idx + 3).join(' ').replace(/^\*|\*$/g, '').trim().slice(0, 120);
+  };
+
+  return (
+    <div className="font-sans bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm max-w-xl">
+      {/* Slack toolbar mock */}
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#350d36] border-b border-[#4a1248]">
+        <div className="w-5 h-5 rounded bg-white/20 flex items-center justify-center">
+          <MessageSquare className="w-3 h-3 text-white" />
+        </div>
+        <span className="text-white text-xs font-bold">#security-incidents</span>
+        <span className="ml-auto text-white/50 text-[10px]">wolfir-bot</span>
+      </div>
+      {/* Message thread */}
+      <div className="px-4 py-3 bg-white">
+        <div className="flex gap-3">
+          {/* Bot avatar */}
+          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
+            <AlertTriangle className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-sm font-bold text-slate-900">wolfir-bot</span>
+              <span className="text-[10px] text-slate-400">{timeStr}</span>
+              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-green-100 text-green-700 border border-green-200">APP</span>
+            </div>
+            <p className="text-sm text-slate-600 mb-2">New security incident detected and analyzed:</p>
+            {/* Attachment card — matches Slack's attachment format */}
+            <div className="rounded-lg border border-slate-200 overflow-hidden" style={{ borderLeftWidth: 4, borderLeftColor: severityColor }}>
+              <div className="px-3 py-2.5 bg-slate-50">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-sm font-bold text-slate-900 leading-tight">{title}</p>
+                  <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-black rounded" style={{ background: severityColor, color: 'white' }}>
+                    {severity}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
+                  {[
+                    { label: 'Incident ID', value: incidentId },
+                    { label: 'Channel', value: '#security-incidents' },
+                    { label: 'Summary', value: extractSection('summary') || extractSection('classification') || 'See full report' },
+                    { label: 'Blast Radius', value: extractSection('blast') || 'Under assessment' },
+                  ].map(({ label, value }) => value && (
+                    <div key={label}>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                      <p className="text-xs text-slate-700 truncate">{value || '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Action buttons row */}
+              <div className="flex items-center gap-2 px-3 py-2 border-t border-slate-200 bg-white">
+                <button className="px-3 py-1 text-[10px] font-bold text-white rounded" style={{ background: severityColor }}>
+                  View Incident
+                </button>
+                <button className="px-3 py-1 text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded border border-slate-200">
+                  Acknowledge
+                </button>
+                <button className="px-3 py-1 text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded border border-slate-200">
+                  Escalate
+                </button>
+              </div>
+            </div>
+            {/* Reactions */}
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-full text-[11px] border border-slate-200 cursor-pointer">👀 2</span>
+              <span className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-full text-[11px] border border-slate-200 cursor-pointer">🔴 1</span>
+              <span className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-full text-[11px] border border-slate-200 cursor-pointer">✅ 0</span>
+              <span className="text-[10px] text-slate-400 ml-1">3 replies · Last reply {timeStr}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+        <span className="text-[10px] text-slate-400">Sent via wolfir · Strands Agent · Nova 2 Lite</span>
+        <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
+          <CheckCircle className="w-3 h-3" /> Delivered
+        </span>
+      </div>
     </div>
   );
 }
@@ -56,6 +154,7 @@ const DocumentationDisplay: React.FC<DocumentationDisplayProps> = ({
   const [copied, setCopied] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [showEnvHelp, setShowEnvHelp] = useState(false);
+  const [slackPreview, setSlackPreview] = useState(true);
 
   const envVarsNeeded = [
     'VITE_JIRA_BASE_URL — your Atlassian URL (e.g. https://your-org.atlassian.net)',
@@ -280,16 +379,38 @@ h2. Lessons Learned
           </div>
         </div>
 
-        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 max-h-64 overflow-y-auto">
-          <div className="prose prose-slate prose-sm max-w-none">
-            {hasContent ? (
-              <FormattedDocContent text={content} />
-            ) : (
-              <p className="text-slate-500 text-sm">
-                {demoMode && timeline ? 'Pre-generated from scenario — judges always see content when demo runs. Generate Documentation uses Nova 2 Lite when backend is connected.' : 'Documentation will appear here after analysis. Use "Generate Documentation" to create via Nova 2 Lite, or run a demo.'}
-              </p>
-            )}
+        {/* Slack preview toggle */}
+        {activeTab === 'slack' && hasContent && (
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setSlackPreview(true)}
+              className={`px-3 py-1.5 text-[10px] font-bold rounded-lg border transition-colors ${slackPreview ? 'bg-[#350d36] text-white border-[#350d36]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              Slack Preview
+            </button>
+            <button
+              onClick={() => setSlackPreview(false)}
+              className={`px-3 py-1.5 text-[10px] font-bold rounded-lg border transition-colors ${!slackPreview ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              Raw Text
+            </button>
           </div>
+        )}
+
+        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 max-h-72 overflow-y-auto">
+          {activeTab === 'slack' && slackPreview && hasContent ? (
+            <SlackMessageCard content={content} incidentId={incidentId} />
+          ) : (
+            <div className="prose prose-slate prose-sm max-w-none">
+              {hasContent ? (
+                <FormattedDocContent text={content} />
+              ) : (
+                <p className="text-slate-500 text-sm">
+                  {demoMode && timeline ? 'Pre-generated from scenario — judges always see content when demo runs. Generate Documentation uses Nova 2 Lite when backend is connected.' : 'Documentation will appear here after analysis. Use "Generate Documentation" to create via Nova 2 Lite, or run a demo.'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2 pt-4 mt-4 border-t border-slate-100">

@@ -231,6 +231,42 @@ sequenceDiagram
     Frontend-->>User: Timeline, Attack Path, Remediation, Docs
 ```
 
+### Scalability Architecture (SQS + Multi-Region)
+
+How wolfir scales from a hackathon demo to a real SOC handling 11,000+ alerts/day:
+
+```
+                        ┌─────────────────────────────┐
+                        │   CloudTrail / GuardDuty     │
+                        │   (11,000+ events/day)       │
+                        └──────────────┬──────────────┘
+                                       │
+                        ┌──────────────▼──────────────┐
+                        │   AWS SQS (Alert Queue)     │
+                        │   FIFO · DLQ · 14-day TTL   │
+                        └──┬──────────┬──────────┬───┘
+                           │          │          │
+              ┌────────────▼─┐  ┌─────▼──────┐  ┌▼────────────┐
+              │ wolfir Worker │  │wolfir Worker│  │wolfir Worker│
+              │  (ECS Fargate)│  │(ECS Fargate)│  │(ECS Fargate)│
+              │ Priority:HIGH │  │Priority:MED │  │Priority:LOW │
+              └──────┬───────┘  └──────┬──────┘  └──────┬──────┘
+                     │                 │                  │
+              ┌──────▼─────────────────▼──────────────────▼──────┐
+              │        Strands Agents Orchestration Layer         │
+              │   Nova Pro · Nova 2 Lite · Nova Micro · Nova Act  │
+              │           6 MCP Servers · 27 MCP Tools            │
+              └──────────────────────┬───────────────────────────┘
+                                     │
+              ┌──────────────────────▼───────────────────────────┐
+              │              DynamoDB Global Tables               │
+              │    Cross-region incident memory & correlation     │
+              │    us-east-1 · us-west-2 · ap-southeast-1        │
+              └──────────────────────────────────────────────────┘
+```
+
+**Why this matters:** The current demo runs a single FastAPI worker. In production, SQS decouples alert ingestion from AI processing — you can burst to 100 concurrent Strands agents during an active breach without dropping alerts. Each worker is stateless; DynamoDB holds all cross-incident state. The FIFO queue ensures critical events (GuardDuty HIGH) jump ahead of low-severity CloudWatch noise.
+
 ## 🔑 Key Differentiators
 
 ### 1. Cross-Incident Memory (DynamoDB)

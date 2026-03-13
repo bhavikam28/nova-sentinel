@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft, ChevronRight as ChevronRightIcon, ArrowLeft, Menu, X, Lock
+  ChevronLeft, ChevronRight as ChevronRightIcon, ChevronDown, ArrowLeft, Menu, X, Lock
 } from 'lucide-react';
 import WolfirLogo, { WolfirWordmark } from '../Logo';
 import { maskAccountId } from '../../utils/formatting';
@@ -21,31 +21,33 @@ export interface SidebarFeature {
   locked: boolean;
   badge?: string;
   badgeColor?: string;
-  group: 'ai_security' | 'analysis' | 'intelligence' | 'tools';
+  group: 'ai_security' | 'analysis' | 'intelligence' | 'tools' | 'advanced';
   requiresAnalysis?: boolean;
 }
 
 export const SIDEBAR_FEATURES: SidebarFeature[] = [
-  // Analysis group first — judges look at overview first
+  // Core IR flow — judges evaluate these first
   { id: 'overview', label: 'Security Overview', icon: IconOverview, locked: false, group: 'analysis' },
-  { id: 'ai-pipeline', label: 'AI Security Posture', icon: IconAIPipeline, locked: false, group: 'ai_security' },
-  { id: 'security-graph', label: 'Security Graph', icon: IconGraph, locked: false, group: 'ai_security' },
-  { id: 'ai-compliance', label: 'AI Compliance', icon: IconCompliance, locked: false, group: 'ai_security' },
   { id: 'timeline', label: 'Incident Timeline', icon: IconTimeline, locked: false, group: 'analysis', requiresAnalysis: true },
   { id: 'attack-path', label: 'Attack Path', icon: IconAttackPath, locked: false, group: 'analysis' },
-  { id: 'changeset', label: 'ChangeSet Risk', icon: IconChangeSet, locked: false, badge: 'NEW', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
-  { id: 'agentic-query', label: 'Autonomous Agent', icon: IconAgent, locked: false, badge: 'NEW', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
-  { id: 'incident-history', label: 'Incident History', icon: IconHistory, locked: false, group: 'analysis' },
-  // Intelligence group
+  { id: 'remediation', label: 'Remediation Engine', icon: IconRemediation, locked: false, group: 'analysis' },
+  { id: 'agentic-query', label: 'Autonomous Agent', icon: IconAgent, locked: false, badge: 'AI', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
+  // AI Security Posture — the novel second pillar
+  { id: 'ai-pipeline', label: 'AI Security Posture', icon: IconAIPipeline, locked: false, group: 'ai_security' },
+  // Intelligence
   { id: 'compliance', label: 'Compliance Mapping', icon: IconCompliance, locked: false, badge: '6', group: 'intelligence' },
   { id: 'cost', label: 'Cost Impact', icon: IconCost, locked: false, group: 'intelligence' },
-  { id: 'remediation', label: 'Remediation Engine', icon: IconRemediation, locked: false, group: 'intelligence' },
-  { id: 'protocol', label: 'IR Protocol', icon: IconHealthCheck, locked: false, badge: 'NIST', badgeColor: 'bg-emerald-100 text-emerald-600', group: 'intelligence' },
-  // Tools group
-  { id: 'visual', label: 'Architecture & STRIDE', icon: IconVisual, locked: false, group: 'tools' },
+  // Output
   { id: 'aria', label: 'Aria Voice AI', icon: IconVoice, locked: false, group: 'tools' },
   { id: 'documentation', label: 'Documentation', icon: IconDocumentation, locked: false, group: 'tools' },
   { id: 'export', label: 'Export Report', icon: IconExport, locked: false, group: 'tools' },
+  // Advanced — available but not in the primary flow
+  { id: 'security-graph', label: 'Security Graph', icon: IconGraph, locked: false, group: 'advanced' },
+  { id: 'ai-compliance', label: 'AI Compliance', icon: IconCompliance, locked: false, group: 'advanced' },
+  { id: 'protocol', label: 'IR Protocol (NIST)', icon: IconHealthCheck, locked: false, badge: 'NIST', badgeColor: 'bg-emerald-100 text-emerald-600', group: 'advanced' },
+  { id: 'changeset', label: 'ChangeSet Risk', icon: IconChangeSet, locked: false, group: 'advanced' },
+  { id: 'incident-history', label: 'Incident History', icon: IconHistory, locked: false, group: 'advanced' },
+  { id: 'visual', label: 'Architecture & STRIDE', icon: IconVisual, locked: false, group: 'advanced' },
 ];
 
 interface DashboardLayoutProps {
@@ -75,12 +77,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const groups = [
-    { key: 'analysis', label: 'Quick Start' },
-    { key: 'ai_security', label: 'AI Security Posture' },
+    { key: 'analysis', label: 'Core Response' },
+    { key: 'ai_security', label: 'AI Security' },
     { key: 'intelligence', label: 'Intelligence' },
-    { key: 'tools', label: 'Utilities' },
+    { key: 'tools', label: 'Output' },
   ];
 
   const renderSidebar = (isMobile = false) => (
@@ -198,6 +201,71 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
           );
         })}
+
+        {/* Advanced — collapsible divider */}
+        {(() => {
+          const advancedFeatures = SIDEBAR_FEATURES.filter(f => f.group === 'advanced');
+          const hasActiveAdvanced = advancedFeatures.some(f => f.id === activeFeature);
+          return (
+            <div className="mb-2">
+              <button
+                onClick={() => setAdvancedOpen(!advancedOpen)}
+                title={collapsed ? 'Advanced' : undefined}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-slate-300 transition-colors ${collapsed ? 'justify-center' : ''}`}
+              >
+                {!collapsed && <span className="flex-1 text-left">Advanced</span>}
+                {collapsed ? (
+                  <ChevronRightIcon className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className={`w-3 h-3 transition-transform ${advancedOpen || hasActiveAdvanced ? 'rotate-180' : ''}`} />
+                )}
+              </button>
+              <AnimatePresence>
+                {(advancedOpen || hasActiveAdvanced) && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-0.5 mt-0.5">
+                      {advancedFeatures.map((feature) => {
+                        const isActive = activeFeature === feature.id;
+                        return (
+                          <button
+                            key={feature.id}
+                            onClick={() => { onFeatureChange(feature.id); if (isMobile) setMobileOpen(false); }}
+                            title={collapsed ? feature.label : undefined}
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                              isActive
+                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
+                            } ${collapsed ? 'justify-center' : ''}`}
+                          >
+                            <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-600'}`} />
+                            {!collapsed && (
+                              <>
+                                <span className="flex-1 text-left truncate">{feature.label}</span>
+                                {feature.badge && (
+                                  <span className={`px-1.5 py-0.5 text-[8px] font-bold rounded-full ${
+                                    isActive ? 'bg-white/20 text-white' : feature.badgeColor || 'bg-slate-700 text-slate-400'
+                                  }`}>
+                                    {feature.badge}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })()}
       </nav>
 
       {/* Sidebar Footer */}

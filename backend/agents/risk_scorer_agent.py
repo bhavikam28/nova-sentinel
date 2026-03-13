@@ -1,6 +1,8 @@
 """
-Risk Scorer Agent - Nova Micro powered fast risk classification
+Risk Scorer Agent - Nova Micro powered fast risk classification.
+Runs 3× parallel Nova Micro calls to produce confidence intervals.
 """
+import asyncio
 import json
 from typing import Dict, Any, Optional
 
@@ -8,6 +10,8 @@ from services.bedrock_service import BedrockService
 from models.incident import SeverityLevel
 from utils.prompts import RISK_SCORING_CALIBRATION_SYSTEM
 from utils.logger import logger
+
+LEVEL_TO_SCORE = {"CRITICAL": 95, "HIGH": 75, "MEDIUM": 50, "LOW": 25}
 
 
 class RiskScorerAgent:
@@ -151,6 +155,31 @@ Return ONLY valid JSON, no additional text."""
             logger.error(f"Error scoring event risk: {e}")
             raise
     
+    async def score_risk_with_intervals(
+        self,
+        configuration: Dict[str, Any],
+        context: Optional[str] = None,
+        runs: int = 3,
+    ) -> Dict[str, Any]:
+        """
+        Run Nova Micro `runs` times in parallel and compute min/mean/max risk scores.
+        Returns the mean assessment enriched with confidence interval fields.
+        """
+        tasks = [self.score_risk(configuration, context) for _ in range(runs)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        valid = [r for r in results if isinstance(r, dict) and "risk_level" in r]
+        if not valid:
+            return await self.score_risk(configuration, context)
+
+        scores = [LEVEL_TO_SCORE.get((r.get("risk_level") or "MEDIUM").upper(), 50) for r in valid]
+        mean_score = round(sum(scores) / len(scores))
+        base = valid[0]
+        base["risk_score_numeric"] = mean_score
+        base["risk_score_min"] = min(scores)
+        base["risk_score_max"] = max(scores)
+        base["risk_score_ci_runs"] = len(valid)
+        return base
+
     def _parse_risk_response(self, response_text: str) -> Dict[str, Any]:
         """Parse Nova Micro risk scoring response. Robust extraction like temporal_agent."""
         try:
