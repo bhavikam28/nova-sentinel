@@ -32,18 +32,20 @@ export const SIDEBAR_FEATURES: SidebarFeature[] = [
   { id: 'attack-path', label: 'Attack Path', icon: IconAttackPath, locked: false, group: 'analysis' },
   { id: 'remediation', label: 'Remediation Engine', icon: IconRemediation, locked: false, group: 'analysis' },
   { id: 'agentic-query', label: 'Autonomous Agent', icon: IconAgent, locked: false, badge: 'AI', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'analysis' },
-  // AI Security Posture — the novel second pillar
+  { id: 'blast-radius', label: 'Blast Radius Simulator', icon: IconAttackPath, locked: false, badge: 'NEW', badgeColor: 'bg-red-100 text-red-600', group: 'analysis' },
+  // AI Security — the novel second pillar (surface all AI features together)
   { id: 'ai-pipeline', label: 'AI Security Posture', icon: IconAIPipeline, locked: false, group: 'ai_security' },
+  { id: 'security-graph', label: 'Security Graph', icon: IconGraph, locked: false, group: 'ai_security' },
+  { id: 'ai-compliance', label: 'AI Compliance', icon: IconAgent, locked: false, group: 'ai_security' },
   // Intelligence
   { id: 'compliance', label: 'Compliance Mapping', icon: IconCompliance, locked: false, badge: '6', group: 'intelligence' },
   { id: 'cost', label: 'Cost Impact', icon: IconCost, locked: false, group: 'intelligence' },
   // Output
-  { id: 'aria', label: 'Aria Voice AI', icon: IconVoice, locked: false, group: 'tools' },
+  { id: 'aria', label: 'Lyra AI', icon: IconVoice, locked: false, group: 'tools' },
   { id: 'documentation', label: 'Documentation', icon: IconDocumentation, locked: false, group: 'tools' },
   { id: 'export', label: 'Export Report', icon: IconExport, locked: false, group: 'tools' },
   // Advanced — available but not in the primary flow
-  { id: 'security-graph', label: 'Security Graph', icon: IconGraph, locked: false, group: 'advanced' },
-  { id: 'ai-compliance', label: 'AI Compliance', icon: IconCompliance, locked: false, group: 'advanced' },
+  { id: 'organizations', label: 'AWS Organizations', icon: IconCompliance, locked: false, badge: 'ORG', badgeColor: 'bg-indigo-100 text-indigo-600', group: 'intelligence' },
   { id: 'protocol', label: 'IR Protocol (NIST)', icon: IconHealthCheck, locked: false, badge: 'NIST', badgeColor: 'bg-emerald-100 text-emerald-600', group: 'advanced' },
   { id: 'changeset', label: 'ChangeSet Risk', icon: IconChangeSet, locked: false, group: 'advanced' },
   { id: 'incident-history', label: 'Incident History', icon: IconHistory, locked: false, group: 'advanced' },
@@ -89,7 +91,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const renderSidebar = (isMobile = false) => (
     <div className={`flex flex-col h-full ${isMobile ? '' : ''}`}>
       {/* Sidebar Header */}
-      <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-5 border-b border-slate-700/50`}>
+      <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-3 border-b border-slate-700/50`}>
         {!collapsed && (
           <div className="flex items-center gap-2.5">
             <WolfirLogo size={24} animated={false} />
@@ -114,29 +116,25 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Connected account badge (console mode) */}
       {!collapsed && mode === 'console' && awsAccountId && (
-        <div className="px-4 py-2">
-          <div className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 truncate" title={`Connected: ${awsAccountId}`}>
+        <div className="px-4 py-1.5">
+          <div className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 truncate" title={`Connected: ${awsAccountId}`}>
             Connected: {maskAccountId(awsAccountId)}
           </div>
         </div>
       )}
       {/* Mode Badge — clickable in demo mode to return to scenario picker */}
       {!collapsed && (
-        <div className="px-4 py-3">
+        <div className="px-4 py-2">
           {mode === 'demo' && hasAnalysis && onBackToScenarios ? (
             <button
               onClick={onBackToScenarios}
-              className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-center bg-slate-700/50 text-slate-200 border border-slate-600 hover:bg-slate-600/50 transition-colors cursor-pointer"
+              className="w-full px-3 py-1.5 rounded-lg text-xs font-semibold text-center bg-slate-700/50 text-slate-200 border border-slate-600 hover:bg-slate-600/50 transition-colors cursor-pointer"
               title="Run a different demo scenario"
             >
               Demo Scenarios
             </button>
           ) : (
-            <div className={`px-3 py-2 rounded-lg text-xs font-semibold text-center ${
-              mode === 'demo'
-                ? 'bg-slate-700/50 text-slate-200 border border-slate-600'
-                : 'bg-slate-700/50 text-slate-200 border border-slate-600'
-            }`}>
+            <div className="px-3 py-1.5 rounded-lg text-xs font-semibold text-center bg-slate-700/50 text-slate-200 border border-slate-600">
               {mode === 'demo' ? 'Demo Scenarios' : 'Live AWS Console'}
             </div>
           )}
@@ -144,17 +142,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       )}
 
       {/* Feature Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2">
+      <nav className="flex-1 overflow-y-auto px-3 py-1.5">
         {groups.map((group) => {
           const features = SIDEBAR_FEATURES.filter(f => f.group === group.key);
           return (
-            <div key={group.key} className="mb-4">
+            <div key={group.key} className="mb-2.5">
               {!collapsed && (
-                <p className="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <p className="px-2 mb-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                   {group.label}
                 </p>
               )}
-              <div className="space-y-0.5">
+              <div className="space-y-px">
                 {features.map((feature) => {
                   const isActive = activeFeature === feature.id;
                   const isLocked = !hasAnalysis && feature.requiresAnalysis;
@@ -169,7 +167,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       }}
                       title={collapsed ? feature.label : isLocked ? `${feature.label} — run analysis first` : undefined}
                       disabled={isLocked}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                         isLocked
                           ? 'text-slate-500 cursor-not-allowed opacity-70'
                           : isActive
@@ -211,14 +209,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <button
                 onClick={() => setAdvancedOpen(!advancedOpen)}
                 title={collapsed ? 'Advanced' : undefined}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-slate-300 transition-colors ${collapsed ? 'justify-center' : ''}`}
+                className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-slate-300 transition-colors ${collapsed ? 'justify-center' : ''}`}
               >
                 {!collapsed && <span className="flex-1 text-left">Advanced</span>}
-                {collapsed ? (
-                  <ChevronRightIcon className="w-3 h-3" />
-                ) : (
-                  <ChevronDown className={`w-3 h-3 transition-transform ${advancedOpen || hasActiveAdvanced ? 'rotate-180' : ''}`} />
-                )}
+                <ChevronDown className={`w-3 h-3 transition-transform ${advancedOpen || hasActiveAdvanced ? 'rotate-180' : ''}`} />
               </button>
               <AnimatePresence>
                 {(advancedOpen || hasActiveAdvanced) && (
@@ -229,7 +223,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="space-y-0.5 mt-0.5">
+                    <div className="space-y-px mt-0.5">
                       {advancedFeatures.map((feature) => {
                         const isActive = activeFeature === feature.id;
                         return (
@@ -237,13 +231,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                             key={feature.id}
                             onClick={() => { onFeatureChange(feature.id); if (isMobile) setMobileOpen(false); }}
                             title={collapsed ? feature.label : undefined}
-                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                               isActive
                                 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                                 : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
                             } ${collapsed ? 'justify-center' : ''}`}
                           >
-                            <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-600'}`} />
+                            <feature.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
                             {!collapsed && (
                               <>
                                 <span className="flex-1 text-left truncate">{feature.label}</span>
@@ -269,7 +263,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </nav>
 
       {/* Sidebar Footer */}
-      <div className="px-3 py-3 border-t border-slate-700/50">
+      <div className="px-3 py-2 border-t border-slate-700/50">
         <button
           onClick={onBack}
           className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all ${collapsed ? 'justify-center' : ''}`}
@@ -347,7 +341,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Persistent mode banner — judges always know what they're looking at */}
         {mode === 'demo' ? (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-semibold text-amber-800">
-            <span>🎭</span>
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
             <span>Demo Mode — Simulated AWS Data · No real AWS account connected</span>
             <a href="#console" className="ml-2 underline underline-offset-2 hover:text-amber-900">Connect real AWS →</a>
           </div>

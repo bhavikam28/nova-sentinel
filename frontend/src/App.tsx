@@ -6,21 +6,23 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, AlertCircle, CheckCircle2, Menu, X, ChevronRight, ChevronDown,
-  Loader2, Eye, Brain, Zap, Shield, FileText,
-  Home, ArrowLeft
+  Loader2, Eye, Brain, Zap, Shield, FileText
 } from 'lucide-react';
 import WolfirLogo, { WolfirWordmark } from './components/Logo';
 import LandingHero from './components/Landing/LandingHero';
 import FeaturesSection from './components/Landing/FeaturesSection';
+import SOCProblemsSection from './components/Landing/SOCProblemsSection';
 import FAQSection from './components/Landing/FAQSection';
 import ScrollToTop from './components/Landing/ScrollToTop';
 import StatsCards from './components/Landing/StatsCards';
+import IndustryStatsSection from './components/Landing/IndustryStatsSection';
 import UseCasesSection from './components/Landing/UseCasesSection';
 import PricingSection from './components/Landing/PricingSection';
 import PlatformFeaturesSection from './components/Landing/PlatformFeaturesSection';
 import BlogSection from './components/Landing/BlogSection';
 import BlogPostPage from './components/Landing/BlogPostPage';
 import MITREAtlasTeaser from './components/Landing/MITREAtlasTeaser';
+import DashboardShowcase from './components/Landing/DashboardShowcase';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ScenarioPicker from './components/Dashboard/ScenarioPicker';
 import RealAWSConnect from './components/Dashboard/RealAWSConnect';
@@ -31,6 +33,7 @@ import VisualAnalysisUpload from './components/Analysis/VisualAnalysisUpload';
 import RemediationPlan from './components/Analysis/RemediationPlan';
 import DocumentationDisplay from './components/Analysis/DocumentationDisplay';
 import ComplianceMapping from './components/Analysis/ComplianceMapping';
+import BlastRadiusSimulator from './components/Analysis/BlastRadiusSimulator';
 import CostImpact from './components/Analysis/CostImpact';
 import SecurityPostureDashboard from './components/Analysis/SecurityPostureDashboard';
 import ReportExport from './components/Analysis/ReportExport';
@@ -54,6 +57,7 @@ import AgenticQuery from './components/Analysis/AgenticQuery';
 import ChangeSetAnalysis from './components/Analysis/ChangeSetAnalysis';
 import ProtocolAdherence from './components/Analysis/ProtocolAdherence';
 import LoginPage from './components/Auth/LoginPage';
+import OrganizationsDashboard from './components/Dashboard/OrganizationsDashboard';
 import { LiveSimulation } from './components/Simulation/LiveSimulation';
 import {
   SecurityHealthCheck,
@@ -67,22 +71,29 @@ type AppMode = 'landing' | 'login' | 'demo' | 'console';
 function App() {
   const [mode, setMode] = useState<AppMode>('landing');
   const [scenarios, setScenarios] = useState<DemoScenario[]>(DEFAULT_DEMO_SCENARIOS);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
-  const [orchestrationResult, setOrchestrationResult] = useState<OrchestrationResponse | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(() => {
+    try { const s = localStorage.getItem('wolfir_analysis_result'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [orchestrationResult, setOrchestrationResult] = useState<OrchestrationResponse | null>(() => {
+    try { const s = localStorage.getItem('wolfir_orchestration_result'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [visualAnalysisResult, setVisualAnalysisResult] = useState<any>(null);
-  const [remediationPlan, setRemediationPlan] = useState<any>(null);
+  const [remediationPlan, setRemediationPlan] = useState<any>(() => {
+    try { const s = localStorage.getItem('wolfir_remediation_plan'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [documentationResult, setDocumentationResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [awsProfile, setAwsProfile] = useState<string>('default');
-  const [awsConnected, setAwsConnected] = useState(false);
-  const [awsAccountId, setAwsAccountId] = useState<string | null>(null);
-  const [authMethod, setAuthMethod] = useState<'profile' | 'sso' | 'access_key'>('profile');
-  const [quickAccessKey, setQuickAccessKey] = useState('');
-  const [quickSecretKey, setQuickSecretKey] = useState('');
-  const [ssoStartUrl, setSsoStartUrl] = useState('');
-  const [ssoRegion, setSsoRegion] = useState('us-east-1');
+  const [awsProfile, setAwsProfile] = useState<string>(() => {
+    try { return localStorage.getItem('wolfir_aws_profile') || 'default'; } catch { return 'default'; }
+  });
+  const [awsConnected, setAwsConnected] = useState<boolean>(() => {
+    try { return localStorage.getItem('wolfir_aws_connected') === 'true'; } catch { return false; }
+  });
+  const [awsAccountId, setAwsAccountId] = useState<string | null>(() => {
+    try { return localStorage.getItem('wolfir_aws_account_id') || null; } catch { return null; }
+  });
   const [activeFeature, setActiveFeature] = useState('overview');
   const [useFullAI, setUseFullAI] = useState(false);
   const [backendOffline, setBackendOffline] = useState(() =>
@@ -94,12 +105,14 @@ function App() {
   const [visitedFeatures, setVisitedFeatures] = useState<Set<string>>(new Set());
   const [lastDemoScenarioId, setLastDemoScenarioId] = useState<string | null>(null);
   const [simulationScenarioId, setSimulationScenarioId] = useState<string | null>(null);
-  const [healthCheckResult, setHealthCheckResult] = useState<SecurityHealthCheckResult | null>(null);
+  const [healthCheckResult, setHealthCheckResult] = useState<SecurityHealthCheckResult | null>(() => {
+    try { const s = localStorage.getItem('wolfir_health_check'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
   const [resourcesDropdownOpen, setResourcesDropdownOpen] = useState(false);
   const [cloudTrailEmptyState, setCloudTrailEmptyState] = useState<{ daysBack: number } | null>(null);
   const [accountTeaser, setAccountTeaser] = useState<{ cloudtrail_events_7d: number; iam_users: number; security_hub_findings: number } | null>(null);
-  type LandingSection = 'home' | 'product' | 'features' | 'use-cases' | 'faq' | 'blog' | 'blog-post';
+  type LandingSection = 'home' | 'product' | 'features' | 'use-cases' | 'faq' | 'pricing' | 'blog' | 'blog-post';
   const [landingSection, setLandingSection] = useState<LandingSection>('home');
   const [blogPostId, setBlogPostId] = useState<string | null>(null);
   const correlationSeededRef = useRef(false);
@@ -112,13 +125,47 @@ function App() {
     if (h === '#blog') return { section: 'blog', postId: null };
     const blogMatch = h.match(/^#blog\/(\d+)$/);
     if (blogMatch) return { section: 'blog-post', postId: blogMatch[1].padStart(2, '0') };
-    if (h === '#pricing') return { section: 'home', postId: null };
+    if (h === '#pricing') return { section: 'pricing', postId: null };
     return { section: 'home', postId: null };
   };
 
   useEffect(() => {
     if (activeFeature) setVisitedFeatures((prev) => new Set(prev).add(activeFeature));
   }, [activeFeature]);
+
+  // Persist analysis state to localStorage so results survive tab switches / idle
+  useEffect(() => {
+    try {
+      if (analysisResult) localStorage.setItem('wolfir_analysis_result', JSON.stringify(analysisResult));
+      else localStorage.removeItem('wolfir_analysis_result');
+    } catch { /* quota exceeded — ignore */ }
+  }, [analysisResult]);
+  useEffect(() => {
+    try {
+      if (orchestrationResult) localStorage.setItem('wolfir_orchestration_result', JSON.stringify(orchestrationResult));
+      else localStorage.removeItem('wolfir_orchestration_result');
+    } catch { /* quota exceeded — ignore */ }
+  }, [orchestrationResult]);
+  useEffect(() => {
+    try {
+      if (remediationPlan) localStorage.setItem('wolfir_remediation_plan', JSON.stringify(remediationPlan));
+      else localStorage.removeItem('wolfir_remediation_plan');
+    } catch { /* quota exceeded — ignore */ }
+  }, [remediationPlan]);
+  useEffect(() => {
+    try {
+      if (healthCheckResult) localStorage.setItem('wolfir_health_check', JSON.stringify(healthCheckResult));
+      else localStorage.removeItem('wolfir_health_check');
+    } catch { /* quota exceeded — ignore */ }
+  }, [healthCheckResult]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('wolfir_aws_profile', awsProfile);
+      localStorage.setItem('wolfir_aws_connected', String(awsConnected));
+      if (awsAccountId) localStorage.setItem('wolfir_aws_account_id', awsAccountId);
+      else localStorage.removeItem('wolfir_aws_account_id');
+    } catch { /* quota exceeded — ignore */ }
+  }, [awsProfile, awsConnected, awsAccountId]);
 
   useEffect(() => {
     loadScenarios();
@@ -138,20 +185,15 @@ function App() {
   }, []);
 
   const loadScenarios = async () => {
-    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-      setScenarios(DEFAULT_DEMO_SCENARIOS);
-      return;
-    }
+    // Always use the frontend-defined scenario list — backend shouldn't control what we show.
+    setScenarios(DEFAULT_DEMO_SCENARIOS);
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) return;
+    // Still ping backend to determine online/offline status
     try {
-      const data = await demoAPI.listScenarios();
-      const fromBackend = data.scenarios?.length ? data.scenarios : DEFAULT_DEMO_SCENARIOS;
-      // Always ensure Shadow AI (5th scenario) is present — merge if backend missed it
-      const hasShadow = fromBackend.some((s: DemoScenario) => s.id === 'shadow-ai');
-      const shadowScenario = DEFAULT_DEMO_SCENARIOS.find((s) => s.id === 'shadow-ai');
-      setScenarios(hasShadow ? fromBackend : (shadowScenario ? [...fromBackend, shadowScenario] : fromBackend));
+      await demoAPI.listScenarios();
       setBackendOffline(false);
     } catch {
-      setScenarios(DEFAULT_DEMO_SCENARIOS);
+      // backend offline — demo mode still works fully with local scenarios
     }
   };
 
@@ -185,6 +227,9 @@ function App() {
     setAccountTeaser(null);
     setError(null);
     setActiveFeature('overview');
+    try {
+      ['wolfir_analysis_result', 'wolfir_orchestration_result', 'wolfir_remediation_plan', 'wolfir_health_check'].forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
   };
 
   const handleHealthCheck = async () => {
@@ -235,6 +280,7 @@ function App() {
         else if (scenarioId === 'privilege-escalation') incidentType = 'Privilege Escalation';
         else if (scenarioId === 'unauthorized-access') incidentType = 'Unauthorized Access';
         else if (scenarioId === 'shadow-ai') incidentType = 'Shadow AI / LLM Abuse';
+        else if (scenarioId === 'organizations-breach') incidentType = 'AWS Organizations Cross-Account Breach';
 
         let events: any[] = [];
         if (scenarioId === 'crypto-mining') events = (await demoAPI.getCryptoMiningScenario()).events;
@@ -242,6 +288,7 @@ function App() {
         else if (scenarioId === 'privilege-escalation') events = (await demoAPI.getPrivilegeEscalationScenario()).events;
         else if (scenarioId === 'unauthorized-access') events = (await demoAPI.getUnauthorizedAccessScenario()).events;
         else if (scenarioId === 'shadow-ai') events = (await demoAPI.getShadowAIScenario()).events;
+        else if (scenarioId === 'organizations-breach') events = (await demoAPI.getPrivilegeEscalationScenario()).events; // reuse priv-esc events as base
         result = await orchestrationAPI.analyzeIncident(events, undefined, incidentType);
         setBackendOffline(false);
       }
@@ -517,259 +564,114 @@ function App() {
       }
       if (mode === 'console') {
         return (
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* Connection Card */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               {/* Header */}
-              <div className="p-5 border-b border-slate-100">
-                <h2 className="text-lg font-bold text-slate-900 mb-0.5">Connect Your AWS Account</h2>
-                <p className="text-sm text-slate-500">
-                  Credentials stay local — <span className="font-semibold text-slate-700">never stored</span> on our servers.
-                </p>
+              <div className="px-6 pt-6 pb-4">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <h2 className="text-base font-bold text-slate-900">Connect Your AWS Account</h2>
+                </div>
+                <p className="text-xs text-slate-500 ml-11">Credentials stay local — never transmitted or stored.</p>
               </div>
 
-              {/* Auth Method Tabs */}
-              <div className="flex border-b border-slate-100">
-                <button
-                  onClick={() => setAuthMethod('profile')}
-                  className={`flex-1 px-4 py-3 text-xs font-bold text-center transition-colors relative ${
-                    authMethod === 'profile'
-                      ? 'text-indigo-700 bg-indigo-50/50'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  AWS CLI Profile
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">Recommended</span>
-                  {authMethod === 'profile' && (
-                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setAuthMethod('sso')}
-                  className={`flex-1 px-4 py-3 text-xs font-bold text-center transition-colors relative ${
-                    authMethod === 'sso'
-                      ? 'text-indigo-700 bg-indigo-50/50'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  AWS IAM Identity Center
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">SSO</span>
-                  {authMethod === 'sso' && (
-                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setAuthMethod('access_key')}
-                  className={`flex-1 px-4 py-3 text-xs font-bold text-center transition-colors relative ${
-                    authMethod === 'access_key'
-                      ? 'text-indigo-700 bg-indigo-50/50'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  Quick Connect
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">30s</span>
-                  {authMethod === 'access_key' && (
-                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
-                  )}
-                </button>
-              </div>
-
-              {/* Auth Forms */}
-              <div className="p-5">
-                {authMethod === 'profile' ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Profile Name</label>
-                      <input
-                        type="text"
-                        value={awsProfile}
-                        onChange={(e) => setAwsProfile(e.target.value)}
-                        placeholder="default"
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Uses AWS CLI profile (from <code className="bg-slate-100 px-1 rounded text-[10px]">aws login</code> or config).
-                        <span className="block mt-0.5">Profile Name = section in <code className="bg-slate-100 px-1 rounded text-[10px]">~/.aws/config</code>. Use &quot;default&quot; for your main AWS account.</span>
-                      </p>
-                    </div>
-                    <div className="bg-slate-900 rounded-lg p-3">
-                      <p className="text-[10px] text-slate-400 mb-1 font-mono">Recommended — aws login (CLI 2.32.0+)</p>
-                      <code className="text-sm text-green-400 font-mono block">
-                        {awsProfile === 'default' ? 'aws login' : `aws login --profile ${awsProfile}`}
-                      </code>
-                      <p className="text-[10px] text-slate-500 mt-2">Alternative: <code className="text-slate-400">aws configure --profile {awsProfile}</code></p>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-                      <Shield className="w-3.5 h-3.5 text-indigo-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-indigo-600 leading-relaxed">
-                        <strong>aws login:</strong> Browser-based OAuth. No keys on disk. Temporary credentials auto-refresh. Zero-trust — nothing transmitted or stored on any server.
-                      </p>
-                    </div>
+              {/* Auth Form — CLI Profile only (secure method) */}
+              <div className="px-6 pb-6">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2.5 p-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-3">
+                    <Shield className="w-3.5 h-3.5 text-indigo-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-[11px] text-indigo-600 leading-relaxed">
+                      CLI Profile only — Access Keys removed (security best practice). For SSO, run <code className="bg-indigo-100 px-1 rounded font-mono">aws sso login</code> first, then use your profile name below.
+                    </p>
                   </div>
-                ) : authMethod === 'access_key' ? (
-                  <div className="space-y-4">
-                    <p className="text-xs text-slate-600">Paste temporary access key. Store nothing — use once. For judges who can&apos;t run local CLI.</p>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Access Key ID</label>
-                      <input
-                        type="text"
-                        value={quickAccessKey}
-                        onChange={(e) => setQuickAccessKey(e.target.value)}
-                        placeholder="AKIA..."
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Secret Access Key</label>
-                      <input
-                        type="password"
-                        value={quickSecretKey}
-                        onChange={(e) => setQuickSecretKey(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      />
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <Shield className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-amber-800 leading-relaxed">
-                        Use temporary credentials only. Validates connection; for full CloudTrail analysis use CLI Profile. Never stored.
-                      </p>
-                    </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Profile Name</label>
+                    <input
+                      type="text"
+                      value={awsProfile}
+                      onChange={(e) => setAwsProfile(e.target.value)}
+                      placeholder="default"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1.5">
+                      Run <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">aws configure</code> or <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">aws sso login</code> first.
+                    </p>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3">
-                      <p className="text-xs font-semibold text-emerald-800 mb-2">SSO works today via AWS profiles</p>
-                      <p className="text-xs text-emerald-700 leading-relaxed mb-3">
-                        Security teams in AWS Organizations: configure your SSO profile once, then select it in the <strong>CLI Profile</strong> tab above. No separate SSO flow needed.
-                      </p>
-                      <ol className="text-xs text-emerald-800 space-y-1.5 list-decimal list-inside font-medium">
-                        <li>Run <code className="bg-emerald-100 px-1 rounded text-[10px]">aws configure sso</code> — enter your org&apos;s SSO start URL when prompted</li>
-                        <li>Run <code className="bg-emerald-100 px-1 rounded text-[10px]">aws sso login</code> (or <code className="bg-emerald-100 px-1 rounded text-[10px]">aws login</code>)</li>
-                        <li>Switch to the <strong>CLI Profile</strong> tab above</li>
-                        <li>Select your SSO profile from the dropdown — you&apos;re connected</li>
-                      </ol>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Your org&apos;s SSO Start URL</label>
-                      <input
-                        type="text"
-                        value={ssoStartUrl}
-                        onChange={(e) => setSsoStartUrl(e.target.value)}
-                        placeholder="https://my-org.awsapps.com/start"
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      />
-                      <p className="text-[10px] text-slate-500 mt-1">Used to generate the setup command below</p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">SSO Region</label>
-                      <select
-                        value={ssoRegion}
-                        onChange={(e) => setSsoRegion(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      >
-                        <option value="us-east-1">US East (N. Virginia)</option>
-                        <option value="us-west-2">US West (Oregon)</option>
-                        <option value="eu-west-1">EU (Ireland)</option>
-                        <option value="eu-central-1">EU (Frankfurt)</option>
-                        <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
-                        <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
-                      </select>
-                    </div>
-                    <div className="bg-slate-900 rounded-lg p-3">
-                      <p className="text-[10px] text-slate-400 mb-1 font-mono">Run this to configure your SSO profile</p>
-                      <code className="text-xs text-green-400 font-mono block break-all">
-                        aws configure sso --profile wolfir{ssoStartUrl ? ` --sso-start-url ${ssoStartUrl} --sso-region ${ssoRegion}` : ''}
-                      </code>
-                      <p className="text-[10px] text-slate-500 mt-2">Then: <code className="text-slate-400">aws sso login --profile wolfir</code></p>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-                      <Shield className="w-3.5 h-3.5 text-indigo-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-indigo-600 leading-relaxed">
-                        <strong>Multi-account:</strong> Create one profile per account. Switch profiles in the CLI Profile tab to analyze different accounts.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 {/* Test Connection */}
-                <div className="mt-4 flex flex-col gap-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button
-                      onClick={async () => {
-                        setConnectionLoading(true);
-                        setConnectionError(null);
-                        try {
-                          if (authMethod === 'access_key') {
-                            const result = await authAPI.quickConnect(quickAccessKey, quickSecretKey);
-                            setAwsConnected(result.connected);
-                            setAwsAccountId(result.account_id || null);
-                            if (result.connected) setConnectionError(null);
-                            else setConnectionError((result as any).error || 'Invalid credentials.');
+                <div className="mt-4 space-y-3">
+                  <button
+                    onClick={async () => {
+                      setConnectionLoading(true);
+                      setConnectionError(null);
+                      try {
+                        {
+                          const result = await authAPI.testConnection(awsProfile);
+                          setAwsConnected(result.connected);
+                          setAwsAccountId(result.account_id || null);
+                          if (result.connected) {
+                            setConnectionError(null);
+                            authAPI.getAccountTeaser(awsProfile || undefined).then((t) => setAccountTeaser(t)).catch(() => {});
                           } else {
-                            const result = await authAPI.testConnection(awsProfile);
-                            setAwsConnected(result.connected);
-                            setAwsAccountId(result.account_id || null);
-                            if (result.connected) {
-                              setConnectionError(null);
-                              authAPI.getAccountTeaser(awsProfile || undefined).then((t) => setAccountTeaser(t)).catch(() => {});
-                            } else {
-                              setConnectionError('Connection failed. Check credentials and backend.');
-                            }
+                            setConnectionError('Connection failed. Check your profile name and run aws configure or aws sso login first.');
                           }
-                        } catch (err: any) {
-                          setAwsConnected(false);
-                          const msg = err?.response?.data?.detail || err?.message;
-                          setConnectionError(
-                            err?.response
-                              ? `Connection test failed: ${msg || 'Check backend logs.'}`
-                              : 'Backend unreachable. Start backend: cd backend && uvicorn main:app --reload'
-                          );
-                        } finally {
-                          setConnectionLoading(false);
                         }
-                      }}
-                      disabled={connectionLoading || (authMethod === 'sso') || (authMethod === 'access_key' && (!quickAccessKey.trim() || !quickSecretKey.trim()))}
-                      className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-70"
-                    >
+                      } catch (err: any) {
+                        setAwsConnected(false);
+                        const msg = err?.response?.data?.detail || err?.message;
+                        setConnectionError(
+                          err?.response
+                            ? `Connection failed: ${msg || 'Check backend logs.'}`
+                            : 'Backend unreachable. Start backend: cd backend && uvicorn main:app --reload'
+                        );
+                      } finally {
+                        setConnectionLoading(false);
+                      }
+                    }}
+                    disabled={connectionLoading}
+                    className="w-full px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
                     {connectionLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Testing...
-                      </>
-                    ) : authMethod === 'sso' ? (
-                      <>
-                        <span className="text-xs">Switch to CLI Profile tab → select your SSO profile → Test Connection</span>
-                      </>
-                    ) : authMethod === 'access_key' ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Quick Connect
-                      </>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Connecting...</>
+                    ) : awsConnected ? (
+                      <><CheckCircle2 className="w-4 h-4" /> Connected — Test Again</>
                     ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Test Connection
-                      </>
+                      <><CheckCircle2 className="w-4 h-4" /> Test Connection</>
                     )}
                   </button>
+
                   {awsConnected && (
                     <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="text-xs font-bold text-emerald-700">Connected</span>
+                        {awsAccountId && <span className="text-[10px] text-emerald-600 ml-auto font-mono">{maskAccountId(awsAccountId)}</span>}
                       </div>
                       {accountTeaser && (
-                        <div className="px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
-                          <span className="font-semibold">Here&apos;s what we found:</span>{' '}
-                          {accountTeaser.cloudtrail_events_7d.toLocaleString()} CloudTrail events in last 7 days. {accountTeaser.iam_users} IAM users. {accountTeaser.security_hub_findings} Security Hub findings.
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                            <p className="text-sm font-bold text-slate-900">{accountTeaser.cloudtrail_events_7d.toLocaleString()}</p>
+                            <p className="text-[10px] text-slate-500">Events (7d)</p>
+                          </div>
+                          <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                            <p className="text-sm font-bold text-slate-900">{accountTeaser.iam_users}</p>
+                            <p className="text-[10px] text-slate-500">IAM Users</p>
+                          </div>
+                          <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                            <p className="text-sm font-bold text-slate-900">{accountTeaser.security_hub_findings}</p>
+                            <p className="text-[10px] text-slate-500">Hub Findings</p>
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
-                  </div>
+
                   {connectionError && (
-                    <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                    <p className="text-xs text-amber-700 bg-amber-50 px-4 py-2.5 rounded-xl border border-amber-200">
                       {connectionError}
                     </p>
                   )}
@@ -829,142 +731,66 @@ function App() {
           );
         }
         return (
-          <div className="space-y-6">
-            {/* Incident Header */}
+          <div className="space-y-5">
+            {/* ── INCIDENT HEADER ─────────────────────────────────── */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 to-slate-50/80">
-              <div className="flex items-center justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center flex-shrink-0">
-                    <Shield className="w-5 h-5 text-indigo-600" strokeWidth={1.8} />
-                  </div>
-                  <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <h2 className="text-lg font-bold text-slate-900">
-                      Incident {ar.incident_id}
-                    </h2>
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-slate-600" />
-                      <span className="text-xs font-bold text-slate-700">
-                        {(ar.timeline.confidence * 100).toFixed(0)}%
-                      </span>
+              <div className="px-6 py-4 bg-gradient-to-r from-indigo-50/60 to-slate-50/80">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-5 h-5 text-indigo-600" strokeWidth={1.8} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5 mb-0.5">
+                        <h2 className="text-base font-bold text-slate-900">Incident {ar.incident_id}</h2>
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-200">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                          <span className="text-[11px] font-bold text-emerald-700">{(ar.timeline.confidence * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Analyzed in <span className="font-semibold text-slate-700">{formatAnalysisTime(ar.analysis_time_ms)}</span>
+                        <span className="text-slate-400 mx-1">·</span>
+                        Last analyzed: <span className="font-medium text-slate-600">{formatLastAnalyzed(ar.timeline)}</span>
+                      </p>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-500">
-                    Analyzed in <span className="font-semibold text-slate-700">{formatAnalysisTime(ar.analysis_time_ms)}</span>
-                    <span className="text-slate-400 mx-1">·</span>
-                    Last analyzed: <span className="font-medium text-slate-600">{formatLastAnalyzed(ar.timeline)}                    </span>
-                  </p>
+                  <div className="flex items-center gap-2">
+                    {orchestrationResult && (
+                      <div className="hidden sm:flex flex-wrap gap-1.5">
+                        {orchestrationResult.results.risk_scores && (
+                          <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">
+                            {orchestrationResult.results.risk_scores.length} Risk Scores
+                          </span>
+                        )}
+                        {orchestrationResult.results.remediation_plan && (
+                          <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200 font-semibold">
+                            Remediation Ready
+                          </span>
+                        )}
+                        {(() => {
+                          const checkpoints = deriveSLACheckpoints(orchestrationResult.analysis_time_ms ?? 0, !!orchestrationResult.results?.remediation_plan, !!orchestrationResult.results?.documentation);
+                          return checkpoints.every(c => c.status === 'met') ? (
+                            <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200 font-semibold">SLA met</span>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
+                    <button onClick={resetAnalysis} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                      New Analysis
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={resetAnalysis}
-                  className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all"
-                >
-                  New Analysis
-                </button>
-              </div>
-              {orchestrationResult && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {orchestrationResult.results.risk_scores && (
-                    <span className="text-[10px] px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">
-                      {orchestrationResult.results.risk_scores.length} Risk Scores
-                    </span>
-                  )}
-                  {orchestrationResult.results.remediation_plan && (
-                    <span className="text-[10px] px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200 font-semibold">
-                      Remediation Ready
-                    </span>
-                  )}
-                  {(() => {
-                    const checkpoints = deriveSLACheckpoints(
-                      orchestrationResult.analysis_time_ms ?? 0,
-                      !!orchestrationResult.results?.remediation_plan,
-                      !!orchestrationResult.results?.documentation
-                    );
-                    const allMet = checkpoints.length > 0 && checkpoints.every(c => c.status === 'met');
-                    return allMet ? (
-                      <span className="text-[10px] px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200 font-semibold">
-                        SLA met
-                      </span>
-                    ) : null;
-                  })()}
-                </div>
-              )}
               </div>
             </div>
 
-            {/* Note */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
-              <div>
-                <p className="text-xs font-bold text-slate-700">Note</p>
-                <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
-                  wolfir flags potential threats. Always validate before treating findings as confirmed.
-                </p>
-              </div>
-            </div>
-
-            {/* Agent Progress */}
-            {orchestrationResult && <AgentProgress agents={orchestrationResult.agents} />}
-
-            {/* Agentic CTA — guide to Autonomous Agent tab */}
-            {orchestrationResult && (
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-4 py-3 flex items-center justify-between gap-3">
-                <p className="text-xs text-indigo-800">
-                  The pipeline ran 4 agents in sequence. Want to see the agent think for itself?
-                </p>
-                <button
-                  onClick={() => setActiveFeature('agentic-query')}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 border border-indigo-200 rounded-lg transition-colors"
-                >
-                  Try the Autonomous Agent tab
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+            {/* ── ORGANIZATIONS DASHBOARD — shown when org scenario is selected ── */}
+            {lastDemoScenarioId === 'organizations-breach' && mode === 'demo' && (
+              <OrganizationsDashboard awsAccountId={null} isRealMode={false} />
             )}
 
-            {/* Agent Pivot — visible conditional reasoning */}
-            {orchestrationResult?.metadata?.agent_pivot && (
-              <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 flex items-start gap-3">
-                <Zap className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" strokeWidth={1.8} />
-                <div>
-                  <p className="text-xs font-bold text-violet-800">Agent pivot</p>
-                  <p className="text-[11px] text-violet-700 leading-relaxed mt-0.5">
-                    {orchestrationResult.metadata.agent_pivot}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Low event count warning — dynamic for real AWS */}
-            {typeof (ar as any)?.events_analyzed === 'number' && (ar as any).events_analyzed <= 5 && typeof (ar as any)?.time_range_days === 'number' && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
-                <Eye className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.8} />
-                <div>
-                  <p className="text-xs font-semibold text-slate-700">Limited event data</p>
-                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
-                    Analysis is based on {(ar as any).events_analyzed} events from the last {(ar as any).time_range_days} days. Findings may not reflect full account activity. Consider increasing time range or max events for broader coverage.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* AWS service principal — likely low suspicion */}
-            {hasAwsServicePrincipalInTimeline(analysisResult.timeline) && (
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3 flex items-start gap-3">
-                <Shield className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" strokeWidth={1.8} />
-                <div>
-                  <p className="text-xs font-semibold text-slate-700">AWS service activity detected</p>
-                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
-                    One or more actors appear to be AWS service principals (*.amazonaws.com). This is often benign automated activity (e.g. Resource Explorer, Config). Verify with your AWS service configuration before treating as malicious.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Security Posture Dashboard */}
-            <SecurityPostureDashboard
+            {/* ── MAIN DASHBOARD (charts + KPIs) — PRIMARY CONTENT ── */}
+            {lastDemoScenarioId !== 'organizations-breach' && <SecurityPostureDashboard
               timeline={analysisResult.timeline}
               orchestrationResult={orchestrationResult}
               analysisTime={analysisResult.analysis_time_ms}
@@ -975,7 +801,66 @@ function App() {
               onNavigateToProtocol={() => setActiveFeature('protocol')}
               onNavigateToExport={() => setActiveFeature('export')}
               onNavigateToRemediation={() => setActiveFeature('remediation')}
-            />
+            />}
+
+            {/* ── SECONDARY INFO — Pipeline + Agent details ───────── */}
+            {orchestrationResult && lastDemoScenarioId !== 'organizations-breach' && <AgentProgress agents={orchestrationResult.agents} />}
+
+            {/* ── CONTEXTUAL WARNINGS — collapsed / de-emphasised ─── */}
+            {(
+              (orchestrationResult?.metadata?.agent_pivot) ||
+              (typeof (ar as any)?.events_analyzed === 'number' && (ar as any).events_analyzed <= 5) ||
+              hasAwsServicePrincipalInTimeline(analysisResult.timeline) ||
+              orchestrationResult
+            ) && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 divide-y divide-slate-100 overflow-hidden">
+                {/* Agentic CTA */}
+                {orchestrationResult && (
+                  <div className="px-4 py-3 flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-600">
+                      The pipeline ran {orchestrationResult.agents?.length ?? 4} agents in sequence. Want to see the agent think for itself?
+                    </p>
+                    <button onClick={() => setActiveFeature('agentic-query')}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 border border-indigo-200 rounded-lg transition-colors">
+                      Try Autonomous Agent <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                {/* Agent Pivot */}
+                {orchestrationResult?.metadata?.agent_pivot && (
+                  <div className="px-4 py-3 flex items-start gap-3">
+                    <Zap className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" strokeWidth={1.8} />
+                    <div>
+                      <p className="text-xs font-bold text-violet-700">Agent pivot detected</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">{orchestrationResult.metadata.agent_pivot}</p>
+                    </div>
+                  </div>
+                )}
+                {/* Low event warning */}
+                {typeof (ar as any)?.events_analyzed === 'number' && (ar as any).events_analyzed <= 5 && typeof (ar as any)?.time_range_days === 'number' && (
+                  <div className="px-4 py-3 flex items-start gap-3">
+                    <Eye className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" strokeWidth={1.8} />
+                    <p className="text-[11px] text-slate-600">
+                      <span className="font-semibold">Limited event data:</span> analysis based on {(ar as any).events_analyzed} events from the last {(ar as any).time_range_days} days. Consider increasing time range.
+                    </p>
+                  </div>
+                )}
+                {/* AWS service principal */}
+                {hasAwsServicePrincipalInTimeline(analysisResult.timeline) && (
+                  <div className="px-4 py-3 flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" strokeWidth={1.8} />
+                    <p className="text-[11px] text-slate-600">
+                      <span className="font-semibold">AWS service activity detected:</span> One or more actors appear to be AWS service principals (*.amazonaws.com) — often benign automated activity. Verify before treating as malicious.
+                    </p>
+                  </div>
+                )}
+                {/* Validation note */}
+                <div className="px-4 py-3 flex items-start gap-3">
+                  <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" strokeWidth={1.8} />
+                  <p className="text-[11px] text-slate-500">wolfir flags potential threats. Always validate before treating findings as confirmed.</p>
+                </div>
+              </div>
+            )}
           </div>
         );
       }
@@ -985,8 +870,8 @@ function App() {
           return (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
               <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Run a demo scenario or CloudTrail analysis to see the incident timeline.</p>
-              <p className="text-xs text-slate-400 mt-1">Security Overview shows your health check — use Demo or Connect AWS for incident analysis.</p>
+              <p className="text-sm font-semibold text-slate-700 mb-1">No incident timeline yet</p>
+              <p className="text-xs text-slate-500">{mode === 'console' ? 'Run "Investigate Threats" to fetch CloudTrail events and build a timeline.' : 'Select a demo scenario to see the incident timeline.'}</p>
             </div>
           );
         }
@@ -1046,16 +931,22 @@ function App() {
           return (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
               <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Run a demo scenario or CloudTrail analysis to see the attack path.</p>
+              <p className="text-sm font-semibold text-slate-700 mb-1">No attack path yet</p>
+              <p className="text-xs text-slate-500">{mode === 'console' ? 'Run "Investigate Threats" to detect attack patterns and visualize the kill chain.' : 'Select a demo scenario to visualize the attack path.'}</p>
             </div>
           );
         }
         const useNarrative = mode === 'demo' || !!orchestrationResult?.metadata?.quick_demo;
-        const isAIScenario = /shadow ai|llm|bedrock|prompt injection/i.test(orchestrationResult?.metadata?.incident_type || '');
+        const demoIncidentType =
+          orchestrationResult?.metadata?.incident_type ||
+          (orchestrationResult?.metadata as any)?.scenario ||
+          (analysisResult as any)?.scenario_id || '';
         if (useNarrative) {
           return (
             <AttackPathReactFlow
-              variant={isAIScenario ? 'ai' : 'standard'}
+              incidentType={demoIncidentType}
+              timeline={analysisResult?.timeline}
+              demoMode={mode === 'demo' || backendOffline}
               onNavigateToRemediation={() => setActiveFeature('remediation')}
             />
           );
@@ -1077,7 +968,8 @@ function App() {
           return (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
               <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Run a demo or CloudTrail analysis to see compliance mapping.</p>
+              <p className="text-sm font-semibold text-slate-700 mb-1">No compliance data yet</p>
+              <p className="text-xs text-slate-500">{mode === 'console' ? 'Run a threat investigation to map findings to MITRE, NIST, and CIS frameworks.' : 'Select a demo scenario to see compliance mapping.'}</p>
             </div>
           );
         }
@@ -1085,6 +977,7 @@ function App() {
           <ComplianceMapping
             timeline={analysisResult.timeline}
             incidentType={orchestrationResult?.metadata?.incident_type}
+            awsAccountId={mode === 'console' ? awsAccountId : null}
           />
         );
 
@@ -1093,7 +986,8 @@ function App() {
           return (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
               <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Run a demo or CloudTrail analysis to see cost impact.</p>
+              <p className="text-sm font-semibold text-slate-700 mb-1">No cost impact data yet</p>
+              <p className="text-xs text-slate-500">{mode === 'console' ? 'Run a threat investigation to estimate financial impact of detected incidents.' : 'Select a demo scenario to see cost impact.'}</p>
             </div>
           );
         }
@@ -1108,6 +1002,14 @@ function App() {
             eventsAnalyzed={(analysisResult as any)?.events_analyzed}
             timeRangeDays={(analysisResult as any)?.time_range_days}
             hasAwsServicePrincipal={hasAwsServicePrincipalInTimeline(analysisResult.timeline)}
+          />
+        );
+
+      case 'organizations':
+        return (
+          <OrganizationsDashboard
+            awsAccountId={awsAccountId}
+            isRealMode={mode === 'console' && !!awsAccountId}
           />
         );
 
@@ -1183,6 +1085,16 @@ function App() {
       case 'agentic-query':
         return <AgenticQuery backendOffline={backendOffline} />;
 
+      case 'blast-radius':
+        return (
+          <BlastRadiusSimulator
+            timeline={analysisResult?.timeline}
+            incidentType={orchestrationResult?.metadata?.incident_type || (orchestrationResult?.metadata as any)?.scenario || ''}
+            awsAccountId={awsAccountId}
+            backendOffline={backendOffline}
+          />
+        );
+
       case 'visual':
         return (
           <VisualAnalysisUpload
@@ -1231,6 +1143,7 @@ function App() {
               } : undefined}
               incidentId={orchestrationResult?.incident_id || analysisResult?.incident_id}
               isAnalysisComplete={!!analysisResult && !loading}
+              awsAccountId={mode === 'console' ? awsAccountId : null}
               embedded
             />
           </div>
@@ -1276,12 +1189,12 @@ function App() {
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">Run a demo scenario or AWS analysis first.</p>
+            <p className="text-sm text-slate-500">{mode === 'console' ? 'Run a threat investigation first to generate documentation.' : 'Select a demo scenario first.'}</p>
             <button
               onClick={() => setActiveFeature('overview')}
               className="mt-3 text-sm text-indigo-600 hover:text-indigo-700 font-semibold"
             >
-              Go to Demo Scenarios →
+              {mode === 'console' ? 'Back to Overview →' : 'Go to Demo Scenarios →'}
             </button>
           </div>
         );
@@ -1290,10 +1203,10 @@ function App() {
         return <AIPipelineSecurity onNavigateToFeature={setActiveFeature} />;
 
       case 'security-graph':
-        return <AISecurityGraph />;
+        return <AISecurityGraph incidentType={orchestrationResult?.metadata?.incident_type || (orchestrationResult?.metadata as any)?.scenario || ''} />;
 
       case 'ai-compliance':
-        return <AICompliance />;
+        return <AICompliance incidentType={orchestrationResult?.metadata?.incident_type || (orchestrationResult?.metadata as any)?.scenario || ''} />;
 
       case 'export':
         return analysisResult ? (
@@ -1392,6 +1305,16 @@ function App() {
                   activeFeature={activeFeature}
                   onNavigate={setActiveFeature}
                 />
+              )}
+              {analysisResult && lastDemoScenarioId && mode === 'demo' && (
+                <button
+                  onClick={() => setSimulationScenarioId(lastDemoScenarioId)}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
+                  title="Replay attack simulation"
+                >
+                  <Play className="w-3 h-3" />
+                  Simulation
+                </button>
               )}
               {analysisResult && (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -1511,58 +1434,67 @@ function App() {
   // ========== LANDING PAGE ==========
   return (
     <div className="min-h-screen bg-white">
-      {/* Fixed Navigation — light */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-200/80">
+      {/* Fixed Navigation — premium */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-b border-slate-200/70 shadow-sm shadow-slate-900/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-[68px]">
             <div className="flex items-center gap-2.5">
-              <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+              <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="flex items-center gap-2.5 hover:opacity-75 transition-opacity" title="Home">
                 <WolfirLogo size={30} animated={false} />
                 <WolfirWordmark size="lg" />
               </a>
-              {landingSection !== 'home' && (
-                <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
-                  className="hidden sm:inline-flex items-center gap-1.5 ml-4 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  Back to Home
-                </a>
-              )}
             </div>
 
-            <div className="hidden md:flex items-center gap-6">
-              <a href="#product" className={`text-sm font-medium transition-colors ${landingSection === 'product' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Product</a>
-              <a href="#features" className={`text-sm font-medium transition-colors ${landingSection === 'features' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Features</a>
-              <a href="#use-cases" className={`text-sm font-medium transition-colors ${landingSection === 'use-cases' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Use Cases</a>
-              <a href="#blog" className={`text-sm font-medium transition-colors ${(landingSection === 'blog' || landingSection === 'blog-post') ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>Blog</a>
-              <div className="relative">
+            <div className="hidden md:flex items-center gap-1">
+              {[
+                { label: 'Product', href: '#product', active: landingSection === 'product' },
+                { label: 'Features', href: '#features', active: landingSection === 'features' },
+                { label: 'Use Cases', href: '#use-cases', active: landingSection === 'use-cases' },
+                { label: 'Blog', href: '#blog', active: landingSection === 'blog' || landingSection === 'blog-post' },
+                { label: 'Pricing', href: '#pricing', active: landingSection === 'pricing' },
+              ].map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    item.active
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              ))}
+              <div className="relative ml-1">
                 <button
                   onClick={() => setResourcesDropdownOpen(!resourcesDropdownOpen)}
                   onBlur={() => setTimeout(() => setResourcesDropdownOpen(false), 150)}
-                  className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
+                  className="flex items-center gap-1 px-3.5 py-2 rounded-lg text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium transition-all"
                 >
                   Resources
-                  <ChevronDown className={`w-4 h-4 transition-transform ${resourcesDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${resourcesDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {resourcesDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-52 py-2 bg-white rounded-xl border border-slate-200 shadow-lg z-50">
-                    <a href="#blog" onClick={() => setResourcesDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">Blog</a>
-                    <a href="#faq" onClick={() => setResourcesDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">FAQ</a>
-                    <a href="https://github.com/bhavikam28/wolfir#readme" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">Docs</a>
-                    <a href="https://github.com/bhavikam28/wolfir" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">GitHub</a>
+                  <div className="absolute top-full left-0 mt-2 w-48 py-1.5 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-900/10 z-50">
+                    <a href="#faq" onClick={() => setResourcesDropdownOpen(false)} className="block px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg mx-1">FAQ</a>
+                    <a href="https://github.com/bhavikam28/wolfir" target="_blank" rel="noopener noreferrer" className="block px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg mx-1">GitHub</a>
                   </div>
                 )}
               </div>
-              <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">Pricing</a>
-              <a href="#login" className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
+            </div>
+
+            <div className="hidden md:flex items-center gap-3">
+              <a href="#login" className="px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors rounded-lg hover:bg-slate-50">
                 Sign In
               </a>
               <a
                 href="#demo"
                 onClick={(e) => { e.preventDefault(); setMode('demo'); window.location.hash = '#demo'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
-                className="btn-nova px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors"
+                className="btn-nova px-5 py-2.5 text-white rounded-lg font-bold text-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)',
+                  boxShadow: '0 2px 12px rgba(37,99,235,0.3)',
+                }}
               >
                 Try Demo
               </a>
@@ -1570,9 +1502,9 @@ function App() {
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-slate-600 hover:text-slate-900"
+              className="md:hidden p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
             >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
@@ -1583,31 +1515,39 @@ function App() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-slate-200 bg-white"
+              className="md:hidden border-t border-slate-100 bg-white"
             >
-              <div className="px-4 py-6 space-y-4">
-                {landingSection !== 'home' && (
-                  <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; setMobileMenuOpen(false); window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="flex items-center gap-2 text-indigo-600 font-medium">
-                    <Home className="w-4 h-4" />
-                    Back to Home
+              <div className="px-4 py-5 space-y-1">
+                {[
+                  { label: 'Product', href: '#product' },
+                  { label: 'Features', href: '#features' },
+                  { label: 'Use Cases', href: '#use-cases' },
+                  { label: 'Blog', href: '#blog' },
+                  { label: 'FAQ', href: '#faq' },
+                  { label: 'Pricing', href: '#pricing' },
+                  { label: 'GitHub', href: 'https://github.com/bhavikam28/wolfir', external: true },
+                ].map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target={(item as any).external ? '_blank' : undefined}
+                    rel={(item as any).external ? 'noopener noreferrer' : undefined}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium rounded-lg transition-colors"
+                  >
+                    {item.label}
                   </a>
-                )}
-                <a href="#product" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Product</a>
-                <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Features</a>
-                <a href="#use-cases" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Use Cases</a>
-                <a href="#blog" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Blog</a>
-                <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">FAQ</a>
-                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">Pricing</a>
-                <a href="https://github.com/bhavikam28/wolfir" target="_blank" rel="noopener noreferrer" className="block text-slate-600 hover:text-slate-900 font-medium">GitHub</a>
-                <a href="#login" onClick={() => setMobileMenuOpen(false)} className="block text-slate-600 hover:text-slate-900 font-medium">
+                ))}
+                <a href="#login" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2.5 text-slate-600 hover:text-slate-900 font-medium rounded-lg hover:bg-slate-50">
                   Sign In
                 </a>
                 <a
                   href="#demo"
                   onClick={() => { setMobileMenuOpen(false); setMode('demo'); window.location.hash = '#demo'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
-                  className="block w-full btn-nova px-6 py-3 bg-indigo-600 text-white rounded-lg font-bold text-center"
+                  className="block w-full mt-2 px-6 py-3.5 text-white rounded-xl font-bold text-center"
+                  style={{ background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)', boxShadow: '0 4px 16px rgba(37,99,235,0.3)' }}
                 >
-                  Try Demo
+                  Try Demo Free
                 </a>
               </div>
             </motion.div>
@@ -1615,75 +1555,93 @@ function App() {
         </AnimatePresence>
       </nav>
 
-      <LandingHero
-        on1ClickDemo={() => {
-          setMode('demo');
-          window.location.hash = '#demo';
-          window.dispatchEvent(new HashChangeEvent('hashchange'));
-          handleSelectScenario('crypto-mining');
-        }}
-      />
-
-      {/* MITRE ATLAS — first thing after hero (something that couldn't exist before Nova) */}
-      {landingSection === 'home' && <MITREAtlasTeaser />}
+      {/* Dedicated pages (like Seddle): Product, Features, Use Cases, FAQ, Pricing, Blog — no hero */}
+      {!['product', 'features', 'use-cases', 'faq', 'pricing', 'blog', 'blog-post'].includes(landingSection) && (
+        <>
+          <LandingHero />
+          {/* MITRE ATLAS — first thing after hero (something that couldn't exist before Nova) */}
+          {landingSection === 'home' && <MITREAtlasTeaser />}
+        </>
+      )}
 
       {/* Content — home = full landing with key visuals; sub-pages = detailed content */}
       {landingSection === 'home' && (
         <>
           <StatsCards />
-          {/* Key visuals ON landing: Pipeline, Attack Path, MCP, Dashboard */}
-          <FeaturesSection />
-          <div id="blog">
-            <BlogSection />
-          </div>
-          {/* Quick links to deeper content */}
-          <div className="py-10 bg-slate-50/50 border-y border-slate-200">
-            <div className="max-w-4xl mx-auto px-4 text-center">
-              <p className="text-sm text-slate-600 mb-4">Explore more</p>
-              <div className="flex flex-wrap justify-center gap-3">
-                <a href="#product" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Product</a>
-                <a href="#features" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Features</a>
-                <a href="#use-cases" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Use Cases</a>
-                <a href="#blog" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">Blog</a>
-                <a href="#faq" className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm hover:border-indigo-200 hover:bg-indigo-50/50 transition-all">FAQ</a>
+          <DashboardShowcase />
+          <SOCProblemsSection />
+          <IndustryStatsSection />
+          {/* Blog teaser — premium, full blog at #blog */}
+          <section id="blog" className="py-20 bg-slate-50 border-y border-slate-200/60">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex items-end justify-between mb-10">
+                <div>
+                  <p className="eyebrow mb-2">Engineering Blog</p>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">From the Blog</h2>
+                </div>
+                <a
+                  href="#blog"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '#blog'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                  className="hidden sm:inline-flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  View all posts <ChevronRight className="w-4 h-4" />
+                </a>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-5">
+                {BLOGS.slice(0, 2).map((b, i) => (
+                  <a
+                    key={b.id}
+                    href={`#blog/${b.id}`}
+                    onClick={(e) => { e.preventDefault(); window.location.hash = `#blog/${b.id}`; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                    className="group block bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 transition-all duration-300"
+                  >
+                    <div className="h-1 w-full" style={{ background: i === 0 ? 'linear-gradient(90deg, #2563EB, #6366F1)' : 'linear-gradient(90deg, #6366F1, #8B5CF6)' }} />
+                    <div className="p-6">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {(b.tags || []).slice(0, 3).map((tag) => (
+                          <span key={tag} className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500">{tag}</span>
+                        ))}
+                      </div>
+                      <h3 className="font-bold text-slate-900 text-base mb-2 group-hover:text-blue-600 transition-colors leading-snug line-clamp-2">{b.title}</h3>
+                      <p className="text-sm text-slate-500 line-clamp-2 mb-4 leading-relaxed">{b.excerpt}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-400">{b.date} · {b.readTime}</span>
+                        <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                          Read more <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+              <div className="sm:hidden mt-6 text-center">
+                <a
+                  href="#blog"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '#blog'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-600"
+                >
+                  View all posts <ChevronRight className="w-4 h-4" />
+                </a>
               </div>
             </div>
-          </div>
+          </section>
         </>
       )}
 
       {landingSection === 'product' && (
-        <div id="product">
-          <div className="pt-4 pb-2 flex justify-center">
-            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </a>
-          </div>
+        <div id="product" className="min-h-screen pt-24 pb-20 bg-white">
           <PlatformFeaturesSection />
         </div>
       )}
 
       {landingSection === 'features' && (
-        <div id="features">
-          <div className="pt-4 pb-2 flex justify-center">
-            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </a>
-          </div>
+        <div id="features" className="min-h-screen pt-24 pb-20 bg-white">
           <FeaturesSection />
         </div>
       )}
 
       {landingSection === 'use-cases' && (
-        <div id="use-cases">
-          <div className="pt-4 pb-2 flex justify-center">
-            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </a>
-          </div>
+        <div id="use-cases" className="min-h-screen pt-24 pb-20 bg-white">
           <UseCasesSection />
         </div>
       )}
@@ -1702,88 +1660,176 @@ function App() {
       })()}
 
       {landingSection === 'blog' && (
-        <div id="blog">
-          <div className="pt-4 pb-2 flex justify-center">
-            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </a>
-          </div>
+        <div id="blog" className="pt-20">
           <BlogSection onPostClick={(id) => { window.location.hash = `#blog/${id}`; window.dispatchEvent(new HashChangeEvent('hashchange')); }} />
         </div>
       )}
 
       {landingSection === 'faq' && (
-        <div id="faq">
-          <div className="pt-4 pb-2 flex justify-center">
-            <a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; window.dispatchEvent(new HashChangeEvent('hashchange')); }} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </a>
-          </div>
+        <div id="faq" className="min-h-screen pt-24 pb-20 bg-slate-50/80">
           <FAQSection />
         </div>
       )}
 
-      {/* Home-only: Pricing + CTA */}
+      {landingSection === 'pricing' && (
+        <div id="pricing" className="min-h-screen pt-24 pb-20 relative overflow-hidden bg-white">
+          <div className="absolute inset-0 bg-cover bg-center pointer-events-none"
+            style={{ backgroundImage: 'url(/images/server-room.png)', opacity: 0.07 }} />
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-white/80 via-transparent to-white/90" />
+          <div className="relative">
+            <PricingSection />
+          </div>
+        </div>
+      )}
+
+      {/* Home-only: CTA */}
       {landingSection === 'home' && (
         <>
-          <PricingSection />
+        {/* CTA — dark navy, premium */}
+        <section
+          className="py-28 relative overflow-hidden"
+          id="cta"
+          style={{ background: 'linear-gradient(135deg, #020817 0%, #0D1B3E 50%, #080D1F 100%)' }}
+        >
+          {/* Radar background image */}
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none"
+            style={{ backgroundImage: 'url(/images/radar-bg.png)', opacity: 0.12 }}
+          />
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(2,8,23,0.65) 0%, rgba(13,27,62,0.60) 50%, rgba(8,13,31,0.65) 100%)' }} />
+          {/* Glow orb */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute w-[800px] h-[400px] rounded-full top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30"
+              style={{ background: 'radial-gradient(ellipse, rgba(37,99,235,0.5), transparent)' }} />
+          </div>
+          {/* Edge lines */}
+          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(96,165,250,0.3), transparent)' }} />
 
-      {/* CTA — premium */}
-      <section className="py-28 bg-gradient-to-b from-slate-50 to-white border-t border-slate-200 relative overflow-hidden" id="cta">
-        <div className="absolute inset-0 opacity-30" style={{
-          backgroundImage: 'radial-gradient(circle at 30% 50%, rgba(99,102,241,0.06) 0%, transparent 50%), radial-gradient(circle at 70% 50%, rgba(139,92,246,0.06) 0%, transparent 50%)',
-        }} />
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-            <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-6 tracking-tight">
-              Try the Agentic Pipeline
-            </h2>
-            <p className="text-lg text-slate-600 mb-12 max-w-2xl mx-auto">
-              Demo scenarios or connect your AWS account. From signal to resolution — credentials stay local.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-5 justify-center">
-              <button
-                onClick={() => { setMode('demo'); window.location.hash = '#demo'; }}
-                className="px-10 py-4 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:border-indigo-300 hover:bg-indigo-50/50 transition-all flex items-center gap-3 justify-center shadow-sm"
+          <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8"
+                style={{ background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(96,165,250,0.2)' }}>
+                <Shield className="w-4 h-4 text-blue-400" />
+                <span className="text-blue-300 text-xs font-semibold">No AWS account required to start</span>
+              </div>
+              <h2
+                className="font-extrabold text-white tracking-tight mb-6"
+                style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)' }}
               >
-                <Play className="h-5 w-5 text-indigo-500" />
-                Try Demo
-              </button>
-              <button
-                onClick={() => { setMode('console'); window.location.hash = '#console'; }}
-                className="btn-nova inline-flex items-center gap-3 px-10 py-4 bg-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:bg-indigo-700 transition-all"
-              >
-                <Shield className="h-5 w-5" />
-                Launch Console
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      <FAQSection />
+                Try the Agentic Pipeline
+              </h2>
+              <p className="text-lg text-slate-400 mb-12 max-w-xl mx-auto leading-relaxed">
+                Run demo scenarios or connect your AWS account. From signal to resolution — credentials always stay local.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <button
+                  onClick={() => { setMode('demo'); window.location.hash = '#demo'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                  className="inline-flex items-center gap-2.5 px-9 py-4 rounded-xl font-bold text-base text-white transition-all duration-200"
+                  style={{
+                    background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)',
+                    boxShadow: '0 4px 28px rgba(37,99,235,0.45)',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 36px rgba(37,99,235,0.6)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(37,99,235,0.45)'; }}
+                >
+                  <Play className="h-5 w-5" />
+                  Try Demo Free
+                </button>
+                <button
+                  onClick={() => { setMode('console'); window.location.hash = '#console'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                  className="inline-flex items-center gap-2.5 px-9 py-4 rounded-xl font-semibold text-base text-white transition-all duration-200"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                >
+                  <Shield className="h-5 w-5 text-blue-400" />
+                  Launch Console
+                </button>
+                <button
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '#pricing'; window.dispatchEvent(new HashChangeEvent('hashchange')); }}
+                  className="px-7 py-4 rounded-xl font-semibold text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                >
+                  View Pricing →
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </section>
         </>
       )}
 
-      <footer className="bg-white border-t border-slate-200 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col items-center">
-            <div className="flex items-center gap-2.5 mb-4">
-              <WolfirLogo size={28} animated={false} />
-              <WolfirWordmark size="lg" />
+      <footer style={{ background: '#020817', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          {/* Footer top */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+            {/* Brand */}
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2.5 mb-4">
+                <WolfirLogo size={28} animated={false} />
+                <WolfirWordmark size="lg" />
+              </div>
+              <p className="text-sm text-slate-500 leading-relaxed max-w-sm">
+                Autonomous cloud security and AI pipeline monitoring. Powered by 5 Amazon Nova models and 6 AWS MCP servers.
+              </p>
             </div>
-            <p className="text-sm text-slate-500 text-center mb-4 max-w-xl">
-              Cloud + AI security: incident response and AI pipeline monitoring (MITRE ATLAS, OWASP LLM Top 10) — powered by 5 Nova models and 6 AWS MCP servers.
+
+            {/* Product links */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Product</h4>
+              <ul className="space-y-2.5">
+                {[
+                  { label: 'Features', href: '#features' },
+                  { label: 'Use Cases', href: '#use-cases' },
+                  { label: 'Pricing', href: '#pricing' },
+                  { label: 'Demo', href: '#demo' },
+                ].map((link) => (
+                  <li key={link.label}>
+                    <a href={link.href} className="text-sm text-slate-500 hover:text-slate-300 transition-colors">{link.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Resources */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Resources</h4>
+              <ul className="space-y-2.5">
+                {[
+                  { label: 'Blog', href: '#blog' },
+                  { label: 'FAQ', href: '#faq' },
+                  { label: 'GitHub', href: 'https://github.com/bhavikam28/wolfir', external: true },
+                ].map((link) => (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      target={(link as any).external ? '_blank' : undefined}
+                      rel={(link as any).external ? 'noopener noreferrer' : undefined}
+                      className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px mb-8" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+          {/* Footer bottom */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="px-2.5 py-1 rounded-md text-[10px] font-bold text-blue-400 bg-blue-950/50 border border-blue-900/60">#AmazonNova</span>
+              <span className="px-2.5 py-1 rounded-md text-[10px] font-bold text-indigo-400 bg-indigo-950/50 border border-indigo-900/60">#MITREАТLAS</span>
+              <span className="px-2.5 py-1 rounded-md text-[10px] font-bold text-slate-400 bg-slate-900 border border-slate-800">#wolfir</span>
+            </div>
+            <p className="text-xs text-slate-600">
+              © 2026 wolfir · Cloud + AI Security Platform
             </p>
-            <div className="flex gap-4 text-xs text-slate-500">
-              <span>#AmazonNova</span>
-              <span>·</span>
-              <span>#wolfir</span>
-              <span>·</span>
-              <span>© 2026</span>
-            </div>
           </div>
         </div>
       </footer>

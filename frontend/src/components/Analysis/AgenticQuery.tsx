@@ -5,19 +5,61 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Send, Loader2, ChevronRight, Clock, Wrench, Brain, Shield, Activity, Database, Trash2, User, Bot } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Zap, Send, Loader2, ChevronRight, ChevronDown, ChevronUp, Clock, Wrench, Brain, Shield, Activity, Database, Trash2, User, Bot } from 'lucide-react';
 import { orchestrationAPI } from '../../services/api';
 
 const MAX_HISTORY_EXCHANGES = 5; // Keep last 5 user+assistant pairs for multi-turn context
 
-/* Premium minimal palette — single accent (indigo) for Wiz.io-style consistency */
-const SUGGESTED_PROMPTS: { label: string; icon: React.ComponentType<{ className?: string }>; color: string; bg: string }[] = [
-  { label: 'Audit all IAM users for security issues', icon: Wrench, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
-  { label: 'Scan CloudTrail for anomalies in the last 24 hours', icon: Activity, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
-  { label: 'Get Security Hub findings (GuardDuty, Inspector)', icon: Shield, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
-  { label: 'Check CloudWatch for billing anomalies', icon: Activity, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
-  { label: 'Investigate IAM roles for privilege escalation', icon: Shield, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
-  { label: 'Investigate cross-account role assumptions', icon: Database, color: 'text-indigo-700', bg: 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200' },
+/* Structured prompt library — grouped by security domain */
+type PromptGroup = { group: string; color: string; items: { label: string; icon: React.ComponentType<{ className?: string }> }[] };
+const PROMPT_GROUPS: PromptGroup[] = [
+  {
+    group: 'IAM & Identity',
+    color: 'indigo',
+    items: [
+      { label: 'Audit all IAM users for security issues', icon: Wrench },
+      { label: 'Investigate IAM roles for privilege escalation', icon: Shield },
+      { label: 'Investigate cross-account role assumptions', icon: Database },
+      { label: 'List all IAM users without MFA enabled', icon: Shield },
+    ],
+  },
+  {
+    group: 'Threat Detection',
+    color: 'red',
+    items: [
+      { label: 'Scan CloudTrail for anomalies in the last 24 hours', icon: Activity },
+      { label: 'Get Security Hub findings (GuardDuty, Inspector)', icon: Shield },
+      { label: 'Identify suspicious API calls from unknown IPs', icon: Brain },
+      { label: 'Check for crypto-mining or unusual EC2 activity', icon: Zap },
+    ],
+  },
+  {
+    group: 'Cost & Infra',
+    color: 'amber',
+    items: [
+      { label: 'Check CloudWatch for billing anomalies', icon: Activity },
+      { label: 'Find publicly exposed S3 buckets', icon: Database },
+      { label: 'List security groups with 0.0.0.0/0 ingress rules', icon: Shield },
+      { label: 'Audit RDS instances for public accessibility', icon: Database },
+    ],
+  },
+];
+
+/* Flat list for tool detection — do not remove, used by TOOL_SIGNATURES */
+const _SUGGESTED_PROMPTS_FLAT = PROMPT_GROUPS.flatMap(g => g.items.map(i => i.label));
+void _SUGGESTED_PROMPTS_FLAT; // referenced indirectly via TOOL_SIGNATURES
+
+/* MCP tools available in the agent */
+const MCP_TOOLS: { name: string; desc: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { name: 'list_cloudtrail_events', desc: 'Query CloudTrail for API events, actors, and anomalies', icon: Activity },
+  { name: 'audit_iam_users', desc: 'Check MFA, key age, policies, and group memberships', icon: Wrench },
+  { name: 'audit_iam_roles', desc: 'Inspect trust policies, role chains, and cross-account access', icon: Shield },
+  { name: 'get_security_hub_findings', desc: 'Fetch GuardDuty, Inspector, and Security Hub findings', icon: Shield },
+  { name: 'analyze_iam_policy', desc: 'Detect wildcard permissions and overly broad policies', icon: Brain },
+  { name: 'get_cloudwatch_metrics', desc: 'Billing anomalies, EC2 metrics, and CloudWatch alarms', icon: Activity },
+  { name: 'query_incident_history', desc: 'Search past incidents and campaign correlation in memory', icon: Database },
+  { name: 'analyze_timeline', desc: 'Root cause analysis and temporal attack pattern detection', icon: Brain },
 ];
 
 /**
@@ -235,6 +277,48 @@ interface AgenticQueryProps {
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string };
 
+/** Smooth word-by-word streaming of agent responses */
+function useTypingAnimation(onComplete?: () => void) {
+  const [streamingText, setStreamingText] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const streamRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fullTextRef = useRef('');
+
+  const startStreaming = (text: string) => {
+    fullTextRef.current = text;
+    setStreamingText('');
+    setIsStreaming(true);
+
+    const words = text.split(' ');
+    let idx = 0;
+    // Words per chunk — varies to feel natural (1–3 words at a time)
+    const tick = () => {
+      if (idx >= words.length) {
+        setStreamingText(text); // Ensure full text is shown at end
+        setIsStreaming(false);
+        onComplete?.();
+        return;
+      }
+      const chunkSize = Math.random() < 0.3 ? 3 : Math.random() < 0.5 ? 2 : 1;
+      const chunk = words.slice(idx, idx + chunkSize).join(' ');
+      idx += chunkSize;
+      setStreamingText(prev => prev + (prev ? ' ' : '') + chunk);
+      // Variable delay 12–40ms per chunk for natural feel
+      const delay = 12 + Math.random() * 28;
+      streamRef.current = setTimeout(tick, delay);
+    };
+    streamRef.current = setTimeout(tick, 0);
+  };
+
+  const stopStreaming = () => {
+    if (streamRef.current) clearTimeout(streamRef.current);
+    setStreamingText(fullTextRef.current);
+    setIsStreaming(false);
+  };
+
+  return { streamingText, isStreaming, startStreaming, stopStreaming };
+}
+
 export default function AgenticQuery({ backendOffline = false }: AgenticQueryProps) {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -243,86 +327,181 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
   const [submittedPrompt, setSubmittedPrompt] = useState<string | null>(null);
   const [isDemoFallback, setIsDemoFallback] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
+  const [showCapabilities, setShowCapabilities] = useState(false);
+  const [activePromptGroup, setActivePromptGroup] = useState(0);
+  const [_pendingUserMsg, setPendingUserMsg] = useState<string | null>(null);
   const startRef = useRef<number>(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const { streamingText, isStreaming, startStreaming, stopStreaming } = useTypingAnimation(() => {
+    // Animation complete — nothing extra needed, history already updated
+  });
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversationHistory, loading]);
+  }, [conversationHistory, loading, streamingText]);
+
+  const deliverResponse = (userMsg: string, resp: string, demo: boolean, elapsed: number) => {
+    setElapsedMs(elapsed);
+    setIsDemoFallback(demo);
+    setLoading(false);
+    setPendingUserMsg(null);
+    // Add user msg + assistant msg to history
+    setConversationHistory((prev) => {
+      const next = [...prev, { role: 'user' as const, content: userMsg }, { role: 'assistant' as const, content: resp }];
+      return next.slice(-MAX_HISTORY_EXCHANGES * 2);
+    });
+    // Kick off streaming animation for the latest assistant message
+    startStreaming(resp);
+  };
 
   const runQuery = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    stopStreaming(); // Stop any in-progress stream
     setPrompt(trimmed);
     setSubmittedPrompt(trimmed);
     setLoading(true);
     setError(null);
     setElapsedMs(null);
     setIsDemoFallback(false);
+    setPendingUserMsg(trimmed);
     startRef.current = Date.now();
 
     try {
       const fallback = getDemoFallback(trimmed);
       if (backendOffline) {
         if (fallback) {
-          // Typing/thinking feel: 1.2–1.6s delay, contextual variation
-          const delay = 1200 + Math.random() * 400;
+          const delay = 1200 + Math.random() * 500;
           await new Promise(r => setTimeout(r, delay));
           const varied = varyDemoResponse(fallback, trimmed);
-          setElapsedMs(Date.now() - startRef.current);
-          setIsDemoFallback(true);
-          setConversationHistory((prev) => {
-            const next = [...prev, { role: 'user' as const, content: trimmed }, { role: 'assistant' as const, content: varied }];
-            return next.slice(-MAX_HISTORY_EXCHANGES * 2);
-          });
+          deliverResponse(trimmed, varied, true, Date.now() - startRef.current);
         } else {
           setElapsedMs(Date.now() - startRef.current);
+          setPendingUserMsg(null);
           setError('Backend offline — try a suggested prompt for demo results.');
+          setLoading(false);
         }
       } else {
         const result = await orchestrationAPI.agentQuery(trimmed, conversationHistory);
         const resp = result.response || 'No response.';
-        setElapsedMs(Date.now() - startRef.current);
-        setConversationHistory((prev) => {
-          const next = [...prev, { role: 'user' as const, content: trimmed }, { role: 'assistant' as const, content: resp }];
-          return next.slice(-MAX_HISTORY_EXCHANGES * 2);
-        });
+        deliverResponse(trimmed, resp, false, Date.now() - startRef.current);
       }
     } catch (err: any) {
       const fallback = getDemoFallback(trimmed);
       if (fallback) {
         await new Promise(r => setTimeout(r, 1200 + Math.random() * 400));
         const varied = varyDemoResponse(fallback, trimmed);
-        setElapsedMs(Date.now() - startRef.current);
-        setIsDemoFallback(true);
-        setConversationHistory((prev) => {
-          const next = [...prev, { role: 'user' as const, content: trimmed }, { role: 'assistant' as const, content: varied }];
-          return next.slice(-MAX_HISTORY_EXCHANGES * 2);
-        });
+        deliverResponse(trimmed, varied, true, Date.now() - startRef.current);
       } else {
         setElapsedMs(Date.now() - startRef.current);
+        setPendingUserMsg(null);
         setError(err.response?.data?.detail || err.message || 'Agent query failed. Backend may be offline.');
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
   const historyCount = Math.floor(conversationHistory.length / 2);
 
-  /** Highlight severity keywords in response text */
-  const formatResponse = (text: string) => {
-    const parts = text.split(/(\b(CRITICAL|HIGH|MEDIUM|LOW)\b)/gi);
+  /**
+   * Render agent response as proper markdown with severity keyword highlighting.
+   * ReactMarkdown handles headers/bold/code/tables; we post-process plain text
+   * nodes to color CRITICAL/HIGH/MEDIUM/LOW badges.
+   *
+   * Bug note: the old split(/(\b(CRITICAL|HIGH)\b)/gi) had TWO capture groups,
+   * so String.split included both captures → "HIGH" appeared twice ("HIGHHIGH").
+   * Fixed by using ReactMarkdown + a simple inline text transformer instead.
+   */
+  const highlightSeverity = (text: string): React.ReactNode[] => {
+    // Single non-capturing outer group — split on the keyword itself only
+    const parts = text.split(/(CRITICAL|HIGH|MEDIUM|LOW)/gi);
     return parts.map((seg, i) => {
       const upper = seg.toUpperCase();
-      if (upper === 'CRITICAL') return <span key={i} className="font-bold text-red-600 bg-red-50 px-0.5 rounded">{seg}</span>;
-      if (upper === 'HIGH') return <span key={i} className="font-bold text-orange-600 bg-orange-50 px-0.5 rounded">{seg}</span>;
-      if (upper === 'MEDIUM') return <span key={i} className="font-semibold text-amber-600 bg-amber-50 px-0.5 rounded">{seg}</span>;
-      if (upper === 'LOW') return <span key={i} className="font-semibold text-emerald-600 bg-emerald-50 px-0.5 rounded">{seg}</span>;
-      return <span key={i}>{seg}</span>;
+      if (upper === 'CRITICAL') return <span key={i} className="font-bold text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded text-[11px]">{seg}</span>;
+      if (upper === 'HIGH')     return <span key={i} className="font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1 py-0.5 rounded text-[11px]">{seg}</span>;
+      if (upper === 'MEDIUM')   return <span key={i} className="font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded text-[11px]">{seg}</span>;
+      if (upper === 'LOW')      return <span key={i} className="font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded text-[11px]">{seg}</span>;
+      return seg;
     });
   };
+
+  const AgentMarkdown: React.FC<{ content: string }> = ({ content }) => (
+    <ReactMarkdown
+      components={{
+        // Headings
+        h1: ({ children }) => <h1 className="text-base font-bold text-slate-900 mt-4 mb-2 first:mt-0">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-sm font-bold text-slate-800 mt-3 mb-1.5 first:mt-0">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold text-slate-700 mt-2 mb-1 first:mt-0">{children}</h3>,
+        // Paragraphs
+        p: ({ children }) => <p className="text-sm text-slate-700 leading-relaxed mb-2 last:mb-0">{children}</p>,
+        // Bold — often wraps severity words
+        strong: ({ children }) => {
+          const text = String(children);
+          const upper = text.toUpperCase();
+          if (upper === 'CRITICAL') return <span className="font-bold text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded text-[11px]">{children}</span>;
+          if (upper === 'HIGH')     return <span className="font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1 py-0.5 rounded text-[11px]">{children}</span>;
+          if (upper === 'MEDIUM')   return <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded text-[11px]">{children}</span>;
+          if (upper === 'LOW')      return <span className="font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded text-[11px]">{children}</span>;
+          return <strong className="font-semibold text-slate-900">{children}</strong>;
+        },
+        // Lists
+        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2 text-sm text-slate-700">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2 text-sm text-slate-700">{children}</ol>,
+        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+        // Code — inline and block
+        code: ({ className, children }) => {
+          const isBlock = className?.includes('language-');
+          if (isBlock) {
+            return (
+              <pre className="my-2 px-3 py-2.5 bg-slate-900 text-green-400 text-[11px] font-mono rounded-xl overflow-x-auto leading-relaxed">
+                <code>{children}</code>
+              </pre>
+            );
+          }
+          return <code className="px-1.5 py-0.5 bg-slate-100 text-slate-800 text-[11px] font-mono rounded border border-slate-200">{children}</code>;
+        },
+        pre: ({ children }) => <>{children}</>,
+        // Tables
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-3 rounded-xl border border-slate-200">
+            <table className="w-full text-xs">{children}</table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-slate-50 border-b border-slate-200">{children}</thead>,
+        tbody: ({ children }) => <tbody className="divide-y divide-slate-100">{children}</tbody>,
+        tr: ({ children }) => <tr className="hover:bg-slate-50/60 transition-colors">{children}</tr>,
+        th: ({ children }) => <th className="px-3 py-2 text-left font-semibold text-slate-700 text-[11px] uppercase tracking-wider">{children}</th>,
+        td: ({ children }) => {
+          const text = String(children).trim().toUpperCase();
+          if (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(text)) {
+            return (
+              <td className="px-3 py-2">
+                {highlightSeverity(String(children))}
+              </td>
+            );
+          }
+          return <td className="px-3 py-2 text-slate-700">{children}</td>;
+        },
+        // Blockquote
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-4 border-indigo-300 pl-3 my-2 text-slate-600 italic">{children}</blockquote>
+        ),
+        // Horizontal rule
+        hr: () => <hr className="my-3 border-slate-200" />,
+        // Text nodes — apply severity highlighting
+        text: ({ children }: any) => {
+          if (typeof children === 'string') {
+            return <>{highlightSeverity(children)}</>;
+          }
+          return <>{children}</>;
+        },
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 
   return (
     <div className="space-y-6">
@@ -369,10 +548,32 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
               </button>
             )}
           </div>
+          {/* Capability cards row */}
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'MCP Tools', value: '8 active', icon: Zap, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
+              { label: 'Model', value: 'Nova Pro', icon: Brain, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+              { label: 'Memory', value: '5 exchanges', icon: Database, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
+              { label: 'Safety', value: 'Prompt Guard', icon: Shield, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+            ].map(c => {
+              const Icon = c.icon;
+              return (
+                <div key={c.label} className={`flex items-center gap-2.5 p-2.5 rounded-xl border ${c.bg} ${c.border}`}>
+                  <div className={`w-7 h-7 rounded-lg bg-white flex items-center justify-center shrink-0 shadow-sm`}>
+                    <Icon className={`w-3.5 h-3.5 ${c.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{c.label}</p>
+                    <p className={`text-[11px] font-bold ${c.color}`}>{c.value}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50/80 border border-amber-200">
             <Shield className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>Investigation only</strong> — the Agent audits and analyzes; it does not make changes. Remediation happens in the Remediation Engine tab with human-in-the-loop approval.
+              <strong>Investigation only</strong> — the Agent audits and analyzes; it does not make changes. Remediation with human-in-the-loop approval happens in the Remediation Engine tab.
             </p>
           </div>
         </div>
@@ -409,27 +610,93 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
           </div>
         </div>
 
-        {/* Suggested prompts — colored cards */}
-        <div className="p-5 border-b border-slate-100">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Click to run</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {SUGGESTED_PROMPTS.map((s) => {
+        {/* Grouped suggested prompts */}
+        <div className="border-b border-slate-100">
+          {/* Group tabs */}
+          <div className="flex items-center gap-1 px-5 pt-4 pb-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2 shrink-0">Quick actions:</span>
+            {PROMPT_GROUPS.map((g, i) => (
+              <button
+                key={g.group}
+                onClick={() => setActivePromptGroup(i)}
+                className={`px-3 py-1 rounded-t-lg text-[11px] font-semibold transition-colors border-b-2 ${
+                  activePromptGroup === i
+                    ? 'text-indigo-700 border-indigo-500 bg-indigo-50/60'
+                    : 'text-slate-500 border-transparent hover:text-slate-700'
+                }`}
+              >
+                {g.group}
+              </button>
+            ))}
+          </div>
+          {/* Prompt grid for active group */}
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {PROMPT_GROUPS[activePromptGroup].items.map((s) => {
               const Icon = s.icon;
               return (
                 <button
                   key={s.label}
                   onClick={() => runQuery(s.label)}
                   disabled={loading}
-                  className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all disabled:opacity-50 ${s.bg}`}
+                  className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 text-left transition-all disabled:opacity-50 group shadow-sm"
                 >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}>
-                    <Icon className="w-4 h-4" />
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0 transition-colors">
+                    <Icon className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-600 transition-colors" />
                   </div>
                   <span className="text-xs font-medium text-slate-700 leading-snug">{s.label}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-400 ml-auto shrink-0 transition-colors" />
                 </button>
               );
             })}
           </div>
+        </div>
+
+        {/* MCP Tools / Capabilities panel — collapsible */}
+        <div className="border-b border-slate-100">
+          <button
+            onClick={() => setShowCapabilities(!showCapabilities)}
+            className="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-slate-50/60 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded bg-violet-100 flex items-center justify-center">
+                <Zap className="w-3.5 h-3.5 text-violet-600" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700">MCP Tools available to this agent</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-100 text-violet-700">{MCP_TOOLS.length} tools</span>
+            </div>
+            {showCapabilities ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          </button>
+          <AnimatePresence>
+            {showCapabilities && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-5 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  {MCP_TOOLS.map(t => {
+                    const Icon = t.icon;
+                    return (
+                      <div key={t.name} className="flex items-start gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                        <Icon className="w-3.5 h-3.5 text-violet-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[10px] font-bold font-mono text-slate-700 leading-tight">{t.name}</p>
+                          <p className="text-[10px] text-slate-500 leading-snug mt-0.5">{t.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="px-5 pb-3">
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    The agent autonomously selects which tools to call based on your prompt — it reasons step-by-step (ReAct pattern) and chains tools when needed. All tool calls are logged to CloudTrail.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Chat thread — conversation history as bubbles */}
@@ -480,10 +747,13 @@ export default function AgenticQuery({ backendOffline = false }: AgenticQueryPro
                             )}
                           </div>
                         )}
-                        <div className="px-4 py-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                          {formatResponse(msg.content)}
+                        <div className="px-4 py-3 prose-sm max-w-none">
+                          <AgentMarkdown content={isLastAssistant && isStreaming ? streamingText : msg.content} />
+                          {isLastAssistant && isStreaming && (
+                            <span className="inline-block w-1.5 h-4 bg-indigo-500 ml-0.5 rounded-sm animate-pulse align-middle" />
+                          )}
                         </div>
-                        {isLastAssistant && (
+                        {isLastAssistant && !isStreaming && (
                           <div className="px-4 pb-2 flex items-center gap-2">
                             <span className="text-[9px] text-slate-400">{isDemoFallback ? 'Demo mode' : 'Strands Agents SDK · Nova Pro'}</span>
                           </div>

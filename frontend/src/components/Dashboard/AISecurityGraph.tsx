@@ -18,8 +18,8 @@ import ReactFlow, {
   Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { motion } from 'framer-motion';
-import { Info, Shield } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AlertTriangle, Shield, Lock, Eye, Zap, CheckCircle2, XCircle, ChevronRight } from 'lucide-react';
 import {
   AmazonCloudFront,
   AmazonApiGateway,
@@ -41,13 +41,137 @@ const NODE_STYLES: Record<string, { bg: string; border: string; icon: React.Comp
   s3: { bg: '#f0f9ff', border: '#7dd3fc', icon: AmazonSimpleStorageService, color: '#0ea5e9' },
 };
 
-const NODE_INFO: Record<string, { what: string; why: string }> = {
-  internet: { what: 'External traffic and user requests', why: 'Attackers probe public endpoints for misconfigurations or injection points.' },
-  api: { what: 'API Gateway or Application Load Balancer', why: 'First line of defense. Misconfigured CORS, missing WAF, or weak auth exposes AI endpoints.' },
-  bedrock: { what: 'Amazon Bedrock — Nova and other foundation models', why: 'InvokeModel calls need guardrails. Prompt injection, PII leakage, and model abuse are key risks.' },
-  sagemaker: { what: 'SageMaker inference endpoints', why: 'Custom models and notebooks. Check IAM, network isolation, and data access.' },
-  iam: { what: 'IAM roles used by models and agents', why: 'Over-privileged roles let compromised AI access S3, RDS, or other sensitive resources.' },
-  s3: { what: 'S3 buckets, RDS — data stores', why: 'Final target. Exfiltrated data, poisoned training sets, or leaked credentials end up here.' },
+interface NodeDetail {
+  service: string;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  what: string;
+  threats: string[];
+  checks: Array<{ label: string; ok: boolean }>;
+  mitre: Array<{ id: string; name: string }>;
+  attackPath: string;
+}
+
+const NODE_INFO: Record<string, NodeDetail> = {
+  internet: {
+    service: 'External Network',
+    riskLevel: 'MEDIUM',
+    what: 'Untrusted external traffic, users, and potential attackers probing your API surface.',
+    threats: [
+      'Credential stuffing & brute force on auth endpoints',
+      'API key enumeration via unauthenticated calls',
+      'SSRF attacks targeting internal AWS metadata service',
+    ],
+    checks: [
+      { label: 'WAF enabled on public endpoints', ok: false },
+      { label: 'Rate limiting configured', ok: false },
+      { label: 'DDoS protection (Shield) active', ok: true },
+    ],
+    mitre: [
+      { id: 'T1190', name: 'Exploit Public-Facing Application' },
+      { id: 'T1133', name: 'External Remote Services' },
+    ],
+    attackPath: 'Internet → API Gateway → Bedrock (prompt injection via public endpoint)',
+  },
+  api: {
+    service: 'API Gateway / ALB',
+    riskLevel: 'HIGH',
+    what: 'Public-facing API layer routing traffic to Bedrock and SageMaker inference endpoints.',
+    threats: [
+      'Missing WAF rules allow malicious prompt payloads to reach LLMs',
+      'Broken auth lets unauthenticated callers invoke InvokeModel',
+      'CORS misconfiguration enables cross-origin credential theft',
+    ],
+    checks: [
+      { label: 'Authentication required on all routes', ok: false },
+      { label: 'WAF with AI-specific rules attached', ok: false },
+      { label: 'Request throttling configured', ok: true },
+    ],
+    mitre: [
+      { id: 'T1078', name: 'Valid Accounts (API abuse)' },
+      { id: 'AML.T0043', name: 'Craft Adversarial Data (ATLAS)' },
+    ],
+    attackPath: 'API Gateway → Bedrock with injected prompt → IAM AssumeRole escalation',
+  },
+  bedrock: {
+    service: 'Amazon Bedrock',
+    riskLevel: 'CRITICAL',
+    what: 'Foundation model invocation layer (Nova, Claude, Titan). Highest AI attack surface in your stack.',
+    threats: [
+      'Prompt injection bypasses guardrails and system prompts',
+      'PII leakage through model responses (training data extraction)',
+      'Shadow AI: unapproved roles invoking models outside governance',
+    ],
+    checks: [
+      { label: 'Guardrails with content filters enabled', ok: false },
+      { label: 'PII redaction configured', ok: false },
+      { label: 'InvokeModel access scoped to approved roles', ok: false },
+    ],
+    mitre: [
+      { id: 'AML.T0051', name: 'LLM Prompt Injection (ATLAS)' },
+      { id: 'AML.T0024', name: 'Exfiltration via ML Model' },
+    ],
+    attackPath: 'Compromised prompt → Bedrock response exfiltrates internal data → S3 write',
+  },
+  sagemaker: {
+    service: 'Amazon SageMaker',
+    riskLevel: 'HIGH',
+    what: 'Custom model endpoints and notebooks. Often has broad IAM permissions and network access.',
+    threats: [
+      'Overprivileged execution roles access S3 training data',
+      'Notebook instances expose credentials via metadata IMDS',
+      'Model poisoning via S3 bucket write access from public role',
+    ],
+    checks: [
+      { label: 'Endpoint network isolation enabled', ok: false },
+      { label: 'Execution role follows least privilege', ok: false },
+      { label: 'Model artifacts encrypted at rest (KMS)', ok: true },
+    ],
+    mitre: [
+      { id: 'AML.T0031', name: 'Erode ML Model Integrity' },
+      { id: 'T1552.005', name: 'Cloud Instance Metadata API' },
+    ],
+    attackPath: 'SageMaker notebook → IMDS credential theft → AssumeRole → S3 exfiltration',
+  },
+  iam: {
+    service: 'IAM Roles & Policies',
+    riskLevel: 'CRITICAL',
+    what: 'Identity layer controlling what Bedrock, SageMaker, and Lambda can do across your AWS account.',
+    threats: [
+      'Wildcard (*) permissions give AI agents unrestricted resource access',
+      'AssumeRole chains allow privilege escalation across services',
+      'Missing permission boundaries let compromised models pivot laterally',
+    ],
+    checks: [
+      { label: 'No wildcard actions in model execution roles', ok: false },
+      { label: 'Permission boundaries on AI service roles', ok: false },
+      { label: 'IAM Access Analyzer enabled', ok: false },
+    ],
+    mitre: [
+      { id: 'T1078.004', name: 'Cloud Accounts (privilege escalation)' },
+      { id: 'T1548', name: 'Abuse Elevation Control Mechanism' },
+    ],
+    attackPath: 'Over-privileged IAM role → AssumeRole from Bedrock → full S3/RDS read+write',
+  },
+  s3: {
+    service: 'S3 / RDS Data Stores',
+    riskLevel: 'HIGH',
+    what: 'Final data layer — training datasets, inference outputs, credentials, and sensitive records.',
+    threats: [
+      'Training data poisoning contaminates future model behavior',
+      'PII exfiltration via GetObject from compromised AI role',
+      'Unencrypted buckets expose data if S3 ACL is misconfigured',
+    ],
+    checks: [
+      { label: 'Default encryption (SSE-KMS) on all buckets', ok: true },
+      { label: 'Block public access enabled account-wide', ok: true },
+      { label: 'S3 Object Lock for training data integrity', ok: false },
+    ],
+    mitre: [
+      { id: 'T1530', name: 'Data from Cloud Storage' },
+      { id: 'AML.T0024', name: 'Exfiltration via Model Output' },
+    ],
+    attackPath: 'Compromised AI role → GetObject PII records → external exfiltration via model API',
+  },
 };
 
 function CustomNode({ data }: { data: { label: string; sublabel?: string; type: string; selected?: boolean } }) {
@@ -96,11 +220,41 @@ const INITIAL_EDGES: Edge[] = [
   { id: 'e6', source: 'iam', target: 's3', type: 'straight', label: 'GetObject', animated: true, style: { stroke: '#db2777', strokeWidth: 2 }, markerEnd: { type: MarkerType.ArrowClosed, color: '#db2777' }, labelStyle: edgeLabelStyle, labelBgStyle: edgeLabelBg, labelBgBorderRadius: 6, labelBgPadding: edgeLabelPadding },
 ];
 
-const AISecurityGraph: React.FC = () => {
+interface AISecurityGraphProps {
+  incidentType?: string;
+}
+
+/** Compute node risk overrides from incident type — propagates threat intelligence into the graph */
+function computeNodeRiskOverrides(incidentType?: string): Record<string, Partial<NodeDetail>> {
+  const t = (incidentType || '').toLowerCase();
+  const isShadowAI  = /shadow.?ai|llm|bedrock|prompt.?inj|invoke/i.test(t);
+  const isPrivEsc   = /priv|escalat|contractor|assume.?role/i.test(t);
+  const isDataExfil = /exfil|data|s3|getobject|bucket/i.test(t);
+
+  const overrides: Record<string, Partial<NodeDetail>> = {};
+  if (isShadowAI) {
+    overrides.bedrock = { riskLevel: 'CRITICAL' };
+    overrides.api = { riskLevel: 'CRITICAL' };
+    overrides.internet = { riskLevel: 'HIGH' };
+  }
+  if (isPrivEsc) {
+    overrides.iam = { riskLevel: 'CRITICAL' };
+  }
+  if (isDataExfil) {
+    overrides.s3 = { riskLevel: 'CRITICAL' };
+    overrides.iam = { riskLevel: 'HIGH' };
+  }
+  return overrides;
+}
+
+const AISecurityGraph: React.FC<AISecurityGraphProps> = ({ incidentType }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [modelCount, setModelCount] = useState<number | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+
+  // Compute dynamic risk overrides based on incident type
+  const riskOverrides = computeNodeRiskOverrides(incidentType);
 
   // Sync selected state to node data so CustomNode receives it
   useEffect(() => {
@@ -127,7 +281,10 @@ const AISecurityGraph: React.FC = () => {
       .catch(() => setModelCount(null));
   }, []);
 
-  const info = selectedNode ? NODE_INFO[selectedNode] : null;
+  const rawInfo = selectedNode ? NODE_INFO[selectedNode] : null;
+  const info = rawInfo && riskOverrides[selectedNode!]
+    ? { ...rawInfo, ...riskOverrides[selectedNode!] }
+    : rawInfo;
   const selectedLabel = selectedNode ? INITIAL_NODES.find((n) => n.id === selectedNode)?.data?.label : null;
 
   return (
@@ -173,39 +330,117 @@ const AISecurityGraph: React.FC = () => {
               <Controls className="!bg-white !border-slate-200 !shadow-sm" />
             </ReactFlow>
           </div>
-          <div className="border-l border-slate-200 bg-slate-50/30 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Info className="w-4 h-4 text-slate-500" />
-              <span className="text-sm font-bold text-slate-800">Node details</span>
-            </div>
-            {info && selectedLabel ? (
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-slate-800">{selectedLabel}</p>
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">What it is</p>
-                  <p className="text-sm text-slate-700 leading-relaxed">{info.what}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Why it matters</p>
-                  <p className="text-sm text-slate-700 leading-relaxed">{info.why}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">
-                <strong>Click any node</strong> to see what it is and why it matters for AI security. The selected node will highlight with a blue ring.
-              </p>
-            )}
-            {selectedNode === 'iam' && (
-              <a href="https://aegis-iam.vercel.app/" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300">
-                <Shield className="w-3.5 h-3.5" /> Analyze IAM with Aegis IAM →
-              </a>
-            )}
-            <div className="mt-4 pt-4 border-t border-slate-200">
-              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Attack path</p>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                Internet → API → Bedrock/SageMaker → IAM → S3. wolfir monitors InvokeModel, guardrails, and Shadow AI.
-              </p>
-            </div>
+          <div className="border-l border-slate-200 bg-white overflow-y-auto" style={{ maxHeight: 420 }}>
+            <AnimatePresence mode="wait">
+              {info && selectedLabel ? (
+                <motion.div
+                  key={selectedNode}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -8 }}
+                  transition={{ duration: 0.15 }}
+                  className="p-5 space-y-4"
+                >
+                  {/* Title + risk badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">{info.service}</p>
+                      <h4 className="text-sm font-bold text-slate-900">{selectedLabel}</h4>
+                    </div>
+                    <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      info.riskLevel === 'CRITICAL' ? 'bg-red-50 text-red-700 border-red-200' :
+                      info.riskLevel === 'HIGH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                      info.riskLevel === 'MEDIUM' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}>
+                      {info.riskLevel}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">{info.what}</p>
+
+                  {/* Threats */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-red-400" /> Top Threats
+                    </p>
+                    <ul className="space-y-1.5">
+                      {info.threats.map((t, i) => (
+                        <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
+                          <ChevronRight className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />
+                          {t}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Security checks */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Security Checks
+                    </p>
+                    <ul className="space-y-1.5">
+                      {info.checks.map((c, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs">
+                          {c.ok
+                            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                            : <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
+                          <span className={c.ok ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}>{c.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* MITRE */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Eye className="w-3 h-3" /> MITRE ATT&CK / ATLAS
+                    </p>
+                    <div className="space-y-1.5">
+                      {info.mitre.map((m) => (
+                        <div key={m.id} className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-bold font-mono border border-violet-200 flex-shrink-0">{m.id}</span>
+                          <span className="text-[11px] text-slate-500">{m.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Attack path */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <Zap className="w-3 h-3" /> Attack Scenario
+                    </p>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">{info.attackPath}</p>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="p-5 flex flex-col items-center justify-center text-center gap-3 min-h-[260px]"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-1">Click any node</p>
+                    <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">See threats, security checks, and MITRE ATT&CK mappings for each layer.</p>
+                  </div>
+                  <div className="w-full pt-3 border-t border-slate-100">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Attack chain</p>
+                    <div className="flex items-center gap-1 flex-wrap justify-center">
+                      {['Internet', 'API', 'Bedrock', 'IAM', 'S3'].map((n, i) => (
+                        <React.Fragment key={n}>
+                          {i > 0 && <ChevronRight className="w-3 h-3 text-slate-300" />}
+                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{n}</span>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
         <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-600">

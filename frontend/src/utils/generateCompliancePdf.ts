@@ -9,7 +9,7 @@ interface ComplianceControl {
   framework: string;
   controlId: string;
   title: string;
-  status: 'violated' | 'at-risk' | 'compliant';
+  status: 'violated' | 'at-risk' | 'compliant' | 'not_evaluated';
   severity: string;
   description: string;
   impact: string;
@@ -20,6 +20,7 @@ interface ReportSummary {
   violated: number;
   atRisk: number;
   compliant: number;
+  notEvaluated?: number;
   total: number;
 }
 

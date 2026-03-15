@@ -380,17 +380,17 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
       )}
 
       {/* Pattern Analysis */}
-      {stats && (stats.top_attack_types?.length > 0 || stats.top_mitre_techniques?.length > 0) && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-4"
-        >
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" /> Most Common Attack Types
-            </h3>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+      >
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" /> Most Common Attack Types
+          </h3>
+          {stats?.top_attack_types?.length > 0 ? (
             <div className="space-y-2">
               {(stats.top_attack_types || []).map((a: any) => (
                 <div key={a.attack_type} className="flex items-center gap-2">
@@ -410,11 +410,19 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
                 </div>
               ))}
             </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <Shield className="w-4 h-4" /> Recurring MITRE Techniques
-            </h3>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <TrendingUp className="w-8 h-8 text-slate-200 mb-2" />
+              <p className="text-xs text-slate-400 font-medium">No history yet</p>
+              <p className="text-[11px] text-slate-400 mt-1">Run a few analyses — attack type trends appear here after incidents are stored.</p>
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <Shield className="w-4 h-4" /> Recurring MITRE Techniques
+          </h3>
+          {stats?.top_mitre_techniques?.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {(stats.top_mitre_techniques || []).map((t: any) => (
                 <span
@@ -425,9 +433,20 @@ export default function IncidentHistory({ accountId = 'demo-account', refreshTri
                 </span>
               ))}
             </div>
-          </div>
-        </motion.div>
-      )}
+          ) : (
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <Shield className="w-8 h-8 text-slate-200 mb-2" />
+              <p className="text-xs text-slate-400 font-medium">No recurring techniques yet</p>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                MITRE data builds up as incidents are saved to memory.
+                {backendOffline
+                  ? ' Start the backend to enable cross-incident memory.'
+                  : ' Requires DynamoDB write permissions — run a demo to populate.'}
+              </p>
+            </div>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }

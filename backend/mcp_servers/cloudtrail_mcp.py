@@ -73,10 +73,10 @@ class CloudTrailMCPServer:
                 trails = ct.describe_trails(includeShadowTrails=False)
                 for t in trails.get('trailList', []):
                     if t.get('IsOrganizationTrail'):
-                        region = t.get('HomeRegion', 'us-east-1')
+                        region = t.get('HomeRegion', self.settings.aws_region)
                         break
             except ClientError:
-                region = 'us-east-1'
+                region = self.settings.aws_region  # Use configured region, not hardcoded us-east-1
         return _get_ct_client(session, region, target_role)
 
     async def lookup_security_events(

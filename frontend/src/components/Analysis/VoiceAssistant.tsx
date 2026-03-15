@@ -1,5 +1,5 @@
 /**
- * Aria — Voice Assistant
+ * Lyra — wolfir's AI Security Intelligence Assistant
  * Real-time voice interaction for security incident analysis
  * Uses Web Speech API for browser-native STT/TTS + Nova 2 Lite backend
  */
@@ -172,6 +172,7 @@ interface VoiceAssistantProps {
   incidentContext?: any;
   incidentId?: string;
   isAnalysisComplete?: boolean;
+  awsAccountId?: string | null;
   /** When true, render inline in tab (no floating button) — tab IS the voice interface */
   embedded?: boolean;
 }
@@ -187,7 +188,7 @@ interface ChatMessage {
   processingTime?: number;
 }
 
-const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embedded = false }: VoiceAssistantProps) => {
+const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, awsAccountId, embedded = false }: VoiceAssistantProps) => {
   const [isOpen, setIsOpen] = useState(embedded);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -212,10 +213,10 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Fetch incident memory count when Aria opens with analysis context
+  // Fetch incident memory count when Lyra opens with analysis context
   useEffect(() => {
     if (!isOpen || !isAnalysisComplete) return;
-    incidentHistoryAPI.list('demo-account').then((r) => setIncidentMemoryCount(r.count ?? 0)).catch(() => setIncidentMemoryCount(null));
+    incidentHistoryAPI.list(awsAccountId || 'demo-account').then((r) => setIncidentMemoryCount(r.count ?? 0)).catch(() => setIncidentMemoryCount(null));
   }, [isOpen, isAnalysisComplete]);
 
   // Initialize with welcome message
@@ -225,8 +226,8 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
         id: 'welcome',
         role: 'assistant',
         text: isAnalysisComplete
-          ? `Hi, I'm Aria — wolfir's security intelligence assistant. I'm here to help you understand incident ${incidentId || 'analysis'}. Ask me about the root cause, attack patterns, compliance impacts, cost estimates, or remediation steps.`
-          : "Hi, I'm Aria — wolfir's AI-powered security assistant. Start an analysis, and I can walk you through findings, explain threats, or recommend next steps. You can also ask me about AWS security best practices.",
+          ? `Hi, I'm Lyra — wolfir's security intelligence assistant. I'm here to help you understand incident ${incidentId || 'analysis'}. Ask me about the root cause, attack patterns, compliance impacts, cost estimates, or remediation steps.`
+          : "Hi, I'm Lyra — wolfir's AI-powered security assistant. Start an analysis, and I can walk you through findings, explain threats, or recommend next steps. You can also ask me about AWS security best practices.",
         timestamp: new Date(),
         suggestions: isAnalysisComplete 
           ? ['What is the root cause?', 'Explain the attack path', 'Show compliance impact', 'Have you seen this attack pattern before?']
@@ -240,8 +241,9 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
     const voices = window.speechSynthesis.getVoices();
     // Prefer these female voices (ordered by quality/naturalness)
     const preferredFemale = [
-      'Microsoft Aria Online (Natural)',
+      'Microsoft Zira Online (Natural)',
       'Microsoft Jenny Online (Natural)',
+      'Microsoft Aria Online (Natural)',
       'Google UK English Female',
       'Google US English',
       'Samantha',
@@ -250,8 +252,8 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
       'Tessa',
       'Victoria',
       'Microsoft Zira',
-      'Microsoft Aria',
       'Microsoft Jenny',
+      'Microsoft Aria',
     ];
     
     for (const name of preferredFemale) {
@@ -265,6 +267,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
       v.name.includes('Zira') ||
       v.name.includes('Hazel') ||
       v.name.includes('Susan') ||
+      v.name.includes('Jenny') ||
       v.name.includes('Aria')
     );
     if (femaleVoice) return femaleVoice;
@@ -542,7 +545,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
                   <Volume2 className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Aria</h3>
+                  <h3 className="text-sm font-bold text-white">Lyra</h3>
                   <p className="text-[10px] text-white/70">
                     {useNovaSonic ? 'Nova Sonic (speech-to-speech)' : 'Nova 2 Lite + browser TTS'}
                   </p>
@@ -664,7 +667,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
                     {/* Processing time */}
                     {msg.processingTime && (
                       <p className="text-[10px] text-slate-400 mt-1.5">
-                        Aria via Nova 2 Lite | {msg.processingTime}ms
+                        Lyra via Nova 2 Lite | {msg.processingTime}ms
                       </p>
                     )}
                   </div>
@@ -771,7 +774,7 @@ const VoiceAssistant = ({ incidentContext, incidentId, isAnalysisComplete, embed
               </div>
               
               <p className="text-[10px] text-slate-400 text-center mt-2">
-                Aria | Powered by Amazon Nova 2 Lite
+                Lyra | Powered by Amazon Nova 2 Lite
               </p>
             </div>
           </motion.div>

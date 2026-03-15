@@ -139,12 +139,12 @@ class CloudTrailService:
             trails = ct.describe_trails(includeShadowTrails=False)
             for t in trails.get('trailList', []):
                 if t.get('IsOrganizationTrail'):
-                    region = t.get('HomeRegion', 'us-east-1')
+                    region = t.get('HomeRegion', self.settings.aws_region)
                     logger.info(f"Org trail found: HomeRegion={region}")
                     return region
         except ClientError as e:
-            logger.warning(f"Could not find org trail: {e}. Using us-east-1.")
-        return "us-east-1"  # AWS: Org activity viewable in us-east-1
+            logger.warning(f"Could not find org trail: {e}. Falling back to configured region {self.settings.aws_region}.")
+        return self.settings.aws_region  # Fall back to configured region, not always us-east-1
     
     async def lookup_events(
         self,

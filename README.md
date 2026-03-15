@@ -12,7 +12,7 @@
 
 ## Motivation
 
-Security teams receive **11,000+ alerts per day** and investigate **less than 5%** (Ponemon Institute, *Cost of Data Breach Report*). Manual correlation, triage, and remediation take hours — often at 2am. Existing tools detect; they don't respond. We built wolfir to close that gap: from alert to remediation plan to documentation, autonomously, with human-in-the-loop approval for risky actions.
+Security teams receive **960+ alerts per day** on average, and **40% go uninvestigated** (Prophet Security, AI in SOC Survey, 2025). Manual correlation, triage, and remediation take hours — often at 2am. Existing tools detect; they don't respond. We built wolfir to close that gap: from alert to remediation plan to documentation, autonomously, with human-in-the-loop approval for risky actions.
 
 **Why we chose this path:**
 - **Multi-model specialization** — One model can't do everything well. Nova Pro reads diagrams. Nova Micro scores risk in &lt;1s. Nova 2 Lite reasons over timelines. Each does what it's best at.
@@ -50,7 +50,7 @@ wolfir is an **autonomous security platform** that closes two gaps:
 | **IR Protocol Adherence** | NIST IR phase compliance scoring |
 | **AI Pipeline Security** | MITRE ATLAS monitoring (6 techniques) |
 | **Visual Analysis** | Upload diagrams — Nova Pro STRIDE assessment |
-| **Real AWS** | Connect via CLI profile or SSO — credentials stay local |
+| **Real AWS** | Connect via AWS CLI profile — credentials stay local, never transmitted |
 
 ## 🏗 Architecture
 
@@ -233,12 +233,12 @@ sequenceDiagram
 
 ### Scalability Architecture (SQS + Multi-Region)
 
-How wolfir scales from a hackathon demo to a real SOC handling 11,000+ alerts/day:
+How wolfir scales from a hackathon demo to a real SOC handling 960+ alerts/day:
 
 ```
                         ┌─────────────────────────────┐
                         │   CloudTrail / GuardDuty     │
-                        │   (11,000+ events/day)       │
+                        │   (960+ alerts/day avg)      │
                         └──────────────┬──────────────┘
                                        │
                         ┌──────────────▼──────────────┐
@@ -399,7 +399,7 @@ See [terraform/README.md](terraform/README.md) for step-by-step instructions. Th
 
 ## 🔒 Security of the Product
 
-- **Credentials** — Never stored; always local (CLI profile or SSO). Quick Connect accepts temporary keys for 30s validation only.
+- **Credentials** — Never stored; always local via AWS CLI profile. wolfir requires no long-lived access keys — use `aws sso login` or `aws configure` locally, then point wolfir at your profile.
 - **Demo mode** — Complete client-side fallback when backend is offline; no AWS required.
 - **CloudTrail audit proof** — Every remediation action is logged and verifiable.
 - **API rate limiting** — 60 requests/minute per IP (SlowAPI) to prevent abuse.

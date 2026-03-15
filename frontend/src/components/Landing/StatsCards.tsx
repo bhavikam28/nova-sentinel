@@ -1,85 +1,82 @@
 /**
- * Project-relevant stats — defensible numbers
- * 11k alerts: Ponemon/Cost of Data Breach; 5 Nova: product; 23 tools: MCP count; 90d: CloudTrail max
+ * By the numbers — premium horizontal stat strip, big-tech style
  */
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Cpu, Shield, FileText } from 'lucide-react';
 
 const STATS = [
   {
-    value: '11K+',
-    suffix: '',
-    label: 'Alerts per day (avg SOC)',
-    sub: 'Ponemon Institute — most go uninvestigated',
-    icon: Zap,
+    value: '960+',
+    label: 'Alerts per day',
+    sub: 'avg SOC · 40% uninvestigated',
   },
   {
     value: '5',
-    suffix: '',
-    label: 'Nova models orchestrated',
-    sub: 'Pro, 2 Lite, Micro, 2 Sonic, Canvas',
-    icon: Cpu,
+    label: 'Nova Models',
+    sub: 'Pro, Lite, Micro, Sonic, Canvas',
   },
   {
     value: '23',
-    suffix: '',
-    label: 'MCP tools across 6 servers',
-    sub: 'CloudTrail, IAM, CloudWatch, Security Hub, Nova Canvas, AI Security',
-    icon: Shield,
+    label: 'MCP Tools',
+    sub: 'across 6 AWS MCP servers',
   },
   {
-    value: '90',
-    suffix: 'd',
+    value: '97%',
+    label: 'AI breach victims',
+    sub: 'lacked AI access controls',
+  },
+  {
+    value: '90d',
     label: 'CloudTrail lookback',
-    sub: 'Kill chain tracing, campaign correlation',
-    icon: FileText,
+    sub: 'kill chain tracing',
   },
 ];
 
 const StatsCards: React.FC = () => {
   return (
-    <section className="py-16 bg-white border-y border-slate-200">
+    <section className="py-20 bg-white border-b border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-10"
+          className="text-center mb-14"
         >
-          <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-[0.2em] mb-2">
-            By the numbers
-          </p>
-          <h2 className="text-xl font-bold text-slate-900">Cloud + AI security in one platform</h2>
+          <p className="eyebrow mb-3">By the numbers</p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Cloud + AI security, unified in one platform
+          </h2>
         </motion.div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {STATS.map((stat, i) => {
-            const Icon = stat.icon;
-            return (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
-                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all text-left"
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-slate-100 rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+          {STATS.map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.06 }}
+              className="bg-white px-6 py-8 flex flex-col items-center text-center group hover:bg-blue-50/40 transition-colors duration-200"
+            >
+              <span
+                className="font-extrabold text-slate-900 tracking-tight leading-none mb-2 font-mono"
+                style={{ fontSize: 'clamp(2rem, 4vw, 2.75rem)' }}
               >
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-5 h-5 text-indigo-600" />
-                  </div>
-                  <div>
-                    <div className="text-3xl font-bold text-indigo-600 font-mono">
-                      {stat.value}
-                      <span className="text-lg">{stat.suffix}</span>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-900 mt-1">{stat.label}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{stat.sub}</p>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                <span
+                  style={{
+                    background: 'linear-gradient(135deg, #1D4ED8 0%, #6366F1 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {stat.value}
+                </span>
+              </span>
+              <p className="text-sm font-bold text-slate-800 mb-1">{stat.label}</p>
+              <p className="text-xs text-slate-400 leading-snug">{stat.sub}</p>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>

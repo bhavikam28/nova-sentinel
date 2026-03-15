@@ -364,8 +364,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline, onNavigateToExpor
                               {formatTimestamp(event.timestamp)}
                             </span>
                           </div>
-                          <h4 className="text-xs font-bold text-slate-900 mb-1">{event.action}</h4>
-                          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                          <h4 className="text-sm font-bold text-slate-900 mb-1">{event.action}</h4>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-2.5">
                             <span className="flex items-center gap-1.5">
                               <User className="w-3.5 h-3.5 text-slate-400" />
                               {event.actor}
@@ -375,8 +375,31 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline, onNavigateToExpor
                               {humanizeResource(event.resource)}
                             </span>
                           </div>
+                          {/* Security Significance — always visible, prominent */}
+                          <div className={`p-3 rounded-lg border ${
+                            sevLabel === 'CRITICAL' ? 'bg-red-50 border-red-200' :
+                            sevLabel === 'HIGH'     ? 'bg-orange-50 border-orange-200' :
+                            sevLabel === 'MEDIUM'   ? 'bg-amber-50 border-amber-200' :
+                                                     'bg-slate-50 border-slate-200'
+                          }`}>
+                            <p className={`text-[11px] font-bold mb-1 flex items-center gap-1.5 ${
+                              sevLabel === 'CRITICAL' ? 'text-red-700' :
+                              sevLabel === 'HIGH'     ? 'text-orange-700' :
+                              sevLabel === 'MEDIUM'   ? 'text-amber-700' :
+                                                       'text-slate-600'
+                            }`}>
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              Security Significance
+                            </p>
+                            <p className={`text-xs leading-relaxed ${
+                              sevLabel === 'CRITICAL' ? 'text-red-700' :
+                              sevLabel === 'HIGH'     ? 'text-orange-700' :
+                              sevLabel === 'MEDIUM'   ? 'text-amber-700' :
+                                                       'text-slate-600'
+                            }`}>{getEnrichedSignificance(event)}</p>
+                          </div>
                         </div>
-                        <button className="text-slate-400 hover:text-slate-600 p-1 flex-shrink-0 ml-2">
+                        <button className="text-slate-400 hover:text-slate-600 p-1 flex-shrink-0 ml-2 mt-0.5">
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                       </div>
@@ -391,17 +414,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline, onNavigateToExpor
                             className="mt-3 pt-3 border-t border-slate-100 overflow-hidden"
                           >
                             {event.details && event.details.trim() && event.details !== getEnrichedSignificance(event) && (
-                              <div className="mb-3">
-                                <p className="text-xs font-bold text-slate-600 mb-1">Details</p>
-                                <p className="text-xs text-slate-500 leading-relaxed">{event.details}</p>
+                              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                <p className="text-xs font-bold text-slate-600 mb-1.5">Raw CloudTrail Details</p>
+                                <p className="text-xs text-slate-500 leading-relaxed font-mono">{event.details}</p>
                               </div>
                             )}
-                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                              <p className="text-xs font-bold text-amber-700 mb-1 flex items-center gap-1">
-                                <AlertCircle className="w-3.5 h-3.5" /> Security Significance
-                              </p>
-                              <p className="text-xs text-amber-600 leading-relaxed">{getEnrichedSignificance(event)}</p>
-                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>

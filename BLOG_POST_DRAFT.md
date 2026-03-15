@@ -81,7 +81,7 @@ Five AWS MCP servers expose 23 tools that the Strands Agent can call:
 
 We built this for SOC analysts, cloud security engineers, and incident responders. If you're in an AWS organization using IAM Identity Center (SSO), you can connect your profile and run analysis against real CloudTrail data. No keys on our servers. Everything stays in your account.
 
-We also built it for teams that are understaffed. Security teams get 11,000+ alerts per day and investigate less than 5%. wolfir doesn't replace judgment — it gives you a head start. A timeline in seconds instead of 45 minutes. A remediation plan with approval gates instead of a blank page.
+We also built it for teams that are understaffed. Security teams get 960+ alerts per day on average, and 40% go uninvestigated. wolfir doesn't replace judgment — it gives you a head start. A timeline in seconds instead of 45 minutes. A remediation plan with approval gates instead of a blank page.
 
 ## The Differentiators
 

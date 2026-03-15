@@ -4,7 +4,7 @@
 
 ## Inspiration
 
-Security teams receive 11,000 alerts per day. They investigate less than 5% (Ponemon Institute). The gap isn't detection — it's response. Existing tools tell you *something* happened. They don't tell you what to do, and they don't do it for you.
+Security teams receive 960+ alerts per day on average. 40% go uninvestigated (Prophet Security, 2025). The gap isn't detection — it's response. Existing tools tell you *something* happened. They don't tell you what to do, and they don't do it for you.
 
 We also noticed a second problem that nobody is solving: every security platform now uses AI, but nobody is securing the AI itself. Prompt injection, API abuse, model theft — MITRE ATLAS has catalogued the threats. Who's monitoring them in production? We decided wolfir would.
 

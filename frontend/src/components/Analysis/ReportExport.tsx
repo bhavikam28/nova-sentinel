@@ -40,19 +40,94 @@ interface ExecutiveBriefingData {
  * load directly into https://mitre-attack.github.io/attack-navigator/
  */
 const ACTION_TO_TECHNIQUE: Record<string, { id: string; name: string; tactic: string }> = {
-  AssumeRole:        { id: 'T1078', name: 'Valid Accounts', tactic: 'initial-access' },
-  CreateAccessKey:   { id: 'T1098.001', name: 'Account Manipulation: Additional Cloud Credentials', tactic: 'persistence' },
-  AttachUserPolicy:  { id: 'T1078.004', name: 'Valid Accounts: Cloud Accounts', tactic: 'privilege-escalation' },
-  AttachRolePolicy:  { id: 'T1098', name: 'Account Manipulation', tactic: 'privilege-escalation' },
-  RunInstances:      { id: 'T1204', name: 'User Execution', tactic: 'execution' },
-  DescribeInstances: { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
-  ListBuckets:       { id: 'T1619', name: 'Cloud Storage Object Discovery', tactic: 'discovery' },
-  GetObject:         { id: 'T1530', name: 'Data from Cloud Storage Object', tactic: 'collection' },
-  PutObject:         { id: 'T1537', name: 'Transfer Data to Cloud Account', tactic: 'exfiltration' },
-  DeleteTrail:       { id: 'T1562.008', name: 'Impair Defenses: Disable Cloud Logs', tactic: 'defense-evasion' },
-  StopLogging:       { id: 'T1562.008', name: 'Impair Defenses: Disable Cloud Logs', tactic: 'defense-evasion' },
-  InvokeModel:       { id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'execution' },
-  ConsoleLogin:      { id: 'T1078', name: 'Valid Accounts', tactic: 'initial-access' },
+  // Initial Access
+  AssumeRole:                   { id: 'T1078', name: 'Valid Accounts', tactic: 'initial-access' },
+  ConsoleLogin:                 { id: 'T1078', name: 'Valid Accounts', tactic: 'initial-access' },
+  GetFederationToken:           { id: 'T1550.001', name: 'Use Alternate Authentication Material: Application Access Token', tactic: 'initial-access' },
+  GetSessionToken:              { id: 'T1078', name: 'Valid Accounts', tactic: 'initial-access' },
+  SwitchRole:                   { id: 'T1078.004', name: 'Valid Accounts: Cloud Accounts', tactic: 'initial-access' },
+
+  // Persistence
+  CreateAccessKey:              { id: 'T1098.001', name: 'Account Manipulation: Additional Cloud Credentials', tactic: 'persistence' },
+  CreateUser:                   { id: 'T1136.003', name: 'Create Account: Cloud Account', tactic: 'persistence' },
+  CreateRole:                   { id: 'T1098', name: 'Account Manipulation', tactic: 'persistence' },
+  UpdateAccessKey:              { id: 'T1098.001', name: 'Account Manipulation: Additional Cloud Credentials', tactic: 'persistence' },
+  AddUserToGroup:               { id: 'T1098', name: 'Account Manipulation', tactic: 'persistence' },
+  PutUserPolicy:                { id: 'T1098', name: 'Account Manipulation', tactic: 'persistence' },
+  PutRolePolicy:                { id: 'T1098', name: 'Account Manipulation', tactic: 'persistence' },
+  CreateLoginProfile:           { id: 'T1136.003', name: 'Create Account: Cloud Account', tactic: 'persistence' },
+  UpdateLoginProfile:           { id: 'T1098', name: 'Account Manipulation', tactic: 'persistence' },
+
+  // Privilege Escalation
+  AttachUserPolicy:             { id: 'T1078.004', name: 'Valid Accounts: Cloud Accounts', tactic: 'privilege-escalation' },
+  AttachRolePolicy:             { id: 'T1098', name: 'Account Manipulation', tactic: 'privilege-escalation' },
+  AttachGroupPolicy:            { id: 'T1098', name: 'Account Manipulation', tactic: 'privilege-escalation' },
+  UpdateAssumeRolePolicy:       { id: 'T1098', name: 'Account Manipulation', tactic: 'privilege-escalation' },
+  CreatePolicyVersion:          { id: 'T1484.001', name: 'Domain Policy Modification: Group Policy Modification', tactic: 'privilege-escalation' },
+  SetDefaultPolicyVersion:      { id: 'T1484.001', name: 'Domain Policy Modification', tactic: 'privilege-escalation' },
+  PassRole:                     { id: 'T1098', name: 'Account Manipulation', tactic: 'privilege-escalation' },
+
+  // Defense Evasion
+  DeleteTrail:                  { id: 'T1562.008', name: 'Impair Defenses: Disable Cloud Logs', tactic: 'defense-evasion' },
+  StopLogging:                  { id: 'T1562.008', name: 'Impair Defenses: Disable Cloud Logs', tactic: 'defense-evasion' },
+  DeleteFlowLogs:               { id: 'T1562.008', name: 'Impair Defenses: Disable Cloud Logs', tactic: 'defense-evasion' },
+  DisableAlarmActions:          { id: 'T1562', name: 'Impair Defenses', tactic: 'defense-evasion' },
+  DeleteDetector:               { id: 'T1562.001', name: 'Impair Defenses: Disable or Modify Tools', tactic: 'defense-evasion' },
+  DisableSecurityHub:           { id: 'T1562.001', name: 'Impair Defenses: Disable or Modify Tools', tactic: 'defense-evasion' },
+  UpdateTrail:                  { id: 'T1562.008', name: 'Impair Defenses: Disable Cloud Logs', tactic: 'defense-evasion' },
+  DeleteBucketPolicy:           { id: 'T1562', name: 'Impair Defenses', tactic: 'defense-evasion' },
+
+  // Discovery
+  DescribeInstances:            { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  DescribeSecurityGroups:       { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  DescribeVpcs:                 { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  DescribeSubnets:              { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  ListBuckets:                  { id: 'T1619', name: 'Cloud Storage Object Discovery', tactic: 'discovery' },
+  ListObjects:                  { id: 'T1619', name: 'Cloud Storage Object Discovery', tactic: 'discovery' },
+  ListRoles:                    { id: 'T1069.003', name: 'Permission Groups Discovery: Cloud Groups', tactic: 'discovery' },
+  ListUsers:                    { id: 'T1087.004', name: 'Account Discovery: Cloud Account', tactic: 'discovery' },
+  ListGroups:                   { id: 'T1069.003', name: 'Permission Groups Discovery: Cloud Groups', tactic: 'discovery' },
+  GetCallerIdentity:            { id: 'T1033', name: 'System Owner/User Discovery', tactic: 'discovery' },
+  GetAccountAuthorizationDetails:{ id: 'T1087.004', name: 'Account Discovery: Cloud Account', tactic: 'discovery' },
+  DescribeRegions:              { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  ListFunctions:                { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  DescribeClusters:             { id: 'T1526', name: 'Cloud Service Discovery', tactic: 'discovery' },
+  GetSecretValue:               { id: 'T1552.001', name: 'Unsecured Credentials: Credentials In Files', tactic: 'credential-access' },
+  ListSecrets:                  { id: 'T1552.001', name: 'Unsecured Credentials: Credentials In Files', tactic: 'credential-access' },
+
+  // Execution
+  RunInstances:                 { id: 'T1204', name: 'User Execution', tactic: 'execution' },
+  StartInstances:               { id: 'T1204', name: 'User Execution', tactic: 'execution' },
+  InvokeFunction:               { id: 'T1059.009', name: 'Command and Scripting Interpreter: Cloud API', tactic: 'execution' },
+  InvokeModel:                  { id: 'T1059.009', name: 'Command and Scripting Interpreter: Cloud API', tactic: 'execution' },
+  CreateFunction:               { id: 'T1059.009', name: 'Command and Scripting Interpreter: Cloud API', tactic: 'execution' },
+  SendCommand:                  { id: 'T1651', name: 'Cloud Administration Command', tactic: 'execution' },
+  StartAutomationExecution:     { id: 'T1651', name: 'Cloud Administration Command', tactic: 'execution' },
+
+  // Collection
+  GetObject:                    { id: 'T1530', name: 'Data from Cloud Storage Object', tactic: 'collection' },
+  CopyObject:                   { id: 'T1530', name: 'Data from Cloud Storage Object', tactic: 'collection' },
+  CreateSnapshot:               { id: 'T1530', name: 'Data from Cloud Storage Object', tactic: 'collection' },
+  DescribeSnapshots:            { id: 'T1530', name: 'Data from Cloud Storage Object', tactic: 'collection' },
+  GetDatabaseDump:              { id: 'T1005', name: 'Data from Local System', tactic: 'collection' },
+
+  // Exfiltration
+  PutObject:                    { id: 'T1537', name: 'Transfer Data to Cloud Account', tactic: 'exfiltration' },
+  CreateBucket:                 { id: 'T1537', name: 'Transfer Data to Cloud Account', tactic: 'exfiltration' },
+  PutBucketPolicy:              { id: 'T1537', name: 'Transfer Data to Cloud Account', tactic: 'exfiltration' },
+  ModifySnapshotAttribute:      { id: 'T1537', name: 'Transfer Data to Cloud Account', tactic: 'exfiltration' },
+
+  // Impact
+  TerminateInstances:           { id: 'T1531', name: 'Account Access Removal', tactic: 'impact' },
+  DeleteBucket:                 { id: 'T1485', name: 'Data Destruction', tactic: 'impact' },
+  DeleteObjects:                { id: 'T1485', name: 'Data Destruction', tactic: 'impact' },
+  DeleteFunction:               { id: 'T1485', name: 'Data Destruction', tactic: 'impact' },
+  PutBucketVersioning:          { id: 'T1490', name: 'Inhibit System Recovery', tactic: 'impact' },
+  AuthorizeSecurityGroupIngress:{ id: 'T1562.007', name: 'Impair Defenses: Disable or Modify Cloud Firewall', tactic: 'impact' },
+
+  // Lateral Movement
+  RequestSpotInstances:         { id: 'T1578.002', name: 'Modify Cloud Compute Infrastructure: Create Cloud Instance', tactic: 'lateral-movement' },
+  ModifyInstanceAttribute:      { id: 'T1578', name: 'Modify Cloud Compute Infrastructure', tactic: 'lateral-movement' },
 };
 
 function generateMitreNavigatorLayer(timeline: Timeline, incidentType = 'AWS Incident'): string {
@@ -207,11 +282,13 @@ const ReportExport: React.FC<ReportExportProps> = ({
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+  const [coverSource, setCoverSource] = useState<'nova-canvas' | 'built-in' | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [executiveBriefingOpen, setExecutiveBriefingOpen] = useState(false);
   const [executiveBriefingData, setExecutiveBriefingData] = useState<ExecutiveBriefingData | null>(null);
   const [executiveBriefingLoading, setExecutiveBriefingLoading] = useState(false);
   const [executiveBriefingError, setExecutiveBriefingError] = useState<string | null>(null);
+  const [mitreDownloaded, setMitreDownloaded] = useState(false);
   const briefingRef = useRef<HTMLDivElement>(null);
 
   const getSteps = () =>
@@ -406,15 +483,20 @@ ${REPORT_MODEL_ATTRIBUTION}
 
   const handleMitreNavigatorExport = () => {
     const json = generateMitreNavigatorLayer(timeline, incidentType || 'AWS Incident');
-    const blob = new Blob([json], { type: 'application/json' });
+    // Use octet-stream so the browser always prompts save-to-disk instead of
+    // opening the .json file in VS Code or the system default application.
+    const blob = new Blob([json], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `wolfir-mitre-layer-${incidentId || 'incident'}.json`;
+    link.setAttribute('download', `wolfir-mitre-layer-${incidentId || 'incident'}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setMitreDownloaded(true);
+    setTimeout(() => setMitreDownloaded(false), 8000);
   };
 
   const handleDownloadPdf = async () => {
@@ -536,31 +618,113 @@ ${REPORT_MODEL_ATTRIBUTION}
     }
   };
 
+  const generateBuiltInCoverDataUrl = (): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 500;
+    const ctx = canvas.getContext('2d')!;
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, 900, 500);
+    grad.addColorStop(0, '#0f172a');
+    grad.addColorStop(0.5, '#1e1b4b');
+    grad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 900, 500);
+    // Subtle grid lines
+    ctx.strokeStyle = 'rgba(99,102,241,0.08)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < 900; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 500); ctx.stroke(); }
+    for (let y = 0; y < 500; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(900, y); ctx.stroke(); }
+    // Glowing circle accent
+    const radGrad = ctx.createRadialGradient(450, 250, 0, 450, 250, 280);
+    radGrad.addColorStop(0, 'rgba(99,102,241,0.18)');
+    radGrad.addColorStop(1, 'rgba(99,102,241,0)');
+    ctx.fillStyle = radGrad;
+    ctx.fillRect(0, 0, 900, 500);
+    // Shield icon (simple polygon)
+    ctx.save();
+    ctx.translate(450, 130);
+    ctx.beginPath();
+    ctx.moveTo(0, -55); ctx.lineTo(50, -20); ctx.lineTo(50, 20); ctx.lineTo(0, 55); ctx.lineTo(-50, 20); ctx.lineTo(-50, -20);
+    ctx.closePath();
+    const shieldGrad = ctx.createLinearGradient(-50, -55, 50, 55);
+    shieldGrad.addColorStop(0, '#6366f1');
+    shieldGrad.addColorStop(1, '#8b5cf6');
+    ctx.fillStyle = shieldGrad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 38px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Security Incident Report', 450, 240);
+    // Incident type
+    ctx.fillStyle = '#a5b4fc';
+    ctx.font = '600 20px system-ui, sans-serif';
+    ctx.fillText(incidentType || 'AWS Security Incident', 450, 278);
+    // Divider
+    ctx.strokeStyle = 'rgba(99,102,241,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(200, 305); ctx.lineTo(700, 305); ctx.stroke();
+    // Incident ID
+    ctx.fillStyle = '#64748b';
+    ctx.font = '500 14px monospace';
+    ctx.fillText(incidentId || 'wolfir', 450, 330);
+    // Date
+    const d = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    ctx.fillStyle = '#475569';
+    ctx.font = '500 13px system-ui, sans-serif';
+    ctx.fillText(`Generated ${d}`, 450, 355);
+    // Footer
+    ctx.fillStyle = '#334155';
+    ctx.font = '500 11px system-ui, sans-serif';
+    ctx.fillText('wolfir · AI-Powered AWS Security Analysis · Amazon Nova', 450, 475);
+    // Corner accents
+    ctx.strokeStyle = 'rgba(99,102,241,0.4)';
+    ctx.lineWidth = 2;
+    ['tl','tr','bl','br'].forEach(corner => {
+      const cx = corner.includes('r') ? 900 : 0;
+      const cy = corner.includes('b') ? 500 : 0;
+      const dx = corner.includes('r') ? -1 : 1;
+      const dy = corner.includes('b') ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + dx * 30, cy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx, cy + dy * 30);
+      ctx.stroke();
+    });
+    return canvas.toDataURL('image/png');
+  };
+
   const handleGenerateCover = async () => {
     setCoverLoading(true);
     setCoverImage(null);
     setCoverError(null);
+    setCoverSource(null);
     const timeoutMs = 15000;
     try {
       const res = await Promise.race([
-        novaCanvasMCPAPI.generateReportCover(
-          incidentType,
-          'CRITICAL',
-          incidentId || 'INC-000000'
-        ),
+        novaCanvasMCPAPI.generateReportCover(incidentType, 'CRITICAL', incidentId || 'INC-000000'),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Nova Canvas timed out after 15s')), timeoutMs)
+          setTimeout(() => reject(new Error('timeout')), timeoutMs)
         ),
       ]);
       const img = res?.image_base64 ?? res?.image;
       if (img) {
         setCoverImage(img.startsWith('data:') ? img : `data:image/png;base64,${img}`);
+        setCoverSource('nova-canvas');
       } else {
-        setCoverError('No image returned. Ensure Nova Canvas MCP server is running.');
+        throw new Error('No image returned');
       }
-    } catch (err: any) {
-      setCoverImage(null);
-      setCoverError(err?.message || err?.response?.data?.detail || 'Nova Canvas unavailable. Use "Print with Cover" above — it always works.');
+    } catch {
+      // Always fall back to built-in cover so the button always produces a result
+      const builtIn = generateBuiltInCoverDataUrl();
+      setCoverImage(builtIn);
+      setCoverSource('built-in');
+      setCoverError('Nova Canvas MCP unavailable — using built-in cover. Start the MCP server to generate AI artwork.');
     } finally {
       setCoverLoading(false);
     }
@@ -673,22 +837,45 @@ ${REPORT_MODEL_ATTRIBUTION}
               Executive Briefing
             </button>
             <button
-              onClick={coverImage ? () => handlePrintReport(true, false) : handleGenerateCover}
+              onClick={handleGenerateCover}
               disabled={coverLoading}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[11px] font-bold hover:bg-slate-100 disabled:opacity-50"
             >
               {coverLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Image className="w-3 h-3" />}
-              {coverImage ? 'Print with Cover' : 'Generate Cover'}
+              {coverLoading ? 'Generating...' : coverImage ? 'Regenerate Cover' : 'Generate Cover'}
             </button>
+            {coverImage && (
+              <button
+                onClick={() => handlePrintReport(true, false)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-bold hover:bg-violet-100"
+              >
+                <Printer className="w-3 h-3" /> Print with Cover
+              </button>
+            )}
             <button
               onClick={handleMitreNavigatorExport}
-              title="Download a MITRE ATT&CK Navigator layer pre-populated with techniques detected in this incident. Open at mitre-attack.github.io/attack-navigator/"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-[11px] font-bold hover:bg-red-100 transition-colors"
+              title="Download a MITRE ATT&CK Navigator layer pre-populated with techniques detected in this incident"
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold transition-colors ${mitreDownloaded ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'}`}
             >
-              <Shield className="w-3 h-3" />
-              MITRE Navigator Layer
+              {mitreDownloaded ? <CheckCircle2 className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+              {mitreDownloaded ? 'Downloaded!' : 'MITRE Navigator Layer'}
             </button>
-            {coverError && <span className="text-[10px] text-amber-600">{coverError}</span>}
+            {mitreDownloaded && (
+              <a
+                href="https://mitre-attack.github.io/attack-navigator/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-[11px] font-bold hover:bg-slate-50"
+              >
+                Open MITRE Navigator →
+              </a>
+            )}
+            {coverError && coverSource === 'built-in' && (
+              <div className="w-full flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-amber-700">{coverError}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -908,22 +1095,30 @@ ${REPORT_MODEL_ATTRIBUTION}
           <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
             {/* Cover art — visible inline so judges see Nova Canvas output */}
             <div className="border-b border-slate-200 bg-slate-50 p-6 flex flex-col items-center justify-center min-h-[160px]">
-              {coverImage ? (
-                <>
+              {coverLoading ? (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                  <p className="text-sm text-slate-500">Generating cover art...</p>
+                  <p className="text-xs text-slate-400">Trying Nova Canvas · falls back to built-in if unavailable</p>
+                </div>
+              ) : coverImage ? (
+                <div className="flex flex-col items-center gap-2">
                   <img src={coverImage} alt="Report cover" className="max-w-full max-h-[220px] object-contain rounded-lg shadow-md" />
-                  <p className="text-[10px] text-slate-500 mt-2">Cover by Amazon Nova Canvas</p>
-                </>
+                  <p className="text-[10px] text-slate-400">
+                    {coverSource === 'nova-canvas' ? '✦ Generated by Amazon Nova Canvas' : '✦ Built-in cover (Nova Canvas MCP not available)'}
+                  </p>
+                </div>
               ) : (
                 <div className="text-center py-4">
-                  <Image className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <Image className="w-10 h-10 text-slate-200 mx-auto mb-2" />
                   <p className="text-sm font-medium text-slate-600 mb-0.5">No cover image yet</p>
-                  <p className="text-xs text-slate-500 mb-3">Generate to see Nova Canvas output in preview</p>
+                  <p className="text-xs text-slate-400 mb-3">Always works — uses Nova Canvas if available, built-in otherwise</p>
                   <button
                     onClick={handleGenerateCover}
                     disabled={coverLoading}
                     className="px-4 py-2 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
                   >
-                    {coverLoading ? 'Generating...' : 'Generate Cover'}
+                    Generate Cover
                   </button>
                 </div>
               )}

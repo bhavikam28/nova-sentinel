@@ -1,4 +1,4 @@
-# The Hard Parts of Multi-Agent Security Orchestration
+﻿# The Hard Parts of Multi-Agent Security Orchestration
 
 Orchestrating five Nova models plus an autonomous agent sounds simple on paper. In practice, it’s a maze of state management, tool selection, and failure modes. Here’s what we learned building wolfir.
 
@@ -28,12 +28,13 @@ Five Nova calls per incident. Plus embeddings for similarity. Plus optional visu
 
 ## Challenge 4: Credentials and Security
 
-We never store AWS credentials. The backend reads from the user’s local `~/.aws/credentials`. But we still need to assume roles for cross-account, support SSO, and handle “backend offline” for Vercel-only demos.
+We never store AWS credentials. The backend reads from the user’s local `~/.aws/credentials`. But we still need to assume roles for cross-account, handle “backend offline” for Vercel-only demos.
 
 **What we did:** Profile-based auth. Optional `AWS_TARGET_ROLE_ARN` for cross-account. Demo mode with client-side fallbacks so the frontend works even when the API isn’t running. For real analysis, credentials stay on the user’s machine.
 
-**Gotcha:** SSO token expiry. AWS SSO sessions expire. We surface clear errors and point users to `aws sso login`.
+**Gotcha:** Session expiry. CLI profile sessions expire (STS tokens have a max of 12 hours). We surface clear errors so users know to re-authenticate with `aws sso login` or refresh their profile.
 
 ## The Payoff
 
 When it works, it’s magic. One click, and you get a timeline, attack path, remediation plan, and docs. The challenges above are why most teams stick to dashboards. We chose the harder path — and it’s paying off.
+

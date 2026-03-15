@@ -7,7 +7,7 @@
 
 /* ============================
    WOLFIR DESIGN SYSTEM
-   Premium UI
+   Premium Big-Tech UI
    ============================ */
 
 :root {
@@ -20,6 +20,13 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Design tokens */
+  --blue-primary: #2563EB;
+  --blue-accent: #60A5FA;
+  --navy-deep: #020817;
+  --navy-mid: #080D1F;
+  --navy-light: #0D1B3E;
 }
 
 body {
@@ -76,7 +83,14 @@ html {
 }
 
 .gradient-text-hero {
-  background: linear-gradient(135deg, #818CF8 0%, #A78BFA 40%, #C4B5FD 100%);
+  background: linear-gradient(135deg, #60A5FA 0%, #818CF8 45%, #C4B5FD 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-blue {
+  background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -171,26 +185,43 @@ html {
 .card-premium {
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .card-premium:hover {
-  border-color: #818cf8;
-  box-shadow: 0 20px 40px -12px rgba(99, 102, 241, 0.12);
-  transform: translateY(-4px);
+  border-color: #93C5FD;
+  box-shadow: 0 20px 40px -12px rgba(37, 99, 235, 0.1);
+  transform: translateY(-3px);
 }
 
 .card-dark {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  border-radius: 1rem;
+  background: rgba(8, 13, 31, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 1.25rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(12px);
 }
 
 .card-dark:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  box-shadow: 0 0 40px rgba(99, 102, 241, 0.1);
+  border-color: rgba(96, 165, 250, 0.3);
+  box-shadow: 0 0 40px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Stat highlight card */
+.card-stat {
+  background: white;
+  border: 1px solid #F1F5F9;
+  border-radius: 1.5rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.card-stat:hover {
+  border-color: #BFDBFE;
+  box-shadow: 0 12px 40px -8px rgba(37, 99, 235, 0.08);
   transform: translateY(-2px);
 }
 
@@ -200,7 +231,7 @@ html {
 .btn-nova {
   position: relative;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-nova::before {
@@ -220,11 +251,24 @@ html {
 
 .btn-nova:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 10px 30px -5px rgba(37, 99, 235, 0.4);
 }
 
 .btn-nova:active {
   transform: translateY(0);
+}
+
+/* Premium blue CTA button */
+.btn-primary-blue {
+  background: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.35);
+  color: white;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary-blue:hover {
+  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.55);
+  transform: translateY(-2px);
 }
 
 /* ============================
@@ -428,5 +472,56 @@ a:focus-visible {
 
   .text-pretty {
     text-wrap: pretty;
+  }
+
+  /* ============================
+     DESIGN TOKENS
+     Canonical component classes — use these instead of ad-hoc
+     Tailwind variants in component files.
+     ============================ */
+
+  /* Primary surface card */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-200 overflow-hidden;
+    box-shadow: var(--shadow-card, 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06));
+  }
+
+  /* Nested content panel inside a .card */
+  .card-inner {
+    @apply bg-white rounded-xl border border-slate-200;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  /* Status / label badge — pair with color utilities e.g. bg-red-50 text-red-700 border-red-200 */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border leading-none;
+  }
+
+  /* Section header micro-label */
+  .section-label {
+    @apply text-[10px] font-bold text-slate-500 uppercase tracking-widest;
+  }
+
+  /* Premium section eyebrow */
+  .eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.22em] text-blue-600;
+  }
+
+  .eyebrow-dark {
+    @apply text-[11px] font-bold uppercase tracking-[0.22em] text-blue-400;
+  }
+
+  /* Premium headline */
+  .headline-xl {
+    @apply text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-[1.08];
+  }
+
+  .headline-xl-dark {
+    @apply text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.08];
+  }
+
+  /* Section spacing */
+  .section-gap {
+    @apply py-24 sm:py-32;
   }
 }

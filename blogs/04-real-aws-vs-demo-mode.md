@@ -1,4 +1,4 @@
-# Real AWS vs. Demo Mode: How wolfir Works With and Without Your Account
+﻿# Real AWS vs. Demo Mode: How wolfir Works With and Without Your Account
 
 wolfir has two modes: **Demo** (no AWS) and **Console** (real AWS). Both use the same UI and pipeline. The difference is where the data comes from.
 
@@ -17,7 +17,7 @@ Click “Try Demo,” pick a scenario (Crypto Mining, IAM Privilege Escalation, 
 
 ## Console Mode: Real AWS
 
-Connect via AWS CLI profile or SSO. Credentials stay on your machine — we never store or transmit them. The backend reads from `~/.aws/credentials` and makes AWS API calls directly.
+Connect via AWS CLI profile. Credentials stay on your machine — we never store or transmit them. The backend reads from `~/.aws/credentials` and makes AWS API calls directly. For SSO users, run `aws sso login` first to populate the profile.
 
 **What you get:**
 - Real CloudTrail events from 12 regions (configurable)
@@ -48,3 +48,4 @@ We take this seriously. Credentials are read locally. No proxy. No storage. If y
 
 - **Evaluating the product?** Demo mode. No setup.
 - **Analyzing your environment?** Connect AWS. One-time config, then you’re live.
+

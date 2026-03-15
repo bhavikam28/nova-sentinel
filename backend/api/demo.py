@@ -20,39 +20,25 @@ async def list_scenarios() -> Dict[str, Any]:
     return {
         "scenarios": [
             {
-                "id": "crypto-mining",
-                "name": "Cryptocurrency Mining Attack",
-                "description": "Compromised IAM role used to launch crypto mining instances",
+                "id": "privilege-escalation",
+                "name": "IAM Privilege Escalation",
+                "description": "Contractor abuses AssumeRole chain to gain AdministratorAccess — triggers MITRE T1098, T1078. Full kill chain: recon → pivot → persistence.",
                 "severity": "CRITICAL",
                 "event_count": 9
             },
             {
-                "id": "data-exfiltration",
-                "name": "Data Exfiltration",
-                "description": "Unauthorized access and download of sensitive data",
-                "severity": "HIGH",
-                "event_count": 3
-            },
-            {
-                "id": "privilege-escalation",
-                "name": "Privilege Escalation",
-                "description": "IAM user escalates privileges through role assumption",
+                "id": "organizations-breach",
+                "name": "AWS Organizations Cross-Account Breach",
+                "description": "Compromised role in a Dev account pivots via STS AssumeRole into Production and Security accounts — lateral movement across 3 OUs, 12 member accounts. wolfir detects and contains with org-wide SCPs.",
                 "severity": "CRITICAL",
-                "event_count": 4
-            },
-            {
-                "id": "unauthorized-access",
-                "name": "Unauthorized Access",
-                "description": "External actor accessing sensitive resources",
-                "severity": "HIGH",
-                "event_count": 3
+                "event_count": 18
             },
             {
                 "id": "shadow-ai",
                 "name": "Shadow AI / LLM Abuse",
-                "description": "Ungoverned Bedrock InvokeModel, prompt injection, OWASP LLM Top 10",
+                "description": "Ungoverned Bedrock InvokeModel calls + prompt injection attempt. Exercises the MITRE ATLAS self-monitoring pipeline — unique to wolfir.",
                 "severity": "CRITICAL",
-                "event_count": 5
+                "event_count": 7
             }
         ]
     }
@@ -132,11 +118,13 @@ async def get_quick_demo(scenario_id: str) -> Dict[str, Any]:
     from services.incident_memory import get_incident_memory
 
     names = {
+        "privilege-escalation": "IAM Privilege Escalation",
+        "organizations-breach": "AWS Organizations Cross-Account Breach",
+        "shadow-ai": "Shadow AI / LLM Abuse",
+        # legacy — kept for backward compat if any old links reference them
         "crypto-mining": "Cryptocurrency Mining Attack",
         "data-exfiltration": "Data Exfiltration",
-        "privilege-escalation": "Privilege Escalation",
         "unauthorized-access": "Unauthorized Access",
-        "shadow-ai": "Shadow AI / LLM Abuse",
     }
     incident_type = names.get(scenario_id, "Security Incident")
     result = get_quick_demo_result(scenario_id, incident_type)

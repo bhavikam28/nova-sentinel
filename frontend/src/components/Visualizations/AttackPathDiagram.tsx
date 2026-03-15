@@ -723,7 +723,7 @@ function severityRank(sev: string): number {
 const DEMO_NODES: NodeDef[] = [
   { id: 'internet', x: 80, y: 200, icon: Globe, label: 'Internet', subLabel: 'External Origin', detail: 'Suspicious IP: 203.0.113.42 (TOR exit node)', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:00Z' },
   { id: 'gateway', x: 240, y: 200, icon: AmazonApiGateway, label: 'API Gateway', subLabel: 'Entry Point', detail: 'REST API — 847 requests in 2 minutes', color: '#334155', bg: '#E2E8F0', severity: 'medium', mitreId: 'T1190', timestamp: '2026-01-15T14:20:15Z' },
-  { id: 'vpc', x: 400, y: 200, icon: AmazonVirtualPrivateCloud, label: 'VPC', subLabel: 'Network Layer', detail: 'vpc-0a1b2c3d — us-east-1', color: '#B91C1C', bg: '#FEF2F2', severity: 'medium', mitreId: 'T1021', timestamp: '2026-01-15T14:20:30Z' },
+  { id: 'vpc', x: 400, y: 200, icon: AmazonVirtualPrivateCloud, label: 'VPC', subLabel: 'Network Layer', detail: 'VPC ID: vpc-0a1b2c3d · CIDR: 10.0.0.0/16 · Region: us-east-1', color: '#B91C1C', bg: '#FEF2F2', severity: 'medium', mitreId: 'T1021', timestamp: '2026-01-15T14:20:30Z' },
   { id: 'ec2', x: 560, y: 200, icon: AmazonEc2, label: 'EC2 Instance', subLabel: 'Compromised', detail: 'i-abc123 — Attacker installed crypto-miner | Severity: Critical', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'T1078', resourceId: 'i-abc123', riskScore: 98, timestamp: '2026-01-15T14:21:00Z' },
   { id: 'iam', x: 720, y: 200, icon: AwsIdentityAndAccessManagement, label: 'IAM Role', subLabel: 'Escalated', detail: 'arn:aws:iam::role/admin-temp — privilege escalation', color: '#DC2626', bg: '#FEE2E2', severity: 'critical', ring: true, mitreId: 'T1078', riskScore: 92, timestamp: '2026-01-15T14:21:45Z' },
   { id: 'database', x: 880, y: 200, icon: AmazonRds, label: 'RDS Database', subLabel: 'Data Target', detail: 'db-prod-main — 2.4GB data accessed', color: '#EA580C', bg: '#FFEDD5', severity: 'high', mitreId: 'T1041', resourceId: 'db-prod-main', riskScore: 78, timestamp: '2026-01-15T14:22:30Z' },
@@ -1367,6 +1367,28 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
                 </stop>
               </linearGradient>
             </defs>
+
+            {/* ===== AWS Infrastructure Layers (dashed containers) — for narrative/demo or fallback demo layout ===== */}
+            {((useNarrative) || (NODES.some(n => n.id === 'vpc') && NODES.some(n => n.id === 'ec2')) || (NODES.some(n => n.id === 'bedrock') && NODES.some(n => n.id === 's3'))) && (
+              <g id="aws-infra-layers" style={{ pointerEvents: 'none' }}>
+                {(variant === 'ai' || (NODES.some(n => n.id === 'bedrock') && NODES.some(n => n.id === 's3'))) ? (
+                  <>
+                    <rect x={120} y={5} width={850} height={320} rx={12} fill="rgba(251,146,60,0.06)" stroke="#f97316" strokeWidth={2} strokeDasharray="8 6" />
+                    <text x={135} y={27} fill="#f97316" fontSize={10} fontWeight={700} fontFamily="Inter, system-ui, sans-serif">AWS Account · us-east-1</text>
+                    <rect x={175} y={55} width={540} height={245} rx={8} fill="rgba(139,92,246,0.06)" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="8 6" />
+                    <text x={190} y={77} fill="#8b5cf6" fontSize={10} fontWeight={700} fontFamily="Inter, system-ui, sans-serif">VPC</text>
+                  </>
+                ) : (
+                  <>
+                    <rect x={155} y={145} width={800} height={135} rx={10} fill="rgba(251,146,60,0.06)" stroke="#f97316" strokeWidth={2} strokeDasharray="8 6" />
+                    <text x={170} y={167} fill="#f97316" fontSize={10} fontWeight={700} fontFamily="Inter, system-ui, sans-serif">AWS Account · us-east-1</text>
+                    <rect x={215} y={190} width={470} height={70} rx={6} fill="rgba(5,150,105,0.06)" stroke="#059669" strokeWidth={2} strokeDasharray="6 4" />
+                    <text x={230} y={212} fill="#059669" fontSize={9} fontWeight={700} fontFamily="Inter, system-ui, sans-serif">Bedrock AI Services</text>
+                    <text x={230} y={224} fill="#94a3b8" fontSize={8} fontFamily="Inter, system-ui, sans-serif">Managed inference layer</text>
+                  </>
+                )}
+              </g>
+            )}
 
             {/* ===== EDGES with animated flow — arrow stops at node edge (no overlap) ===== */}
             {EDGES.map((edge, i) => {

@@ -285,8 +285,28 @@ export const documentationAPI = {
 };
 
 export const remediationAPI = {
-  executeStep: async (stepId: string, incidentId: string, action: string, target: string, demoMode = false): Promise<any> => {
+  executeStep: async (
+    stepId: string,
+    incidentId: string,
+    action: string,
+    target: string,
+    demoMode = false,
+    extra?: {
+      policyArn?: string;
+      instanceIds?: string;
+      sgId?: string;
+      port?: number;
+      cidr?: string;
+      username?: string;
+    }
+  ): Promise<any> => {
     const params = new URLSearchParams({ incident_id: incidentId, action, target, demo_mode: String(demoMode) });
+    if (extra?.policyArn)   params.set('policy_arn', extra.policyArn);
+    if (extra?.instanceIds) params.set('instance_ids', extra.instanceIds);
+    if (extra?.sgId)        params.set('sg_id', extra.sgId);
+    if (extra?.port != null) params.set('port', String(extra.port));
+    if (extra?.cidr)        params.set('cidr', extra.cidr);
+    if (extra?.username)    params.set('username', extra.username);
     const response = await api.post(`/api/remediation/execute/${stepId}?${params}`);
     return response.data;
   },

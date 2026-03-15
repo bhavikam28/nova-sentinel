@@ -31,6 +31,85 @@ interface ChangeSetAnalysisProps {
   backendOffline?: boolean;
 }
 
+/** Generate GitHub Actions YAML for pre-deploy changeset scanning */
+function generateGitHubActionsYAML(stackName: string, region: string): string {
+  const sn = stackName || 'my-app-stack';
+  const rgn = region || 'us-east-1';
+  return `# wolfir ChangeSet Security Gate — add to .github/workflows/deploy.yml
+name: Deploy with Security Gate
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  changeset-security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: \${{ secrets.AWS_DEPLOY_ROLE }}
+          aws-region: ${rgn}
+
+      - name: Create CloudFormation ChangeSet
+        id: create_changeset
+        run: |
+          CHANGESET_NAME="cs-\${{ github.sha }}-\$(date +%s)"
+          aws cloudformation create-change-set \\
+            --stack-name ${sn} \\
+            --template-body file://template.yaml \\
+            --change-set-name \$CHANGESET_NAME \\
+            --capabilities CAPABILITY_IAM \\
+            --region ${rgn}
+          echo "changeset_name=\$CHANGESET_NAME" >> \$GITHUB_OUTPUT
+
+          # Wait for changeset to be ready
+          aws cloudformation wait change-set-create-complete \\
+            --stack-name ${sn} \\
+            --change-set-name \$CHANGESET_NAME \\
+            --region ${rgn}
+
+      - name: Run wolfir Security Analysis
+        id: wolfir_scan
+        run: |
+          RESULT=$(curl -sf -X POST \${{ secrets.WOLFIR_API_URL }}/api/changeset/analyze \\
+            -H "Content-Type: application/json" \\
+            -d '{
+              "stack_name": "${sn}",
+              "change_set_name": "'\${{ steps.create_changeset.outputs.changeset_name }}'",
+              "region": "${rgn}"
+            }')
+          RISK_LEVEL=$(echo \$RESULT | jq -r '.risk_level')
+          RISK_SCORE=$(echo \$RESULT | jq -r '.risk_score')
+          echo "risk_level=\$RISK_LEVEL" >> \$GITHUB_OUTPUT
+          echo "risk_score=\$RISK_SCORE" >> \$GITHUB_OUTPUT
+          echo "result=\$RESULT" >> \$GITHUB_OUTPUT
+
+      - name: Security Gate — Block Critical Deployments
+        run: |
+          RISK="\${{ steps.wolfir_scan.outputs.risk_level }}"
+          if [ "\$RISK" = "critical" ]; then
+            echo "❌ DEPLOYMENT BLOCKED — wolfir detected CRITICAL risk in ChangeSet"
+            echo "Risk details: \${{ steps.wolfir_scan.outputs.result }}"
+            exit 1
+          elif [ "\$RISK" = "high" ]; then
+            echo "⚠️ HIGH risk detected — proceeding with manual approval required"
+          else
+            echo "✅ Security gate passed — risk level: \$RISK"
+          fi
+
+      - name: Execute ChangeSet (if gate passed)
+        if: steps.wolfir_scan.outputs.risk_level != 'critical'
+        run: |
+          aws cloudformation execute-change-set \\
+            --stack-name ${sn} \\
+            --change-set-name \${{ steps.create_changeset.outputs.changeset_name }} \\
+            --region ${rgn}`;
+}
+
 const ChangeSetAnalysis: React.FC<ChangeSetAnalysisProps> = ({ backendOffline: propBackendOffline }) => {
   const [stackName, setStackName] = useState('');
   const [changeSetName, setChangeSetName] = useState('');
@@ -41,6 +120,8 @@ const ChangeSetAnalysis: React.FC<ChangeSetAnalysisProps> = ({ backendOffline: p
   const [expandedChanges, setExpandedChanges] = useState<Set<number>>(new Set());
   const [changeSetOptions, setChangeSetOptions] = useState<Array<{ change_set_name: string; status: string }>>([]);
   const [loadingChangeSets, setLoadingChangeSets] = useState(false);
+  const [showGitHubYAML, setShowGitHubYAML] = useState(false);
+  const [yamlCopied, setYamlCopied] = useState(false);
 
   const loadChangeSets = async () => {
     if (!stackName.trim()) return;
@@ -83,7 +164,8 @@ const ChangeSetAnalysis: React.FC<ChangeSetAnalysisProps> = ({ backendOffline: p
         return;
       }
       const res = await changesetAPI.analyze(stackName.trim(), changeSetName.trim(), region.trim() || undefined);
-      setResult({ ...DEMO_RESULT, ...res } as typeof DEMO_RESULT);
+      // Use only the real API response — do NOT merge with DEMO_RESULT or demo values bleed in
+      setResult(res as typeof DEMO_RESULT);
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Analysis failed.';
       setError(msg);
@@ -277,16 +359,6 @@ const ChangeSetAnalysis: React.FC<ChangeSetAnalysisProps> = ({ backendOffline: p
               <p className="text-sm text-slate-600">{result.recommendation}</p>
             </div>
 
-            {result?.risky_changes?.some(r => String(r.resource_type || '').includes('IAM')) && (
-              <a
-                href="https://aegis-iam.vercel.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300"
-              >
-                <ExternalLink className="w-3.5 h-3.5" /> Analyze IAM changes with Aegis IAM
-              </a>
-            )}
 
             {result.risky_changes.length > 0 && (
               <div>
@@ -338,6 +410,65 @@ const ChangeSetAnalysis: React.FC<ChangeSetAnalysisProps> = ({ backendOffline: p
                 <p className="text-sm text-emerald-800">No high-risk changes detected. {result.total_changes} changes analyzed.</p>
               </div>
             )}
+
+            {/* GitHub Actions CI/CD Integration */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowGitHubYAML(prev => !prev)}
+                className="flex items-center justify-between w-full text-left py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-slate-500" />
+                  <span className="text-xs font-bold text-slate-700">CI/CD Security Gate — GitHub Actions Integration</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">YAML</span>
+                </div>
+                {showGitHubYAML ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+              {showGitHubYAML && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+                  <p className="text-[11px] text-slate-500 mb-3">
+                    Add this to your GitHub Actions workflow to automatically block high-risk CloudFormation deployments using wolfir as a security gate.
+                  </p>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const yaml = generateGitHubActionsYAML(stackName, region);
+                        navigator.clipboard?.writeText(yaml);
+                        setYamlCopied(true);
+                        setTimeout(() => setYamlCopied(false), 2000);
+                      }}
+                      className="absolute top-2 right-2 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-bold rounded flex items-center gap-1 z-10"
+                    >
+                      <Copy className="w-2.5 h-2.5" />
+                      {yamlCopied ? 'Copied!' : 'Copy YAML'}
+                    </button>
+                    <pre className="text-[10px] font-mono bg-slate-900 text-green-400 rounded-xl p-4 overflow-x-auto max-h-72 leading-relaxed">
+                      {generateGitHubActionsYAML(stackName, region)}
+                    </pre>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <a
+                      href="https://github.com/aws-actions/configure-aws-credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" /> aws-actions/configure-aws-credentials
+                    </a>
+                    <a
+                      href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" /> CloudFormation ChangeSet docs
+                    </a>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </div>
         </motion.div>
       )}
