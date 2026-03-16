@@ -16,7 +16,7 @@ Prophet Security's 2025 AI in SOC Survey puts the average SOC at 960+ alerts per
 
 In February 2026, I started building what would become wolfir: an agentic pipeline that takes CloudTrail events and produces a complete incident response package — autonomously, with the analyst approving rather than executing.
 
-But as I built, a second problem surfaced. Every modern security platform runs on AI. GuardDuty uses ML. Security Hub correlates with AI. And here I was building another AI-powered security tool. But who's watching the AI itself? If an attacker can inject instructions into the data my models process, abuse my Bedrock inference API, or extract sensitive account patterns through model outputs — my security tool becomes the attack surface.
+But as I built, a second problem surfaced. Every modern security platform runs on AI. GuardDuty uses ML. Security Hub correlates with AI. And here I was building another AI-powered security tool. But who's watching the AI itself? If an attacker can inject instructions into the data my models process, misuse my Bedrock inference API, or extract sensitive account patterns through model outputs — my security tool becomes the attack surface.
 
 MITRE built the ATLAS framework specifically for adversarial ML threats. Almost nobody deploys it in production. wolfir became the exception: a security platform that monitors its own Bedrock AI pipeline with MITRE ATLAS in real time, while simultaneously running cloud incident response.
 
@@ -487,7 +487,7 @@ The three scenarios cover the most impactful real-world AWS attack patterns:
 
 1. **IAM Privilege Escalation** — Contractor abuses an AssumeRole chain to gain AdministratorAccess. MITRE T1098, T1078. 9 events. CRITICAL. Full attack chain: recon → pivot → persistence.
 2. **AWS Organizations Cross-Account Breach** — A compromised role in a Dev account pivots via STS AssumeRole into Production and Security accounts — lateral movement across 3 OUs, 12 member accounts. wolfir detects and contains with org-wide SCPs. 18 events. CRITICAL.
-3. **Shadow AI / LLM Abuse** — Ungoverned Bedrock InvokeModel calls combined with a prompt injection attempt. This scenario exercises the MITRE ATLAS self-monitoring pipeline — the AI security pillar catching a threat that cloud security monitoring alone would not surface. 7 events. CRITICAL.
+3. **Shadow AI / Unauthorized LLM Use** — Ungoverned Bedrock InvokeModel calls combined with a prompt injection attempt. This scenario exercises the MITRE ATLAS self-monitoring pipeline — the AI security pillar catching a threat that cloud security monitoring alone would not surface. 7 events. CRITICAL.
 
 Run scenario 1 first, then scenario 2 — the cross-incident memory will flag "78% probability this is the same attacker." This is the **correlation seeding trick**: scenario 1 runs silently in the background when you land on the page so scenario 2 always has historical data to correlate against.
 
@@ -714,7 +714,7 @@ if policy_arn not in policy_arns:
 
 ### 7. Session Revocation Requires a Specific IAM Pattern
 
-"Revoke all active sessions for a role" sounds straightforward. AWS doesn't have an API call for this — you can't enumerate and kill active STS sessions. The only way to invalidate sessions retroactively is an IAM policy condition:
+"Revoke all active sessions for a role" sounds straightforward. AWS doesn't have an API call for this — you can't enumerate and terminate active STS sessions. The only way to invalidate sessions retroactively is an IAM policy condition:
 
 ```python
 policy_doc = {
@@ -777,7 +777,7 @@ This pattern appears throughout the codebase. Inconsistent field names across re
 
 ### 10. Bedrock Guardrails Blocked Legitimate Security Queries
 
-Adding Guardrails to Agentic Query introduced a failure mode we didn't anticipate: `GuardrailInterventionException` from completely legitimate security queries. Asking "which IAM role was used in the attack?" triggers Guardrails if the word "attack" matches a sensitive phrase filter. "Show me the exploit path" trips a content filter. "How do I revoke compromised credentials?" contains "compromised."
+Adding Guardrails to Agentic Query introduced a failure mode we didn't anticipate: `GuardrailInterventionException` from completely legitimate security queries. Asking "which IAM role was used in the attack?" triggers Guardrails if the word "attack" matches a sensitive phrase filter. "Show me the attack path" trips a content filter. "How do I revoke compromised credentials?" contains "compromised."
 
 Security tooling is inherently full of words that content filters are trained to block. The fix was two-pronged: tuning the guardrail to allow security research context (adding specific allowed phrases for security operations terminology), and adding graceful degradation so a guardrail rejection surfaces a useful message rather than a 500 error:
 
@@ -914,9 +914,9 @@ Same pattern for all six MCP servers and all six agent instances. Startup time d
 
 **Small and mid-sized security teams** that don't have Splunk, Cortex XSOAR, or dedicated SOC analysts. They have CloudTrail, maybe GuardDuty, and not enough hours. wolfir gives them what a 20-person SOC has: a structured response pipeline that runs in minutes.
 
-**Cloud engineers learning incident response.** The three demo scenarios walk through realistic attack chains — IAM privilege escalation, cross-account lateral movement, and Shadow AI abuse. Running a scenario and reading the generated attack timeline teaches you what to look for in real incidents.
+**Cloud engineers learning incident response.** The three demo scenarios walk through realistic attack chains — IAM privilege escalation, cross-account lateral movement, and Shadow AI misuse. Running a scenario and reading the generated attack timeline teaches you what to look for in real incidents.
 
-**Teams deploying AI who need to secure it.** The MITRE ATLAS self-monitoring pillar is a proof of concept for a problem barely anyone is addressing: who watches the watcher? If you're deploying LLMs for security analysis, prompt injection and API abuse are real threat vectors, not theoretical ones.
+**Teams deploying AI who need to secure it.** The MITRE ATLAS self-monitoring pillar is a proof of concept for a problem barely anyone is addressing: who watches the watcher? If you're deploying LLMs for security analysis, prompt injection and API misuse are real threat vectors, not theoretical ones.
 
 **AWS builders exploring multi-agent architectures.** The codebase is a reference implementation: Strands Agents SDK + MCP + multiple Nova models + DynamoDB cross-incident memory + Bedrock Knowledge Base + demo/real mode coexistence. MIT-licensed.
 
