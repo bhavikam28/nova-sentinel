@@ -235,9 +235,9 @@ The campaign probability formula combines three signals: SHA-256 fingerprint mat
 
 The five-agent pipeline runs in dependency order, with parallelism where agent outputs don't depend on each other:
 
-![wolfir 5-agent pipeline flow — Temporal Analysis → Risk Scoring → parallel Remediation + Documentation → Save & Correlate, with timing and context pruning annotations](./images/wolfir-pipeline-flow.png)
+![wolfir 5-agent pipeline flow — full detail showing all agent steps, context pruning, timing, parallel execution, and complete incident response package output grid](./images/wolfir-pipeline-flow-v2.png)
 
-*Figure 3 — wolfir's 5-agent pipeline. Steps 1 and 2 are sequential (each feeds the next). Steps 3 and 4 run concurrently via `asyncio.gather()` — both depend only on the timeline output, not on each other. Context pruning at every handoff keeps token consumption to ~12K per run. The agentic pivot (dashed arrow) fires only when timeline confidence < 0.3.*
+*Figure 3 — wolfir's 5-agent pipeline in full detail. Left: CloudTrail events filtered by `filter_interesting_events()` (60+ routine events stripped) before entering the pipeline. Step 1 (Temporal, ~8s): kill chain reconstruction, root cause, Blast Radius via IAM policy simulation, prompt injection scan on event fields, and the conditional Agentic Pivot. Step 2 (Risk Scoring, ~4s): Nova Micro ×3 parallel via `asyncio.gather()`, MITRE ATT&CK mapping, confidence intervals, calibration overrides. Steps 3+4 (Remediation + Documentation, concurrent, ~5–6s): run in parallel since both only depend on the timeline output, not each other. Step 5 (Save & Correlate, ~2s): 4-signal correlation via DynamoDB + Nova Embeddings. Output grid (bottom right): all 9 features of the Incident Response Package. Total: ~15–25s end to end on ~12K tokens (versus ~40K without context pruning).*
 
 **Step 1 — Temporal Analysis (Nova 2 Lite)**
 
