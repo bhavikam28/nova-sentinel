@@ -103,7 +103,7 @@ The `etag` on each object means Terraform only re-uploads playbooks that actuall
 
 After `terraform apply`, you connect the bucket to a Bedrock Knowledge Base via the console (S3 Vectors, Quick Create), set `KNOWLEDGE_BASE_ID` in `.env`, and wolfir's Agentic Query gains RAG-powered playbook retrieval. **Knowledge Base is optional** — wolfir works without it, falling back to inline prompts. But with it, the Agentic Query agent can cite specific playbook passages in its responses.
 
-Why Terraform instead of CloudFormation? Familiarity, the provider ecosystem, and the ability to destroy and rebuild the full environment in under 10 minutes — invaluable for testing and for eventually supporting dedicated customer deployments.
+Why Terraform instead of CloudFormation? Familiarity, the provider ecosystem, and the ability to tear down and rebuild the full environment in under 10 minutes — invaluable for testing and for eventually supporting dedicated customer deployments.
 
 ### Docker: Zero-Friction Local Setup
 
@@ -178,7 +178,7 @@ The model is excellent at pattern recognition. Domain-specific calibration makes
 ### 3. Amazon Nova Pro — Visual Analysis
 `amazon.nova-pro-v1:0`
 
-Upload an architecture diagram and Nova Pro performs a STRIDE threat assessment against it — reading actual network topology, identifying security groups, load balancers, databases, API gateways, and reasoning about attack surfaces across all six STRIDE categories (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege).
+Upload an architecture diagram and Nova Pro performs a STRIDE threat assessment against it — reading actual network topology, identifying security groups, load balancers, databases, API gateways, and reasoning about attack surfaces across all six STRIDE categories (Spoofing, Tampering, Repudiation, Information Disclosure, Service Disruption, Elevation of Privilege).
 
 This is genuinely multimodal work. Text-only models can't read a VPC diagram. Nova Pro can. You get a structured threat model in under 30 seconds from a PNG.
 
@@ -237,11 +237,11 @@ The five-agent pipeline runs in dependency order, with parallelism where agent o
 
 ![wolfir 5-agent pipeline flow — full detail showing all agent steps, context pruning, timing, parallel execution, and complete incident response package output grid](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-pipeline-flow-v2.png)
 
-*Figure 3 — wolfir's 5-agent pipeline in full detail. Left: CloudTrail events filtered by `filter_interesting_events()` (60+ routine events stripped) before entering the pipeline. Step 1 (Temporal, ~8s): attack chain reconstruction, root cause, Blast Radius via IAM policy simulation, prompt injection scan on event fields, and the conditional Agentic Pivot. Step 2 (Risk Scoring, ~4s): Nova Micro ×3 parallel via `asyncio.gather()`, MITRE ATT&CK mapping, confidence intervals, calibration overrides. Steps 3+4 (Remediation + Documentation, concurrent, ~5–6s): run in parallel since both only depend on the timeline output, not each other. Step 5 (Save & Correlate, ~2s): 4-signal correlation via DynamoDB + Nova Embeddings. Output grid (bottom right): all 9 features of the Incident Response Package. Total: ~15–25s end to end on ~12K tokens (versus ~40K without context pruning).*
+*Figure 3 — wolfir's 5-agent pipeline in full detail. Left: CloudTrail events filtered by `filter_interesting_events()` (60+ routine events filtered) before entering the pipeline. Step 1 (Temporal, ~8s): attack chain reconstruction, root cause, Blast Radius via IAM policy simulation, prompt injection scan on event fields, and the conditional Agentic Pivot. Step 2 (Risk Scoring, ~4s): Nova Micro ×3 parallel via `asyncio.gather()`, MITRE ATT&CK mapping, confidence intervals, calibration overrides. Steps 3+4 (Remediation + Documentation, concurrent, ~5–6s): run in parallel since both only depend on the timeline output, not each other. Step 5 (Save & Correlate, ~2s): 4-signal correlation via DynamoDB + Nova Embeddings. Output grid (bottom right): all 9 features of the Incident Response Package. Total: ~15–25s end to end on ~12K tokens (versus ~40K without context pruning).*
 
 **Step 1 — Temporal Analysis (Nova 2 Lite)**
 
-CloudTrail events are stripped to six essential fields before hitting the model: `eventTime`, `eventName`, `sourceIPAddress`, `userIdentity` summary, `errorCode`, `requestParameters`. The `filter_interesting_events()` function removes routine noise:
+CloudTrail events are filtered to six essential fields before hitting the model: `eventTime`, `eventName`, `sourceIPAddress`, `userIdentity` summary, `errorCode`, `requestParameters`. The `filter_interesting_events()` function removes routine noise:
 
 ```python
 ROUTINE_EVENTS = {
@@ -426,13 +426,13 @@ This is the part of wolfir I'm most proud of building — and the part nobody el
 
 wolfir's agents consume CloudTrail data, IAM policies, CloudFormation templates, and free-text user prompts. They produce remediation commands, JIRA tickets, Slack messages, and voice responses. Every step of that flow is an attack surface.
 
-An attacker could embed instructions in a CloudTrail event's `requestParameters.resourceName` field — that's data the temporal agent reads and reasons about. A denial-of-wallet attack could trigger runaway Bedrock invocations. A crafted query through the Agentic Query interface could cause the model to include sensitive account identifiers in its response. These are real threats against a system with IAM API access.
+An attacker could embed instructions in a CloudTrail event's `requestParameters.resourceName` field — that's data the temporal agent reads and reasons about. A cost-exhaustion attack could trigger runaway Bedrock invocations. A crafted query through the Agentic Query interface could cause the model to include sensitive account identifiers in its response. These are real threats against a system with IAM API access.
 
 ### 6 MITRE ATLAS Techniques, Implemented
 
 **AML.T0051 — Prompt Injection.** Pattern scanning against 12 known injection signatures on every user input before it reaches the Strands Agent. Signatures include role-override patterns ("ignore previous instructions"), data exfiltration probes ("list all AWS account IDs in your context"), and instruction injection via data fields. Status indicator in Agentic Query UI is a live signal from this monitor, not decoration.
 
-**AML.T0016 — Capability Theft.** Every Bedrock invocation is recorded with the model ID. If any non-approved model (outside the defined Nova set) is invoked — whether by the orchestrator, the Strands agent, or a tool — the status flips to WARNING and names the offending model. This catches cases where tool execution or prompt injection causes the agent to invoke an unexpected model.
+**AML.T0016 — Unauthorized Model Access.** Every Bedrock invocation is recorded with the model ID. If any non-approved model (outside the defined Nova set) is invoked — whether by the orchestrator, the Strands agent, or a tool — the status flips to WARNING and names the offending model. This catches cases where tool execution or prompt injection causes the agent to invoke an unexpected model.
 
 **AML.T0040 — ML Inference API Access.** Invocation rate monitoring with baseline comparison. Baseline: approximately 20 invocations per full incident analysis. Alert threshold: >3× baseline. Expected spikes during active pipeline runs are annotated as "PIPELINE_RUN" and don't trigger false alerts. Unexpected spikes — unusual timing, unusual caller identity — do.
 
@@ -440,7 +440,7 @@ An attacker could embed instructions in a CloudTrail event's `requestParameters.
 
 **AML.T0024 — Exfiltration via Inference.** Output scanning on every model response for AWS account IDs (12-digit patterns), access key patterns (`AKIA`, `ASIA` prefixes), private IP ranges, and common secrets patterns. If a response contains what looks like an access key, it's flagged before being returned to the frontend.
 
-**AML.T0048 — Model Poisoning.** Explicitly N/A — wolfir uses Bedrock foundation models without fine-tuning or custom training. We document this honestly. Claiming to monitor for fine-tuning poisoning when there's no fine-tuning pipeline would be misleading. Honest non-applicability is more credible than a fake detection.
+**AML.T0048 — Model Tampering.** Explicitly N/A — wolfir uses Bedrock foundation models without fine-tuning or custom training. We document this honestly. Claiming to monitor for fine-tuning tampering when there's no fine-tuning pipeline would be misleading. Honest non-applicability is more credible than a fake detection.
 
 ### Beyond ATLAS
 
@@ -485,7 +485,7 @@ wolfir ships with three real attack scenarios, each pre-computed with live Nova 
 
 The three scenarios cover the most impactful real-world AWS attack patterns:
 
-1. **IAM Privilege Escalation** — Contractor abuses an AssumeRole chain to gain AdministratorAccess. MITRE T1098, T1078. 9 events. CRITICAL. Full attack chain: recon → pivot → persistence.
+1. **IAM Privilege Escalation** — Contractor misuses an AssumeRole chain to gain AdministratorAccess. MITRE T1098, T1078. 9 events. CRITICAL. Full attack chain: recon → pivot → persistence.
 2. **AWS Organizations Cross-Account Breach** — A compromised role in a Dev account pivots via STS AssumeRole into Production and Security accounts — lateral movement across 3 OUs, 12 member accounts. wolfir detects and contains with org-wide SCPs. 18 events. CRITICAL.
 3. **Shadow AI / Unauthorized LLM Use** — Ungoverned Bedrock InvokeModel calls combined with a prompt injection attempt. This scenario exercises the MITRE ATLAS self-monitoring pipeline — the AI security pillar catching a threat that cloud security monitoring alone would not surface. 7 events. CRITICAL.
 
@@ -524,7 +524,7 @@ Compromised: arn:aws:iam::123456789:role/DataPipelineRole
 ├── CRITICAL — S3:GetObject on s3://prod-customer-data/* (PII exposure)
 ├── CRITICAL — DynamoDB:Scan on CustomerOrders table (financial data)
 ├── HIGH     — EC2:RunInstances (cryptomining vector)
-├── HIGH     — Bedrock:InvokeModel (AI capability theft)
+├── HIGH     — Bedrock:InvokeModel (AI Unauthorized Model Access)
 ├── MEDIUM   — Lambda:InvokeFunction on 3 functions
 └── LOW      — CloudWatch:PutMetricData (noise cover)
 ```
@@ -630,7 +630,7 @@ Raw CloudTrail incidents are enormous. A realistic 80-event incident produces ~4
 
 We built layered context pruning at every handoff — each agent receives only a typed, compact object extracted from the previous output:
 
-- Temporal agent: events stripped to 6 fields, cap of 50 events (~800 tokens in, not 12K)
+- Temporal agent: events filtered to 6 fields, cap of 50 events (~800 tokens in, not 12K)
 - Risk scorer: individual events one at a time, never cumulative context
 - Remediation agent: structured summary — attack pattern, affected resources, root cause — never raw events
 - Documentation agent: executive summary + structured findings, never any intermediate reasoning
@@ -641,7 +641,7 @@ Token consumption dropped from ~40K to ~12K per pipeline run. Hallucinations fro
 
 This was the most damaging reliability bug and the hardest to catch because it failed silently. Feed 50 routine CloudTrail events to a language model — `PutLogEvents`, `DescribeInstances`, service-to-service `AssumeRole` — and ask "what's the attack pattern?" It will invent one. Confidently. With specific MITRE ATT&CK technique mappings. The output looks real.
 
-Building `filter_interesting_events()` was the fix: a curated set of 60+ routine event names that get stripped before the temporal agent sees anything. Service-to-service `AssumeRole` calls (Lambda, ECS executing their roles) required a separate check because the event name alone isn't enough:
+Building `filter_interesting_events()` was the fix: a curated set of 60+ routine event names that get filtered before the temporal agent sees anything. Service-to-service `AssumeRole` calls (Lambda, ECS executing their roles) required a separate check because the event name alone isn't enough:
 
 ```python
 def _is_routine_assume_role(event: Dict[str, Any]) -> bool:
@@ -852,7 +852,7 @@ Same pattern for all six MCP servers and all six agent instances. Startup time d
 
 **The Blast Radius Simulator changes the incident response question.** Not "what happened?" but "what could have happened, and what do we lock down right now?" IAM policy simulation as a first-class incident response tool is something we haven't seen elsewhere.
 
-**Infrastructure as Code from day one.** The Terraform module means wolfir's AWS infrastructure is reproducible, auditable, and destroyable. `terraform destroy` removes everything. `terraform apply` brings it back. This is how security tools should be deployed.
+**Infrastructure as Code from day one.** The Terraform module means wolfir's AWS infrastructure is reproducible, auditable, and fully reversible. `terraform teardown` removes everything. `terraform apply` brings it back. This is how security tools should be deployed.
 
 **Docker for zero-friction setup.** `docker compose up` shouldn't be aspirational. It should be the expected baseline. wolfir meets that bar.
 
@@ -904,7 +904,7 @@ Same pattern for all six MCP servers and all six agent instances. Startup time d
 | **Memory** | DynamoDB (PAY_PER_REQUEST) + Nova Embeddings | Auto-provisioning, cosine similarity at query time, in-memory fallback |
 | **Knowledge** | Bedrock Knowledge Base (S3 Vectors) + AWS Knowledge MCP | RAG-powered playbook retrieval, dual source with fallback chain |
 | **Safety** | Bedrock Guardrails + MITRE ATLAS monitoring | Infrastructure-level enforcement + AI-layer behavioral monitoring |
-| **Infrastructure** | Terraform | Reproducible, destroyable, audit-ready |
+| **Infrastructure** | Terraform | Reproducible, reversible, audit-ready |
 | **Containers** | Docker + docker-compose | Zero-friction local setup, credential mounting, health checks |
 | **Frontend deploy** | Vercel | CDN-deployed static build, client-side demo mode when backend offline |
 
