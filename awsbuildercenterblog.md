@@ -138,15 +138,15 @@ The React/TypeScript frontend deploys to Vercel via `vercel.json`. Vercel runs t
 
 ## How We Built It: 7 Amazon Nova Capabilities
 
-![wolfir dashboard panels — multi-panel view showing attack path visualization, blast radius simulator, AI security posture, and cross-incident correlation](./images/dashboard-panels.png)
-
-*Figure 4 — wolfir's four main dashboard panels. Clockwise from top-left: interactive React Flow attack path diagram (click any node to inspect); Blast Radius Simulator showing every resource reachable from the compromised identity; AI Security Posture with live MITRE ATLAS + OWASP + NIST AI RMF status; Cross-Incident Correlation with campaign probability from 4 signals.*
-
 The first version of wolfir was a single-model system. One Nova 2 Lite call received CloudTrail events and was asked to produce a timeline, risk scores, remediation steps, and documentation simultaneously. It failed fast.
 
 The failure wasn't capability — it was focus. A model trying to simultaneously reason about forensic timelines, assign numerical risk scores with consistency, generate executable CLI commands, and write Confluence-ready documentation produced outputs that were mediocre at all four tasks. Context bloated past 16K tokens on any realistic incident. Remediation steps contradicted the timeline. Documentation used different severity ratings than the risk scores.
 
 The insight: these are genuinely different cognitive tasks. Each requires a different kind of attention, a different speed/accuracy tradeoff, and in some cases a different modality entirely. The seven-model architecture followed directly from this.
+
+![Why we chose each Amazon Nova model — comparison table showing model name, task, and why this model over alternatives](./images/wolfir-nova-model-selection.png)
+
+*Figure 4 — The single most important architectural decision: matching each task to the right model. Using the wrong model isn't a capability problem — it's a reliability and cost problem. Nova Micro at temperature=0.1 produces more consistent risk scores than Nova 2 Lite at default temperature, because determinism matters more than intelligence for classification. Nova Pro is chosen for visual analysis for a non-negotiable reason: text models cannot read images.*
 
 ### 1. Amazon Nova 2 Lite — The Reasoning Engine
 `us.amazon.nova-2-lite-v1:0`
@@ -199,7 +199,7 @@ Click "Generate Nova Act Plan" in the Remediation tab and wolfir generates execu
 
 ![wolfir 7 Nova capabilities — model specialization chart showing which Nova capability handles each pipeline task](./images/blog-07-nova-models.png)
 
-*Figure 8 — wolfir's 7 Nova capabilities by task. Each model is chosen for a specific reason: Micro for speed and determinism at risk scoring, 2 Lite for long-context reasoning at timeline and remediation, Pro exclusively for vision (no text model can read a VPC diagram), Canvas for generation, Sonic for streaming voice, Act for browser automation, Embeddings for behavioral similarity. Using the wrong model for any of these tasks degrades output quality in a way that a more capable model can't fully compensate for.*
+*Figure 10 — wolfir's 7 Nova capabilities by task. Each model is chosen for a specific reason: Micro for speed and determinism at risk scoring, 2 Lite for long-context reasoning at timeline and remediation, Pro exclusively for vision (no text model can read a VPC diagram), Canvas for generation, Sonic for streaming voice, Act for browser automation, Embeddings for behavioral similarity. Using the wrong model for any of these tasks degrades output quality in a way that a more capable model can't fully compensate for.*
 
 ### 7. Nova Multimodal Embeddings — Cross-Incident Memory
 `amazon.nova-2-multimodal-embeddings-v1:0`
@@ -420,10 +420,6 @@ Rollback is implemented for reversible actions: policy version reversion, securi
 
 ## The AI Security Pillar: MITRE ATLAS Self-Monitoring
 
-![wolfir AI security posture dashboard — MITRE ATLAS, OWASP LLM Top 10, and NIST AI RMF monitoring with real-time technique status](./images/blog-03-ai-security.png)
-
-*Figure 5 — wolfir's AI Security Posture dashboard. MITRE ATLAS techniques show live status updated from actual Bedrock invocations. OWASP LLM posture shows all 10 categories. Status indicators are driven by runtime monitoring — not static labels.*
-
 This is the part of wolfir I'm most proud of building — and the part nobody else is building.
 
 ### The Threat Model
@@ -459,13 +455,64 @@ The AI Security pillar also includes:
 
 When you run an incident analysis, the AI Security dashboard updates based on the Bedrock invocations that just ran through the pipeline. Cloud security and AI security share a live data plane.
 
+![wolfir AI Security Posture dashboard — MITRE ATLAS technique live status, OWASP LLM Top 10 radar chart, NIST AI RMF coverage, and Nova invocation rate chart](./images/wolfir-ai-security-posture.png)
+
+*Figure 5 — wolfir's AI Security Posture dashboard. Left: MITRE ATLAS live technique status updated from actual Bedrock invocations — AML.T0040 shows MONITORING because 23 invocations is above baseline (20) but below the 3× alert threshold. Center: OWASP LLM Top 10 radar chart showing posture score of 87/100. Right: AI compliance coverage across all three frameworks. The invocation rate bar chart (bottom left) lets you visually spot pipeline runs versus anomalous spikes.*
+
+---
+
+## Interactive Attack Path Visualization
+
+Understanding *what happened* requires more than a text timeline. wolfir generates an interactive React Flow graph where every event in the attack chain is a clickable node — click any node to see its full risk score, MITRE technique mapping, source IP, timestamp, and what IAM control would have prevented it.
+
+![wolfir interactive attack path diagram — React Flow graph showing IAM privilege escalation kill chain from external actor through reconnaissance, privilege escalation, lateral movement, to data impact](./images/wolfir-attack-path.png)
+
+*Figure 6 — wolfir's interactive attack path for an IAM privilege escalation incident. Nodes are color-coded by severity: green (low), orange (medium), dark red (high), bright red (critical). Arrows show temporal progression with exact time deltas. Clicking "CreatePolicyVersion" (the escalation pivot) opens the inspection panel on the right: risk score 94/100 (CI: 88–97), MITRE T1548.005, source IP, and the specific IAM control that would have prevented it. This is the visualization that turns "seven API calls happened" into "here is exactly how the attacker moved."*
+
+The graph is built from the temporal agent's kill chain reconstruction. Nodes are positioned by the attack phase (Reconnaissance → Discovery → Privilege Escalation → Lateral Movement → Impact), so the visual layout itself tells the story of how the attacker moved through the environment.
+
+---
+
+## Demo Simulation Scenarios + Compliance Mapping
+
+### Five Pre-Built Attack Scenarios — No AWS Account Required
+
+wolfir ships with five real attack scenarios, each pre-computed with live Nova outputs so the full pipeline result loads in under 2 seconds without any cloud connection.
+
+![wolfir demo simulation scenarios and compliance mapping — five pre-built attack scenarios with severity ratings and 6-framework auto-compliance mapping](./images/wolfir-simulation-compliance.png)
+
+*Figure 7 — Left: wolfir's five demo simulation scenarios. Each scenario has pre-computed Nova outputs covering timeline, risk scores, blast radius, remediation plan, and compliance mapping. Right: auto-generated compliance mapping across CIS AWS Foundations, NIST 800-53, SOC 2 Type II, PCI-DSS v4.0, SOX IT Controls, and HIPAA — each finding mapped to the specific control IDs it violates. No manual auditing required.*
+
+The five scenarios cover the most common real-world AWS attack patterns:
+
+1. **IAM Privilege Escalation** — Attacker obtains low-privilege credentials, creates a new policy version granting full admin, then uses it. 7 events. 94/100 CRITICAL. MITRE: T1548.005.
+2. **S3 Data Exfiltration** — Mass `GetObject` calls on `prod-customer-data` bucket. PII exposure detected via Macie patterns. 12 events. 89/100 HIGH.
+3. **Crypto Mining via Compromised Role** — `RunInstances` spike across us-east-1, unusual instance types (`p3.16xlarge`). 9 events. 82/100 HIGH.
+4. **Cross-Account Lateral Movement** — AssumeRole chain across three accounts using trust policy abuse. Cross-account threat that single-account monitoring misses. 11 events. 91/100 CRITICAL.
+5. **Shadow AI / Unauthorized Bedrock Use** — A non-approved principal invokes Nova Pro from outside the wolfir service boundary. Demonstrates the AI security pillar catching a threat the cloud security pillar wouldn't see. 5 events. 76/100 HIGH.
+
+Run scenario 1 first, then scenario 3 — the cross-incident memory will flag "78% probability this is the same attacker." This is the **correlation seeding trick**: scenario 1 runs silently in the background when you land on the page so scenario 3 always has historical data to correlate against.
+
+### Compliance Mapping — 6 Frameworks, Automatic
+
+Every incident analysis produces a compliance report without any manual work. Each finding is automatically mapped to the specific control IDs it violates across:
+
+- **CIS AWS Foundations Benchmark** — IAM, CloudTrail, CloudWatch, S3, networking controls
+- **NIST 800-53 rev5** — Access Control (AC), Audit (AU), Identification (IA), System Protection (SC)
+- **SOC 2 Type II** — CC6 (Logical Access), CC7 (System Operations), A1 (Availability)
+- **PCI-DSS v4.0** — Requirement 7 (Restrict access), Requirement 10 (Log access)
+- **SOX IT General Controls** — ITGC-04 (Access management), ITGC-06 (Change management)
+- **HIPAA** — §164.312 (Technical Safeguards), §164.308 (Administrative Safeguards)
+
+The mapping uses the finding's MITRE ATT&CK technique, affected AWS service, and severity tier to cross-reference against a curated compliance control matrix. An `IAM:CreatePolicyVersion` event with HIGH severity automatically maps to CIS 1.16, NIST AC-6, SOC 2 CC6.1, and PCI-DSS Requirement 7.1 — with the full control reference text included in the export.
+
 ---
 
 ## The Two New Pillars: Blast Radius and Organizations
 
 ![wolfir remediation plan with blast radius — showing compromised identity, reachable AWS resources by risk tier, and one-click remediation steps with approval gates](./images/blog-05-remediation.png)
 
-*Figure 6 — wolfir's Remediation tab after an IAM privilege escalation incident. Left: Blast Radius Simulator showing every AWS resource reachable from the compromised role, tiered by CRITICAL / HIGH / MEDIUM / LOW. Right: generated remediation steps with AUTO / APPROVAL / MANUAL tier classification and execution proof after one-click apply.*
+*Figure 8 — wolfir's Remediation tab after an IAM privilege escalation incident. Left: Blast Radius Simulator showing every AWS resource reachable from the compromised role, tiered by CRITICAL / HIGH / MEDIUM / LOW. Right: generated remediation steps with AUTO / APPROVAL / MANUAL tier classification and execution proof after one-click apply.*
 
 Recent additions to wolfir that fundamentally extend what "incident response" means.
 
@@ -499,11 +546,56 @@ This works in demo mode (pre-computed multi-account scenario) and real AWS mode 
 
 ---
 
+## ChangeSet Analysis, SLA Tracking, and Cost Impact
+
+### ChangeSet Analysis — Risk Before You Deploy
+
+The Blast Radius Simulator asks: *what could an attacker reach with this identity?* The ChangeSet Analyzer asks a different question: *what security risk does this CloudFormation change introduce before you deploy it?*
+
+You paste a CloudFormation change set (or upload a template diff), and wolfir runs it through Nova 2 Lite with a security-focused prompt that evaluates:
+
+- **IAM policy changes** — new or expanded permissions, wildcard actions, missing conditions
+- **Security group modifications** — new ingress rules, port ranges, CIDR scope
+- **S3 bucket configuration changes** — public access, encryption, versioning, bucket policy scope
+- **Encryption at rest changes** — removing KMS keys, switching to SSE-S3, disabling encryption
+- **Network topology changes** — new VPC peering, route table entries, NAT gateway additions
+
+Each finding is rated by risk tier and mapped to the compliance controls it would violate if deployed. The output is a pre-deployment security review that takes 15 seconds instead of a manual audit that takes hours.
+
+This is particularly useful for DevOps teams running frequent deployments — a ChangeSet review can gate the CI/CD pipeline before reaching production.
+
+### SLA Tracker — Are You Responding Fast Enough?
+
+wolfir tracks incident response SLA compliance across every incident in your history. The SLA Tracker monitors two standard tiers:
+
+- **P1 (CRITICAL)** — 15-minute detection-to-acknowledgement, 1-hour detection-to-remediation
+- **P2 (HIGH)** — 1-hour detection-to-acknowledgement, 4-hour detection-to-remediation
+
+The tracker shows real-time progress bars for active incidents ("14 minutes elapsed — 1 minute to P1 SLA breach"), historical SLA compliance rates ("P1: 87% on-time last 30 days"), and predicts breach risk for in-flight incidents based on pipeline stage and historical resolution time for similar attack types.
+
+SLA breach events are logged to the incident history in DynamoDB, so compliance reporting is automatic rather than reconstructed from meeting notes.
+
+### Cost Impact Analysis — What Did This Breach Cost?
+
+Every incident analysis includes a financial exposure estimate using the IBM Cost of Data Breach 2024 methodology:
+
+- **Direct compute cost** — unauthorized EC2/Lambda/Bedrock invocations at AWS on-demand pricing
+- **Data exposure cost** — estimated cost per PII record exposed, scaled by the record count from Blast Radius
+- **Incident response labor cost** — analyst hours × median SOC analyst hourly rate × estimated resolution time
+- **Regulatory fine exposure** — per-jurisdiction GDPR, CCPA, HIPAA fine calculation based on record count and sensitivity tier
+- **Total estimated exposure range** — low/mid/high scenarios with confidence intervals
+
+The cost output feeds directly into executive briefing documents — giving leadership a financial framing alongside the technical timeline. "7 API calls happened" and "$2.1M–4.7M exposure range" have very different business impact.
+
+---
+
+---
+
 ## Challenges We Ran Into
 
 ![wolfir demo mode — dual-mode architecture showing client-side fallback with pre-computed Nova outputs, running full feature set without AWS account](./images/blog-04-dual-mode.png)
 
-*Figure 7 — wolfir's dual-mode architecture. Left: real mode — live FastAPI backend, live AWS account, live Bedrock calls. Right: demo mode — Vercel-deployed React app with client-side pre-computed results. The same frontend codebase handles both. One build artifact, two operational modes.*
+*Figure 9 — wolfir's dual-mode architecture. Left: real mode — live FastAPI backend, live AWS account, live Bedrock calls. Right: demo mode — Vercel-deployed React app with client-side pre-computed results. The same frontend codebase handles both. One build artifact, two operational modes.*
 
 ### 1. The Strands SDK Async Bridge — Our Biggest Architectural Headache
 
