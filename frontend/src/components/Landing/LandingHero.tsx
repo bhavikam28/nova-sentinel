@@ -46,13 +46,27 @@ const LandingHero: React.FC = () => {
         style={{ background: 'linear-gradient(135deg, rgba(2,8,23,0.75) 0%, rgba(8,13,31,0.55) 50%, rgba(13,27,62,0.70) 100%)' }}
       />
 
-      {/* Decorative glass orb — right side */}
+      {/* Decorative right-side glow — replaces globe image */}
       <div
         className="absolute hidden xl:block pointer-events-none"
-        style={{ right: '-80px', top: '50%', transform: 'translateY(-50%)', width: '520px', height: '520px', opacity: 0.22 }}
-      >
-        <img src="/images/hero-orb.png" alt="" className="w-full h-full object-contain" />
-      </div>
+        style={{
+          right: '-120px', top: '50%', transform: 'translateY(-50%)',
+          width: '600px', height: '600px',
+          background: 'radial-gradient(circle at 60% 50%, rgba(99,102,241,0.18) 0%, rgba(37,99,235,0.10) 35%, transparent 70%)',
+          borderRadius: '50%',
+        }}
+      />
+      {/* Inner tighter glow ring */}
+      <div
+        className="absolute hidden xl:block pointer-events-none"
+        style={{
+          right: '-40px', top: '50%', transform: 'translateY(-50%)',
+          width: '380px', height: '380px',
+          background: 'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 65%)',
+          borderRadius: '50%',
+          border: '1px solid rgba(99,102,241,0.08)',
+        }}
+      />
 
       {/* Radial gradient orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
