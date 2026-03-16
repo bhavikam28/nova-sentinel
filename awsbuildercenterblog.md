@@ -1,4 +1,4 @@
-﻿# wolfir: The AI Security Platform That Watches Itself
+# wolfir: The AI Security Platform That Watches Itself
 
 *wolfir: 7 Amazon Nova capabilities, Strands Agents SDK, and MITRE ATLAS self-monitoring for cloud and AI security  -  every architectural decision explained.*
 
@@ -599,7 +599,7 @@ The cost output feeds directly into executive briefing documents  -  giving lead
 
 This one wasn't in any documentation. Strands `@tool` functions are **synchronous**. Our agent implementations use `async` Bedrock calls (`asyncio.to_thread`, `asyncio.gather`). You can't call an async function from a synchronous context without a running event loop  -  and you can't just call `asyncio.run()` inside a Strands tool because FastAPI already owns an event loop in the main thread.
 
-Our first approach (creating a new event loop per tool call) worked but introduced 200–400ms of overhead per call just in loop creation and destruction. At 5 agent steps per incident, that's up to 2 seconds of pure overhead.
+Our first approach (creating a new event loop per tool call) worked but introduced 200–400ms of overhead per call just in loop creation and teardown. At 5 agent steps per incident, that's up to 2 seconds of pure overhead.
 
 The solution was a single persistent worker thread that owns one event loop for the entire process lifetime:
 
