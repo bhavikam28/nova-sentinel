@@ -16,7 +16,7 @@ Prophet Security's 2025 AI in SOC Survey puts the average SOC at 960+ alerts per
 
 In February 2026, I started building what would become wolfir: an agentic pipeline that takes CloudTrail events and produces a complete incident response package  -  autonomously, with the analyst approving rather than executing.
 
-But as I built, a second problem surfaced. Every modern security platform runs on AI. GuardDuty uses ML. Security Hub correlates with AI. And here I was building another AI-powered security tool. But who's watching the AI itself? If an unauthorized actor can embed instructions into the data my models process, misuse my Bedrock inference API, or extract private account patterns through model outputs  -  my security tool becomes the risk surface.
+But as I built, a second problem surfaced. Every modern security platform runs on AI. GuardDuty uses ML. Security Hub correlates with AI. And here I was building another AI-powered security tool. But who's watching the AI itself? If an unidentified principal can embed instructions into the data my models process, misuse my Bedrock inference API, or identify unintended account metadata within model responses  -  my security tool becomes the risk surface.
 
 MITRE built the ATLAS framework specifically for AI/ML security risks. Almost nobody deploys it in production. wolfir became the exception: a security platform that monitors its own Bedrock AI pipeline with MITRE ATLAS in real time, while simultaneously running cloud incident response.
 
@@ -44,7 +44,7 @@ wolfir is an autonomous security platform for AWS that closes two gaps simultane
 
 - Chronological incident timeline with root cause and incident chain analysis
 - Interactive incident path diagram (React Flow, click-to-inspect each node)
-- **Blast Radius Simulator**  -  given the affected identity, maps every AWS service, resource, and data store an unauthorized actor can reach using IAM policy simulation
+- **Blast Radius Simulator**  -  given the affected identity, maps every AWS service, resource, and data store an unidentified principal can reach using IAM policy simulation
 - **AWS Organizations Dashboard**  -  multi-account org tree, cross-account cross-resource movement detection, SCP gap analysis across OUs
 - Per-event risk scores with MITRE Framework technique mapping and confidence intervals
 - Compliance mapping across CIS, NIST 800-53, SOC 2, PCI-DSS, SOX, and HIPAA
@@ -54,9 +54,9 @@ wolfir is an autonomous security platform for AWS that closes two gaps simultane
 - **SLA Tracker**  -  incident response SLA monitoring with SLA compliance prediction
 - **ChangeSet Analysis**  -  CloudFormation change risk assessment before you deploy
 
-Cross-incident memory, powered by DynamoDB and Nova Multimodal Embeddings, correlates new incidents with past ones using behavioral fingerprints, MITRE technique overlap, and semantic similarity. Run two scenarios and the second tells you "78% probability this is the same unauthorized actor."
+Cross-incident memory, powered by DynamoDB and Nova Multimodal Embeddings, correlates new incidents with past ones using behavioral fingerprints, MITRE technique overlap, and semantic similarity. Run two scenarios and the second tells you "78% probability this is the same unidentified principal."
 
-**AI security**  -  wolfir watches itself. Every Bedrock invocation powering the analysis above is simultaneously monitored against the MITRE ATLAS framework. Six techniques tracked in real time. OWASP LLM Top 10 posture. Shadow AI detection. Bedrock Guardrails integration. NIST AI RMF alignment.
+**AI security**  -  wolfir watches itself. Every Bedrock invocation powering the analysis above is simultaneously monitored against the MITRE ATLAS framework. Six techniques tracked in real time. OWASP LLM Top 10 posture. Ungoverned AI detection. Bedrock Guardrails integration. NIST AI RMF alignment.
 
 These two pillars are architecturally connected  -  not bolted together. When you run an incident analysis, the AI Security Posture dashboard updates based on the actual Bedrock invocations that just happened.
 
@@ -85,7 +85,7 @@ wolfir's AWS infrastructure is fully defined in Terraform. The primary Terraform
 - **S3 server-side encryption** with AES256, enforced at the bucket level
 - **Block public access** on all four dimensions (ACLs, policies, public ACLs, public buckets)
 - **S3 versioning** (disabled by default for cost reasons  -  playbooks are idempotent)
-- **Automated playbook upload**  -  six curated Markdown playbooks are uploaded as S3 objects during `terraform apply`, covering IAM access expansion, unauthorized compute usage, data incident response, unauthorized access, OWASP LLM response, and Prompt Guard
+- **Automated playbook upload**  -  six curated Markdown playbooks are uploaded as S3 objects during `terraform apply`, covering IAM access expansion, ungoverned compute usage, data incident response, Non-compliant access, OWASP LLM response, and Prompt Guard
 
 ```hcl
 resource "aws_s3_object" "playbooks" {
@@ -185,7 +185,7 @@ This is genuinely multimodal work. Text-only models can't read a VPC diagram. No
 ### 4. Amazon Nova Canvas  -  Report Imagery
 `amazon.nova-canvas-v1:0`
 
-Generates incident-specific cover images for exported PDF reports. A unauthorized compute usage incident gets a different cover than a data exposure incident. This isn't decoration  -  it signals that the output is a real security deliverable, not a plain text export. Each image is generated with incident type, severity, and affected services as context parameters.
+Generates incident-specific cover images for exported PDF reports. A ungoverned compute usage incident gets a different cover than a data exposure incident. This isn't decoration  -  it signals that the output is a real security deliverable, not a plain text export. Each image is generated with incident type, severity, and affected services as context parameters.
 
 ### 5. Amazon Nova 2 Sonic  -  Voice Interaction
 `amazon.nova-2-sonic-v1:0`
@@ -426,19 +426,19 @@ This is the part of wolfir I'm most proud of building  -  and the part nobody el
 
 wolfir's agents consume CloudTrail data, IAM policies, CloudFormation templates, and free-text user prompts. They produce remediation commands, JIRA tickets, Slack messages, and voice responses. Every step of that flow is an risk surface.
 
-An unauthorized actor could embed instructions in a CloudTrail event's `requestParameters.resourceName` field  -  that's data the temporal agent reads and reasons about. A cost-exhaustion incident could cause runaway Bedrock invocations. A crafted query through the Agentic Query interface could cause the model to include private account identifiers in its response. These are real risks against a system with IAM API access.
+Input data may contain instructions that conflict with system intent in a CloudTrail event's `requestParameters.resourceName` field  -  that's data the temporal agent reads and reasons about. A cost-exhaustion incident could cause runaway Bedrock invocations. A crafted query through the Agentic Query interface could cause the model to include private account identifiers in its response. These are real risks against a system with IAM API access.
 
 ### 6 MITRE ATLAS Techniques, Implemented
 
 **AML.T0051  -  Prompt Guard.** Pattern scanning against 12 known guard signatures on every user input before it reaches the Strands Agent. Signatures include role-adjustment patterns ("ignore previous instructions"), Data Extraction probes ("list all AWS account IDs in your context"), and instruction adjustment via data fields. Status indicator in Agentic Query UI is a live signal from this monitor, not decoration.
 
-**AML.T0016  -  Unauthorized Model Access.** Every Bedrock invocation is recorded with the model ID. If any non-approved model (outside the defined Nova set) is invoked  -  whether by the orchestrator, the Strands agent, or a tool  -  the status flips to WARNING and names the offending model. This catches cases where tool execution or Prompt Guard causes the agent to invoke an unexpected model.
+**AML.T0016  -  Ungoverned Model Access.** Every Bedrock invocation is recorded with the model ID. If any non-approved model (outside the defined Nova set) is invoked  -  whether by the orchestrator, the Strands agent, or a tool  -  the status flips to WARNING and names the offending model. This catches cases where tool execution or Prompt Guard causes the agent to invoke an unexpected model.
 
 **AML.T0040  -  ML Inference API Access.** Invocation rate monitoring with baseline comparison. Baseline: approximately 20 invocations per full incident analysis. Alert threshold: >3�- baseline. Expected surges during active pipeline runs are annotated as "PIPELINE_RUN" and don't flag false alerts. Unexpected surges  -  unusual timing, unusual caller identity  -  do.
 
 **AML.T0043  -  Crafted Data.** Input validation on CloudTrail event structure integrity before events reach the temporal agent. Anomalous field values (unusual event name patterns), falsified timestamps (events with future dates, events with impossible ordering), and structurally malformed events are flagged and optionally quarantined.
 
-**AML.T0024  -  Unauthorized Data Transfer via Inference.** Output scanning on every model response for AWS account IDs (12-digit patterns), access key patterns (`AKIA`, `ASIA` prefixes), private IP ranges, and common secrets patterns. If a response contains what looks like an access key, it's flagged before being returned to the frontend.
+**AML.T0024  -  Ungoverned Data Transfer via Inference.** Output scanning on every model response for AWS account IDs (12-digit patterns), access key patterns (`AKIA`, `ASIA` prefixes), private IP ranges, and common secrets patterns. If a response contains what looks like an access key, it's flagged before being returned to the frontend.
 
 **AML.T0048  -  Model Tampering.** Explicitly N/A  -  wolfir uses Bedrock foundation models without fine-tuning or custom training. We document this honestly. Claiming to monitor for fine-tuning tampering when there's no fine-tuning pipeline would be misleading. Honest non-applicability is more credible than a fake detection.
 
@@ -447,7 +447,7 @@ An unauthorized actor could embed instructions in a CloudTrail event's `requestP
 The AI Security pillar also includes:
 
 - **OWASP LLM Top 10 posture** (LLM01–LLM10)  -  mapped to wolfir's implementation
-- **Shadow AI detection**  -  CloudTrail InvokeModel monitoring for calls from non-approved principals in the account
+- **Ungoverned AI detection**  -  CloudTrail InvokeModel monitoring for calls from non-approved principals in the account
 - **NIST AI RMF alignment**  -  Govern, Map, Measure, Manage framework readiness assessment
 - **EU AI Act readiness**  -  AI system risk classification readiness
 - **AI-BOM**  -  Bedrock model inventory for the account (all foundation models, inference profiles)
@@ -465,11 +465,11 @@ When you run an incident analysis, the AI Security dashboard updates based on th
 
 Understanding *what happened* requires more than a text timeline. wolfir generates an interactive React Flow graph where every event in the incident chain is a clickable node  -  click any node to see its full risk score, MITRE technique mapping, source IP, timestamp, and what IAM control would have prevented it.
 
-![wolfir interactive incident path diagram  -  React Flow graph showing IAM access expansion incident chain from external actor through discovery, access expansion, cross-resource movement, to data impact](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-incident-path.png)
+![wolfir interactive incident path diagram  -  React Flow graph showing IAM access expansion incident chain from external identity through discovery, access expansion, cross-resource movement, to data impact](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-incident-path.png)
 
-*Figure 6  -  wolfir's interactive incident path for an IAM access expansion incident. Nodes are color-coded by severity: green (low), orange (medium), dark red (high), bright red (critical). Arrows show temporal progression with exact time deltas. Clicking "CreatePolicyVersion" (the access expansion branch step) opens the inspection panel on the right: risk score 94/100 (CI: 88–97), MITRE technique T1548.005, source IP, and the specific IAM control that would have prevented it. This is the visualization that turns "seven API calls happened" into "here is exactly how the unauthorized actor moved."*
+*Figure 6  -  wolfir's interactive incident path for an IAM access expansion incident. Nodes are color-coded by severity: green (low), orange (medium), dark red (high), bright red (critical). Arrows show temporal progression with exact time deltas. Clicking "CreatePolicyVersion" (the access expansion branch step) opens the inspection panel on the right: risk score 94/100 (CI: 88–97), MITRE technique T1548.005, source IP, and the specific IAM control that would have prevented it. This is the visualization that turns "seven API calls happened" into "here is exactly how the unidentified principal moved."*
 
-The graph is built from the temporal agent's incident chain analysis. Nodes are positioned by the incident phase (Detection -> Discovery -> access expansion -> cross-resource movement -> Impact), so the visual layout itself tells the story of how the unauthorized actor moved through the environment.
+The graph is built from the temporal agent's incident chain analysis. Nodes are positioned by the incident phase (Detection -> Discovery -> access expansion -> cross-resource movement -> Impact), so the visual layout itself tells the story of how the unidentified principal moved through the environment.
 
 ---
 
@@ -485,11 +485,11 @@ wolfir ships with three real demo scenarios, each pre-computed with live Nova ou
 
 The three scenarios cover the most impactful real-world AWS incident patterns:
 
-1. **IAM access expansion**  -  Contractor misuses an AssumeRole chain to gain AdministratorAccess. MITRE techniques T1098 and T1078. 9 events. CRITICAL. Full incident chain: discovery -> movement -> continued access.
+1. **IAM access expansion**  -  A vendor account misuses an AssumeRole chain to gain AdministratorAccess. MITRE techniques T1098 and T1078. 9 events. CRITICAL. Full incident chain: discovery -> movement -> continued access.
 2. **AWS Organizations Cross-Account exposure**  -  A affected role in a Dev account moves via STS AssumeRole into Production and Security accounts  -  cross-resource movement across 3 OUs, 12 member accounts. wolfir detects and contains with org-wide SCPs. 18 events. CRITICAL.
-3. **Shadow AI / Unauthorized LLM Use**  -  Ungoverned Bedrock InvokeModel calls combined with a Prompt Guard detection. This scenario exercises the MITRE ATLAS self-monitoring pipeline  -  the AI security pillar catching a risk that cloud security monitoring alone would not surface. 7 events. CRITICAL.
+3. **Ungoverned AI / Ungoverned LLM Use**  -  Ungoverned Bedrock InvokeModel calls combined with a Prompt Guard detection. This scenario exercises the MITRE ATLAS self-monitoring pipeline  -  the AI security pillar catching a risk that cloud security monitoring alone would not surface. 7 events. CRITICAL.
 
-Run scenario 1 first, then scenario 2  -  the cross-incident memory will flag "78% probability this is the same unauthorized actor." This is the **correlation seeding trick**: scenario 1 runs silently in the background when you land on the page so scenario 2 always has historical data to correlate against.
+Run scenario 1 first, then scenario 2  -  the cross-incident memory will flag "78% probability this is the same unidentified principal." This is the **correlation seeding trick**: scenario 1 runs silently in the background when you land on the page so scenario 2 always has historical data to correlate against.
 
 ### Compliance Mapping  -  6 Frameworks, Automatic
 
@@ -516,15 +516,15 @@ Recent additions to wolfir that fundamentally extend what "incident response" me
 
 ### Blast Radius Simulator
 
-Knowing that an IAM identity was affected is one thing. Knowing every resource an unauthorized actor with that identity can reach is another. The Blast Radius Simulator takes the affected identity from an incident and runs IAM policy simulation to map its full reachable risk surface:
+Knowing that an IAM identity was affected is one thing. Knowing every resource an unidentified principal with that identity can reach is another. The Blast Radius Simulator takes the affected identity from an incident and runs IAM policy simulation to map its full reachable risk surface:
 
 ```
 affected: arn:aws:iam::123456789:role/DataPipelineRole
 │
 ├── CRITICAL  -  S3:GetObject on s3://prod-customer-data/* (personal data exposure)
 ├── CRITICAL  -  DynamoDB:Scan on CustomerOrders table (financial data)
-├── HIGH      -  EC2:RunInstances (unauthorized compute vector)
-├── HIGH      -  Bedrock:InvokeModel (AI Unauthorized Model Access)
+├── HIGH      -  EC2:RunInstances (ungoverned compute vector)
+├── HIGH      -  Bedrock:InvokeModel (AI Ungoverned Model Access)
 ├── MEDIUM    -  Lambda:InvokeFunction on 3 functions
 └── LOW       -  CloudWatch:PutMetricData (routine low-priority activity)
 ```
@@ -536,7 +536,7 @@ Each resource shows the IAM action that enables access, the risk zone (critical/
 When incidents span accounts, a single-account view is insufficient. The Organizations Dashboard shows:
 
 - Full org tree (Management Account -> OUs -> Member Accounts) with real-time risk level indicators
-- **Cross-account cross-resource movement detection**  -  identifying when compromise in one account created vectors into others
+- **Cross-account cross-resource movement detection**  -  identifying when a security incident in one account created vectors into others
 - **SCP gap analysis**  -  which Service Control Policies are missing across OUs, what they would have prevented
 - Per-account security posture scores, finding counts, and compliance percentages
 
@@ -548,7 +548,7 @@ This works in demo mode (pre-computed multi-account scenario) and real AWS mode 
 
 ### ChangeSet Analysis  -  Risk Before You Deploy
 
-The Blast Radius Simulator asks: *what could an unauthorized actor reach with this identity?* The ChangeSet Analyzer asks a different question: *what security risk does this CloudFormation change introduce before you deploy it?*
+The Blast Radius Simulator asks: *what could an unidentified principal reach with this identity?* The ChangeSet Analyzer asks a different question: *what security risk does this CloudFormation change introduce before you deploy it?*
 
 You paste a CloudFormation change set (or upload a template diff), and wolfir runs it through Nova 2 Lite with a security-focused prompt that evaluates:
 
@@ -577,7 +577,7 @@ SLA miss events are logged to the incident history in DynamoDB, so compliance re
 
 Every incident analysis includes a financial exposure estimate using the IBM Cost of data exposure 2024 methodology:
 
-- **Direct compute cost**  -  unauthorized EC2/Lambda/Bedrock invocations at AWS on-demand pricing
+- **Direct compute cost**  -  ungoverned EC2/Lambda/Bedrock invocations at AWS on-demand pricing
 - **Data exposure cost**  -  estimated cost per PII record exposed, scaled by the record count from Blast Radius
 - **Incident response labor cost**  -  analyst hours �- median SOC analyst hourly rate �- estimated resolution time
 - **Regulatory fine exposure**  -  per-jurisdiction GDPR, CCPA, HIPAA fine calculation based on record count and sensitivity tier
@@ -735,7 +735,7 @@ Any session token issued before `revoke_time` is denied all actions. New session
 
 Even very low temperature doesn't give you perfectly calibrated domain knowledge. Nova Micro consistently over-called certain events:
 
-- `GetCallerIdentity` -> scored HIGH (it appears in unauthorized actor discovery playbooks, but is also a routine SDK health check)
+- `GetCallerIdentity` -> scored HIGH (it appears in unidentified principal discovery playbooks, but is also a routine SDK health check)
 - `CreatePolicyVersion` -> scored CRITICAL regardless of context (legitimate DevOps orgs do this constantly)
 - `PutLogEvents` -> scored MEDIUM (it's CloudWatch log shipping, not an incident)
 
@@ -914,7 +914,7 @@ Same pattern for all six MCP servers and all six agent instances. Startup time d
 
 **Small and mid-sized security teams** that don't have Splunk, Cortex XSOAR, or dedicated SOC analysts. They have CloudTrail, maybe GuardDuty, and not enough hours. wolfir gives them what a 20-person SOC has: a structured response pipeline that runs in minutes.
 
-**Cloud engineers learning incident response.** The three demo scenarios walk through realistic incident chains  -  IAM access expansion, cross-account cross-resource movement, and Shadow AI misuse. Running a scenario and reading the generated incident timeline teaches you what to look for in real incidents.
+**Cloud engineers learning incident response.** The three demo scenarios walk through realistic incident chains  -  IAM access expansion, cross-account cross-resource movement, and Ungoverned AI misuse. Running a scenario and reading the generated incident timeline teaches you what to look for in real incidents.
 
 **Teams deploying AI who need to secure it.** The MITRE ATLAS self-monitoring pillar is a proof of concept for a problem barely anyone is addressing: who watches the watcher? If you're deploying LLMs for security analysis, Prompt Guard and API misuse are real risk vectors, not theoretical ones.
 
