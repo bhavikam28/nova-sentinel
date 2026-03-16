@@ -46,7 +46,7 @@ wolfir is an autonomous security platform for AWS that closes two gaps simultane
 - Interactive attack path diagram (React Flow, click-to-inspect each node)
 - **Blast Radius Simulator**  -  given the affected identity, maps every AWS service, resource, and data store an unauthorized actor can reach using IAM policy simulation
 - **AWS Organizations Dashboard**  -  multi-account org tree, cross-account cross-resource movement detection, SCP gap analysis across OUs
-- Per-event risk scores with MITRE ATT-CK technique mapping and confidence intervals
+- Per-event risk scores with MITRE Framework technique mapping and confidence intervals
 - Compliance mapping across CIS, NIST 800-53, SOC 2, PCI-DSS, SOX, and HIPAA
 - Cost impact using the IBM Cost of data exposure methodology
 - Remediation plan with real AWS CLI commands, human-in-the-loop approval gates, before/after state snapshots, and one-click rollback
@@ -67,7 +67,7 @@ These two pillars are architecturally connected  -  not bolted together. When yo
 
 ### wolfir Dashboard
 
-![wolfir dashboard  -  incident analysis results showing attack timeline, risk scores, MITRE ATT-CK mapping, and remediation plan](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-dashboard-screenshot.png)
+![wolfir dashboard  -  incident analysis results showing attack timeline, risk scores, MITRE Framework mapping, and remediation plan](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-dashboard-screenshot.png)
 
 *Figure 2  -  wolfir dashboard after running an IAM permission escalation scenario. Top: attack timeline with root cause and confidence score. Middle: per-event risk classification with MITRE technique mapping. Bottom: generated remediation plan with before/after state and CloudTrail confirmation.*
 
@@ -158,7 +158,7 @@ Nova 2 Lite handles the longest context windows in the pipeline. We feed it stru
 ### 2. Amazon Nova Micro  -  The Risk Classifier
 `amazon.nova-micro-v1:0`
 
-Risk scoring at `temperature=0.1`  -  very low for determinism. Each CloudTrail event is classified as LOW/MEDIUM/HIGH/CRITICAL with a confidence score and MITRE ATT-CK technique mapping.
+Risk scoring at `temperature=0.1`  -  very low for determinism. Each CloudTrail event is classified as LOW/MEDIUM/HIGH/CRITICAL with a confidence score and MITRE Framework technique mapping.
 
 We run **three parallel calls via `asyncio.gather()`** and return a confidence interval: "77/100 (CI: 70–84)" is more honest than a single number, because a single number implies precision that LLMs don't have.
 
@@ -237,7 +237,7 @@ The five-agent pipeline runs in dependency order, with parallelism where agent o
 
 ![wolfir 5-agent pipeline flow  -  full detail showing all agent steps, context pruning, timing, parallel execution, and complete incident response package output grid](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-pipeline-flow-v2.png)
 
-*Figure 3  -  wolfir's 5-agent pipeline in full detail. Left: CloudTrail events filtered by `filter_interesting_events()` (60+ routine events filtered) before entering the pipeline. Step 1 (Temporal, ~8s): attack chain reconstruction, root cause, Blast Radius via IAM policy simulation, Prompt Override scan on event fields, and the conditional Agentic lateral shift. Step 2 (Risk Scoring, ~4s): Nova Micro �-3 parallel via `asyncio.gather()`, MITRE ATT-CK mapping, confidence intervals, calibration overrides. Steps 3+4 (Remediation + Documentation, concurrent, ~5–6s): run in parallel since both only depend on the timeline output, not each other. Step 5 (Save & Correlate, ~2s): 4-signal correlation via DynamoDB + Nova Embeddings. Output grid (bottom right): all 9 features of the Incident Response Package. Total: ~15–25s end to end on ~12K tokens (versus ~40K without context pruning).*
+*Figure 3  -  wolfir's 5-agent pipeline in full detail. Left: CloudTrail events filtered by `filter_interesting_events()` (60+ routine events filtered) before entering the pipeline. Step 1 (Temporal, ~8s): attack chain reconstruction, root cause, Blast Radius via IAM policy simulation, Prompt Override scan on event fields, and the conditional Agentic lateral shift. Step 2 (Risk Scoring, ~4s): Nova Micro �-3 parallel via `asyncio.gather()`, MITRE Framework mapping, confidence intervals, calibration overrides. Steps 3+4 (Remediation + Documentation, concurrent, ~5–6s): run in parallel since both only depend on the timeline output, not each other. Step 5 (Save & Correlate, ~2s): 4-signal correlation via DynamoDB + Nova Embeddings. Output grid (bottom right): all 9 features of the Incident Response Package. Total: ~15–25s end to end on ~12K tokens (versus ~40K without context pruning).*
 
 **Step 1  -  Temporal Analysis (Nova 2 Lite)**
 
@@ -265,7 +265,7 @@ After timeline extraction, the pipeline queries past incidents via DynamoDB, com
 
 **Step 2  -  Risk Scoring (Nova Micro, parallel)**
 
-Up to five events scored simultaneously via `asyncio.gather()`. Each gets risk level, confidence interval, MITRE ATT-CK mapping.
+Up to five events scored simultaneously via `asyncio.gather()`. Each gets risk level, confidence interval, MITRE Framework mapping.
 
 **Steps 3 + 4  -  Remediation + Documentation (Nova 2 Lite, concurrent)**
 
@@ -434,7 +434,7 @@ An unauthorized actor could embed instructions in a CloudTrail event's `requestP
 
 **AML.T0016  -  Unauthorized Model Access.** Every Bedrock invocation is recorded with the model ID. If any non-approved model (outside the defined Nova set) is invoked  -  whether by the orchestrator, the Strands agent, or a tool  -  the status flips to WARNING and names the offending model. This catches cases where tool execution or Prompt Override causes the agent to invoke an unexpected model.
 
-**AML.T0040  -  ML Inference API Access.** Invocation rate monitoring with baseline comparison. Baseline: approximately 20 invocations per full incident analysis. Alert threshold: >3�- baseline. Expected spikes during active pipeline runs are annotated as "PIPELINE_RUN" and don't trigger false alerts. Unexpected spikes  -  unusual timing, unusual caller identity  -  do.
+**AML.T0040  -  ML Inference API Access.** Invocation rate monitoring with baseline comparison. Baseline: approximately 20 invocations per full incident analysis. Alert threshold: >3�- baseline. Expected surges during active pipeline runs are annotated as "PIPELINE_RUN" and don't trigger false alerts. Unexpected surges  -  unusual timing, unusual caller identity  -  do.
 
 **AML.T0043  -  Crafted Data.** Input validation on CloudTrail event structure integrity before events reach the temporal agent. Anomalous field values (unusual event name patterns), manipulated timestamps (events with future dates, events with impossible ordering), and structurally malformed events are flagged and optionally quarantined.
 
@@ -457,7 +457,7 @@ When you run an incident analysis, the AI Security dashboard updates based on th
 
 ![wolfir AI Security Posture dashboard  -  MITRE ATLAS technique live status, OWASP LLM Top 10 radar chart, NIST AI RMF coverage, and Nova invocation rate chart](https://raw.githubusercontent.com/bhavikam28/wolfir/main/frontend/public/images/wolfir-ai-security-posture.png)
 
-*Figure 5  -  wolfir's AI Security Posture dashboard. Left: MITRE ATLAS live technique status updated from actual Bedrock invocations  -  AML.T0040 shows MONITORING because 23 invocations is above baseline (20) but below the 3�- alert threshold. Center: OWASP LLM Top 10 radar chart showing posture score of 87/100. Right: AI compliance coverage across all three frameworks. The invocation rate bar chart (bottom left) lets you visually spot pipeline runs versus anomalous spikes.*
+*Figure 5  -  wolfir's AI Security Posture dashboard. Left: MITRE ATLAS live technique status updated from actual Bedrock invocations  -  AML.T0040 shows MONITORING because 23 invocations is above baseline (20) but below the 3�- alert threshold. Center: OWASP LLM Top 10 radar chart showing posture score of 87/100. Right: AI compliance coverage across all three frameworks. The invocation rate bar chart (bottom left) lets you visually spot pipeline runs versus anomalous surges.*
 
 ---
 
@@ -502,7 +502,7 @@ Every incident analysis produces a compliance report without any manual work. Ea
 - **SOX IT General Controls**  -  ITGC-04 (Access management), ITGC-06 (Change management)
 - **HIPAA**  -  §164.312 (Technical Safeguards), §164.308 (Administrative Safeguards)
 
-The mapping uses the finding's MITRE ATT-CK technique, affected AWS service, and severity tier to cross-reference against a curated compliance control matrix. An `IAM:CreatePolicyVersion` event with HIGH severity automatically maps to CIS 1.16, NIST AC-6, SOC 2 CC6.1, and PCI-DSS Requirement 7.1  -  with the full control reference text included in the export.
+The mapping uses the finding's MITRE Framework technique, affected AWS service, and severity tier to cross-reference against a curated compliance control matrix. An `IAM:CreatePolicyVersion` event with HIGH severity automatically maps to CIS 1.16, NIST AC-6, SOC 2 CC6.1, and PCI-DSS Requirement 7.1  -  with the full control reference text included in the export.
 
 ---
 
@@ -526,7 +526,7 @@ affected: arn:aws:iam::123456789:role/DataPipelineRole
 ├── HIGH      -  EC2:RunInstances (unauthorized compute vector)
 ├── HIGH      -  Bedrock:InvokeModel (AI Unauthorized Model Access)
 ├── MEDIUM    -  Lambda:InvokeFunction on 3 functions
-└── LOW       -  CloudWatch:PutMetricData (noise cover)
+└── LOW       -  CloudWatch:PutMetricData (routine low-priority activity)
 ```
 
 Each resource shows the IAM action that enables access, the risk zone (critical/high/medium/low), the estimated financial impact, and what would have prevented it. This turns "we had an IAM incident" into "here's exactly what was at risk and what to fix first."
@@ -639,7 +639,7 @@ Token consumption dropped from ~40K to ~12K per pipeline run. Hallucinations fro
 
 ### 3. Hallucinated Threat Narratives from Routine Events
 
-This was the most damaging reliability bug and the hardest to catch because it failed silently. Feed 50 routine CloudTrail events to a language model  -  `PutLogEvents`, `DescribeInstances`, service-to-service `AssumeRole`  -  and ask "what's the attack pattern?" It will invent one. Confidently. With specific MITRE ATT-CK technique mappings. The output looks real.
+This was the most damaging reliability bug and the hardest to catch because it failed silently. Feed 50 routine CloudTrail events to a language model  -  `PutLogEvents`, `DescribeInstances`, service-to-service `AssumeRole`  -  and ask "what's the attack pattern?" It will invent one. Confidently. With specific MITRE Framework technique mappings. The output looks real.
 
 Building `filter_interesting_events()` was the fix: a curated set of 60+ routine event names that get filtered before the temporal agent sees anything. Service-to-service `AssumeRole` calls (Lambda, ECS executing their roles) required a separate check because the event name alone isn't enough:
 
