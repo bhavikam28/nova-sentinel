@@ -151,15 +151,28 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
-    """Allow Chrome Private Network Access (PNA) from public HTTPS origins (e.g. wolfir.vercel.app)
-    to this local backend. Chrome 94+ blocks public → loopback requests unless the server
-    explicitly opts in via this header on the OPTIONS preflight response."""
+class PrivateNetworkAccessMiddleware:
+    """Pure ASGI middleware — injects Access-Control-Allow-Private-Network: true into every
+    http.response.start message. BaseHTTPMiddleware cannot reliably intercept CORSMiddleware's
+    early-return OPTIONS response; hooking send() directly at the ASGI level works for all cases.
+    Required for Chrome 94+ to allow wolfir.vercel.app (public HTTPS) → localhost:8000 (loopback)."""
 
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        response.headers["Access-Control-Allow-Private-Network"] = "true"
-        return response
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_pna(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"access-control-allow-private-network", b"true"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_pna)
 
 
 # Configure CORS
