@@ -81,8 +81,8 @@ function AttackPathNode({ data }: { data: NodeData }) {
   let color: string;
   let bg: string;
   if (data.nodeRole === 'attacker') {
-    color = '#d97706'; // amber — threat actor
-    bg = '#fffbeb';
+    color = '#7c3aed'; // violet — threat actor (distinct from orange/red severity nodes)
+    bg = '#f5f3ff';
   } else if (data.nodeRole === 'detection') {
     color = '#059669'; // emerald — monitoring is healthy
     bg = '#ecfdf5';
@@ -97,13 +97,13 @@ function AttackPathNode({ data }: { data: NodeData }) {
         className="relative w-[72px] h-[72px] rounded-xl border-2 shadow-sm flex items-center justify-center"
         style={{ borderColor, backgroundColor: bg }}
       >
-        <Handle type="target" position={Position.Left} style={{ opacity: 0, left: -14, width: 8, height: 8 }} />
+        <Handle type="target" position={Position.Left} style={{ opacity: 0, left: -14, top: '50%', transform: 'translateY(-50%)', width: 8, height: 8 }} />
         {isAwsIcon ? (
           <Icon size={56} color={color} />
         ) : (
           <Icon className="w-14 h-14" color={color} />
         )}
-        <Handle type="source" position={Position.Right} style={{ opacity: 0, right: -14, left: 'auto', width: 8, height: 8 }} />
+        <Handle type="source" position={Position.Right} style={{ opacity: 0, right: -14, left: 'auto', top: '50%', transform: 'translateY(-50%)', width: 8, height: 8 }} />
       </div>
       <span className="text-[11px] font-bold text-slate-900 text-center leading-tight max-w-[100px] truncate mt-1.5">{data.label}</span>
       <span className="text-[9px] text-slate-500 text-center">{data.subLabel}</span>
@@ -172,13 +172,13 @@ const EDGE_LABELS_AI: Record<string, string> = {
 const INFRA_GROUPS_STANDARD: Node[] = [
   {
     id: 'grp-account', type: 'group', position: { x: 150, y: 20 }, zIndex: -10,
-    style: { width: 860, height: 340, pointerEvents: 'none' },
+    style: { width: 940, height: 360, pointerEvents: 'none' },
     data: { label: 'AWS Account · us-east-1', color: '#f97316', bg: 'rgba(251,146,60,0.06)' },
     draggable: false, selectable: false,
   },
   {
     id: 'grp-vpc', type: 'group', position: { x: 195, y: 55 }, zIndex: -8,
-    style: { width: 560, height: 250, pointerEvents: 'none' },
+    style: { width: 620, height: 270, pointerEvents: 'none' },
     data: { label: 'VPC', color: '#8b5cf6', bg: 'rgba(139,92,246,0.06)' },
     draggable: false, selectable: false,
   },
@@ -275,10 +275,10 @@ const DEMO_EDGES_AI: Edge[]       = buildEdgesWithSeverity(DEMO_EDGES_AI_BASE,  
 // ── PRIVILEGE ESCALATION SCENARIO ──────────────────────────────────────────
 const INFRA_GROUPS_PRIV: Node[] = [
   { id: 'grp-account', type: 'group', position: { x: 140, y: 20 }, zIndex: -10,
-    style: { width: 920, height: 340, pointerEvents: 'none' },
+    style: { width: 1020, height: 380, pointerEvents: 'none' },
     data: { label: 'AWS Account · us-east-1 (Contractor Target)', color: '#dc2626', bg: 'rgba(220,38,38,0.05)' }, draggable: false, selectable: false },
   { id: 'grp-iam', type: 'group', position: { x: 190, y: 50 }, zIndex: -8,
-    style: { width: 660, height: 260, pointerEvents: 'none' },
+    style: { width: 760, height: 310, pointerEvents: 'none' },
     data: { label: 'IAM Role Chain — AssumeRole Pivot', color: '#7c3aed', bg: 'rgba(124,58,237,0.05)' }, draggable: false, selectable: false },
 ];
 const DEMO_NODES_PRIV: Node[] = [
@@ -680,6 +680,7 @@ function AttackPathReactFlowInner({ variant = 'standard', incidentType, onNaviga
                    : 'Internet → VPC → EC2 → IAM → RDS'
                   ) + ' · click any node to inspect'
               }
+              <span className="ml-2 text-slate-400 italic">· drag nodes to rearrange</span>
             </p>
           </div>
         </div>
@@ -719,8 +720,9 @@ function AttackPathReactFlowInner({ variant = 'standard', incidentType, onNaviga
           </div>
           <div className="hidden md:flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Legend:</span>
-          <div className="flex gap-4" title="Node color = severity level">
+          <div className="flex gap-3" title="Node color = severity level">
             {[
+              { color: 'bg-violet-700', label: 'Threat Actor' },
               { color: 'bg-red-700', label: 'Critical' },
               { color: 'bg-orange-600', label: 'High' },
               { color: 'bg-blue-600', label: 'Medium' },
@@ -768,8 +770,8 @@ function AttackPathReactFlowInner({ variant = 'standard', incidentType, onNaviga
         </div>
       )}
 
-      <div className="flex flex-col">
-        <div className="h-[480px] bg-slate-50/30 relative w-full shrink-0">
+      <div className="flex flex-row" style={{ minHeight: 640 }}>
+        <div className="flex-1 bg-slate-50/30 relative" style={{ minHeight: 640 }}>
           <ReactFlow
             nodes={displayNodes}
             edges={edgesWithLabels}
@@ -787,7 +789,7 @@ function AttackPathReactFlowInner({ variant = 'standard', incidentType, onNaviga
             <Background color="#e2e8f0" gap={20} />
           </ReactFlow>
         </div>
-        <div className="border-t border-slate-200 bg-white overflow-y-auto shrink-0" style={{ maxHeight: 280 }}>
+        <div className="w-80 border-l border-slate-200 bg-white overflow-y-auto shrink-0" style={{ maxHeight: 640 }}>
           {selectedNodeData ? (() => {
             const extra = NODE_EXTRA[selectedNode ?? ''];
             const sevCls = selectedNodeData.severity === 'critical' ? 'bg-red-50 text-red-700 border-red-200' :
@@ -872,15 +874,12 @@ function AttackPathReactFlowInner({ variant = 'standard', incidentType, onNaviga
               </div>
             );
           })() : (
-            <div className="px-6 py-3 flex items-center justify-center gap-2 text-slate-400">
-              <Shield className="w-4 h-4 text-slate-300" />
-              <p className="text-xs font-medium text-slate-500">Click any node to inspect MITRE techniques, attack implications, and security checks</p>
+            <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <Shield className="w-8 h-8 text-slate-200" />
+              <p className="text-xs font-medium text-slate-400 leading-relaxed">Click any node to inspect MITRE techniques, attack implications, and security checks</p>
             </div>
           )}
         </div>
-      </div>
-      <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-600">
-        <strong>Tip:</strong> Drag nodes to rearrange. Arrows show data flow and potential attack paths.
       </div>
     </div>
   );
