@@ -3,6 +3,7 @@ Remediation Agent - Generate and execute remediation plans
 Uses Nova 2 Lite for planning and Nova Act for execution
 """
 import json
+import re
 import time
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -117,8 +118,8 @@ IMPORTANT: Each step MUST include a clear "reason" field explaining why this rem
             
             response = await self.bedrock.invoke_nova_lite(
                 prompt=prompt,
-                max_tokens=4000,
-                temperature=0.35
+                max_tokens=6000,
+                temperature=0.1
             )
             
             plan_text = response.get("text", "")
@@ -194,39 +195,107 @@ Provide validation in JSON format with:
             logger.error(f"Error validating plan: {e}")
             raise
     
+    @staticmethod
+    def _clean_json(s: str) -> str:
+        """Remove trailing commas, smart quotes, and BOMs that break json.loads."""
+        s = s.lstrip('\ufeff')
+        s = s.replace('\u201c', '"').replace('\u201d', '"').replace('\u2018', "'").replace('\u2019', "'")
+        s = re.sub(r'//[^\n]*', '', s)           # strip // comments
+        s = re.sub(r',\s*([}\]])', r'\1', s)      # remove trailing commas
+        return s
+
+    @staticmethod
+    def _repair_truncated(s: str) -> str:
+        """Close any unclosed JSON arrays/objects from a truncated response."""
+        s = s.rstrip().rstrip(',')
+        depth_obj = depth_arr = 0
+        in_str = esc = False
+        for ch in s:
+            if esc: esc = False; continue
+            if ch == '\\': esc = True; continue
+            if ch == '"': in_str = not in_str; continue
+            if in_str: continue
+            if ch == '{': depth_obj += 1
+            elif ch == '}': depth_obj -= 1
+            elif ch == '[': depth_arr += 1
+            elif ch == ']': depth_arr -= 1
+        return s + ']' * max(0, depth_arr) + '}' * max(0, depth_obj)
+
+    def _extract_json_str(self, text: str) -> Optional[str]:
+        """Extract the JSON string from a model response using multiple strategies."""
+        # Strategy 1: fenced code block ```json … ```
+        if "```json" in text:
+            start = text.find("```json") + 7
+            end = text.find("```", start)
+            if end > start:
+                return text[start:end].strip()
+        # Strategy 2: any fenced code block ``` … ```
+        if "```" in text:
+            start = text.find("```") + 3
+            end = text.find("```", start)
+            if end > start:
+                candidate = text[start:end].strip()
+                if candidate.startswith("{"):
+                    return candidate
+        # Strategy 3: largest { … } block
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            return text[start:end]
+        return None
+
     def _parse_plan(self, text: str) -> Dict[str, Any]:
-        """Parse remediation plan from text response"""
-        try:
-            # Try to extract JSON
-            if "```json" in text:
-                json_start = text.find("```json") + 7
-                json_end = text.find("```", json_start)
-                json_text = text[json_start:json_end].strip()
-            elif "```" in text:
-                json_start = text.find("```") + 3
-                json_end = text.find("```", json_start)
-                json_text = text[json_start:json_end].strip()
-            else:
-                json_start = text.find("{")
-                json_end = text.rfind("}") + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_text = text[json_start:json_end]
-                else:
-                    raise ValueError("No JSON found")
-            
-            plan = json.loads(json_text)
-            return self._ensure_step_defaults(plan)
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Could not parse plan JSON: {e}")
-            return {
-                "steps": [],
-                "validation_checks": [],
-                "post_remediation_checks": [],
-                "estimated_total_time": "Unknown",
-                "approval_required": True,
-                "raw_plan": text
-            }
+        """Parse remediation plan — robust against trailing commas and truncation."""
+        raw = text or ""
+        json_str = self._extract_json_str(raw)
+
+        if json_str:
+            # Attempt 1: parse as-is
+            try:
+                return self._ensure_step_defaults(json.loads(json_str))
+            except json.JSONDecodeError:
+                pass
+            # Attempt 2: clean trailing commas / smart quotes
+            try:
+                return self._ensure_step_defaults(json.loads(self._clean_json(json_str)))
+            except json.JSONDecodeError:
+                pass
+            # Attempt 3: repair truncated JSON
+            try:
+                return self._ensure_step_defaults(json.loads(self._repair_truncated(self._clean_json(json_str))))
+            except json.JSONDecodeError as e:
+                logger.warning(f"Could not parse plan JSON after repair: {e}")
+
+        # Last resort: build a minimal plan from raw prose so the tab is not blank
+        logger.warning("Building fallback plan from raw prose response")
+        return self._build_prose_fallback(raw)
+
+    def _build_prose_fallback(self, raw_text: str) -> Dict[str, Any]:
+        """When JSON parsing fails entirely, wrap the raw prose as a single manual step."""
+        step_text = raw_text.strip() or "Review the incident and apply remediation steps manually."
+        return {
+            "steps": [
+                {
+                    "step_number": 1,
+                    "action": "Review AI-generated remediation guidance",
+                    "resource": "Manual review required",
+                    "reason": "Automated JSON parsing failed — the full remediation text is shown below for manual execution.",
+                    "command": "# See raw plan below — run the CLI commands from the wolfir analysis output",
+                    "requires_approval": True,
+                    "rollback_command": "# N/A — review before executing",
+                    "estimated_time": "Variable",
+                    "risk_level": "MEDIUM",
+                    "classification": "MANUAL",
+                    "reversible": False,
+                }
+            ],
+            "validation_checks": ["Review the raw plan text before executing any commands."],
+            "post_remediation_checks": ["Verify CloudTrail shows expected changes."],
+            "estimated_total_time": "Manual review required",
+            "approval_required": True,
+            "raw_plan": raw_text,
+            "parse_warning": "JSON parsing failed — raw model output is stored in raw_plan.",
+        }
 
     def _ensure_step_defaults(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Add default values for fields expected by frontend."""
@@ -256,32 +325,19 @@ Provide validation in JSON format with:
         return "APPROVAL"
     
     def _parse_validation(self, text: str) -> Dict[str, Any]:
-        """Parse validation results from text response"""
-        try:
-            if "```json" in text:
-                json_start = text.find("```json") + 7
-                json_end = text.find("```", json_start)
-                json_text = text[json_start:json_end].strip()
-            elif "```" in text:
-                json_start = text.find("```") + 3
-                json_end = text.find("```", json_start)
-                json_text = text[json_start:json_end].strip()
-            else:
-                json_start = text.find("{")
-                json_end = text.rfind("}") + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_text = text[json_start:json_end]
-                else:
-                    raise ValueError("No JSON found")
-            
-            return json.loads(json_text)
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Could not parse validation JSON: {e}")
-            return {
-                "is_safe": False,
-                "safety_issues": ["Could not parse validation response"],
-                "compliance_issues": [],
-                "recommendations": [],
-                "risk_assessment": "UNKNOWN"
-            }
+        """Parse validation results — robust against trailing commas."""
+        json_str = self._extract_json_str(text or "")
+        if json_str:
+            for candidate in (json_str, self._clean_json(json_str), self._repair_truncated(self._clean_json(json_str))):
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+        logger.warning("Could not parse validation JSON")
+        return {
+            "is_safe": False,
+            "safety_issues": ["Could not parse validation response"],
+            "compliance_issues": [],
+            "recommendations": [],
+            "risk_assessment": "UNKNOWN"
+        }

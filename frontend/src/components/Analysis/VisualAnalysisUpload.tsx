@@ -21,6 +21,7 @@ interface VisualAnalysisUploadProps {
   timeline?: Timeline | null;
   orchestrationResult?: OrchestrationResponse | null;
   onNavigateToRemediation?: () => void;
+  awsAccountId?: string | null;
 }
 
 // Demo sample analysis result for when backend isn't available
@@ -348,6 +349,7 @@ const STRIDE_COLORS: Record<string, { bg: string; border: string; text: string }
 
 const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
   onUpload, analysisResult, loading = false, timeline, orchestrationResult, onNavigateToRemediation: _onNavigateToRemediation,
+  awsAccountId,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -415,7 +417,29 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
           recommendations: displayResult.analysis.recommendations,
         },
       } : undefined;
-      const result = await threatModelAPI.generate(desc, visualAnalysis);
+
+      // Collect real resource names from timeline for accurate CLI commands
+      const realResources: string[] = [];
+      if (timeline?.events) {
+        const resourceSet = new Set<string>();
+        for (const ev of timeline.events) {
+          if (ev.resource && typeof ev.resource === 'string' && ev.resource.length > 2 && !ev.resource.startsWith('{')) {
+            resourceSet.add(ev.resource);
+          }
+          if (ev.actor && typeof ev.actor === 'string' && ev.actor.length > 2) {
+            resourceSet.add(ev.actor);
+          }
+        }
+        realResources.push(...Array.from(resourceSet).slice(0, 12));
+      }
+
+      const result = await threatModelAPI.generate(
+        desc,
+        visualAnalysis,
+        true,
+        awsAccountId || undefined,
+        realResources.length > 0 ? realResources : undefined,
+      );
       setThreatModelResult(result);
     } catch {
       setThreatModelResult(DEMO_THREAT_MODEL);
@@ -722,6 +746,14 @@ const VisualAnalysisUpload: React.FC<VisualAnalysisUploadProps> = ({
                           <AnimatePresence>
                             {threatModelResult && (
                               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 pt-6 border-t border-violet-200 space-y-4">
+                                {/* Disclaimer about AI-generated CLI commands */}
+                                <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                                  <svg className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                                  <span>
+                                    <strong>Review before running:</strong> Resource names in CLI commands (table names, trail names, role/user names) are AI-inferred from the incident description. Verify they match your actual AWS resources. Root MFA must be enabled via the AWS Console, not CLI.
+                                    {!awsAccountId && " Account IDs in ARNs will be placeholders — connect your AWS account for real IDs."}
+                                  </span>
+                                </div>
                                 {threatModelResult.summary?.stride_coverage && (
                                   <div className="flex items-center gap-3 flex-wrap mb-5">
                                     <span className="text-sm font-semibold text-slate-600">STRIDE</span>

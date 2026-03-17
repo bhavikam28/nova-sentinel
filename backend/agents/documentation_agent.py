@@ -8,6 +8,7 @@ For browser-based posting to these platforms, see NovaActAgent
 in nova_act_agent.py which uses the Nova Act SDK for browser automation.
 """
 import json
+import re
 import time
 from typing import Dict, Any, Optional
 from services.bedrock_service import BedrockService
@@ -80,46 +81,54 @@ class DocumentationAgent:
         analysis_time = int((time.time() - start_time) * 1000)
         logger.info(f"Documentation generation complete in {analysis_time}ms")
         
-        try:
-            # Attempt to parse JSON from the response
-            json_start = documentation_text.find('{')
-            json_end = documentation_text.rfind('}') + 1
-            if json_start != -1 and json_end != -1:
-                json_str = documentation_text[json_start:json_end]
-                parsed_docs = json.loads(json_str)
-                return {
-                    "documentation": parsed_docs,
-                    "raw_response": documentation_text,
-                    "analysis_time_ms": analysis_time,
-                    "model_used": self.bedrock.settings.nova_lite_model_id,  # Using Nova 2 Lite for content generation
-                    "platforms": ["jira", "slack", "confluence"]
-                }
-            else:
-                logger.warning("No JSON found in documentation response, returning raw text.")
-                return {
-                    "documentation": {
-                        "jira": {"title": "Security Incident", "description": documentation_text},
-                        "slack": {"message": documentation_text},
-                        "confluence": {"content": documentation_text}
-                    },
-                    "raw_response": documentation_text,
-                    "analysis_time_ms": analysis_time,
-                    "model_used": self.bedrock.settings.nova_lite_model_id,  # Using Nova 2 Lite for content generation
-                    "platforms": ["jira", "slack", "confluence"]
-                }
-        except json.JSONDecodeError:
-            logger.error("Failed to parse JSON from documentation response.")
+        def _extract_and_parse(text: str) -> Optional[Dict[str, Any]]:
+            """Try to extract and parse JSON with trailing-comma cleanup."""
+            # Prefer fenced code block
+            for fence in ("```json", "```"):
+                if fence in text:
+                    s = text.find(fence) + len(fence)
+                    e = text.find("```", s)
+                    if e > s:
+                        candidate = text[s:e].strip()
+                        if candidate.startswith("{"):
+                            for attempt in (candidate, re.sub(r',\s*([}\]])', r'\1', candidate)):
+                                try:
+                                    return json.loads(attempt)
+                                except json.JSONDecodeError:
+                                    pass
+            # Fallback: largest { … } block
+            j0 = documentation_text.find('{')
+            j1 = documentation_text.rfind('}') + 1
+            if j0 >= 0 and j1 > j0:
+                raw = documentation_text[j0:j1]
+                for attempt in (raw, re.sub(r',\s*([}\]])', r'\1', raw)):
+                    try:
+                        return json.loads(attempt)
+                    except json.JSONDecodeError:
+                        pass
+            return None
+
+        parsed_docs = _extract_and_parse(documentation_text)
+        if parsed_docs:
             return {
-                "documentation": {
-                    "jira": {"title": "Security Incident", "description": documentation_text},
-                    "slack": {"message": documentation_text},
-                    "confluence": {"content": documentation_text}
-                },
+                "documentation": parsed_docs,
                 "raw_response": documentation_text,
                 "analysis_time_ms": analysis_time,
                 "model_used": self.bedrock.settings.nova_lite_model_id,
                 "platforms": ["jira", "slack", "confluence"]
             }
+        logger.warning("Could not parse documentation JSON — returning raw text as fallback.")
+        return {
+            "documentation": {
+                "jira": {"title": "Security Incident", "description": documentation_text},
+                "slack": {"message": documentation_text},
+                "confluence": {"content": documentation_text}
+            },
+            "raw_response": documentation_text,
+            "analysis_time_ms": analysis_time,
+            "model_used": self.bedrock.settings.nova_lite_model_id,
+            "platforms": ["jira", "slack", "confluence"]
+        }
     
     async def generate_jira_ticket(
         self,

@@ -59,6 +59,8 @@ interface RemediationPlanProps {
   executing?: boolean;
   /** Navigate to another feature (e.g. AI Compliance when AI incident) */
   onNavigateToFeature?: (featureId: string) => void;
+  /** Called when user clicks "Regenerate Plan" on the blank state */
+  onGeneratePlan?: () => void;
 }
 
 type StepStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -79,7 +81,7 @@ const AI_INCIDENT_STEPS = [
 
 const RemediationPlan: React.FC<RemediationPlanProps> = ({
   plan, incidentId, incidentType = 'Security Incident', rootCause = 'Unknown', affectedResources = [], demoMode = false,
-  onApprove, onExecute, executing = false, onNavigateToFeature
+  onApprove, onExecute, executing = false, onNavigateToFeature, onGeneratePlan
 }) => {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const [approved, setApproved] = useState(false);
@@ -144,10 +146,56 @@ const RemediationPlan: React.FC<RemediationPlanProps> = ({
   const progressPct = allSteps.length > 0 ? Math.round((completedCount / allSteps.length) * 100) : 0;
 
   if (!plan || steps.length === 0) {
+    // Check if the backend returned raw prose when JSON parsing failed
+    const rawPlan: string | undefined = plan?.raw_plan || plan?.plan?.raw_plan;
+    const parseWarning: string | undefined = plan?.parse_warning || plan?.plan?.parse_warning;
+
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-        <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <p className="text-sm text-slate-500">No remediation plan available yet.</p>
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-bold text-slate-700">Remediation Engine</span>
+          </div>
+          {onGeneratePlan && (
+            <button
+              onClick={onGeneratePlan}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Regenerate Plan
+            </button>
+          )}
+        </div>
+        {rawPlan ? (
+          <div className="p-6 space-y-3">
+            {parseWarning && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                <span>JSON parsing failed — showing raw AI output below. Click "Regenerate Plan" to retry.</span>
+              </div>
+            )}
+            <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">AI-Generated Remediation Guidance</p>
+            <pre className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto font-mono">
+              {rawPlan}
+            </pre>
+          </div>
+        ) : (
+          <div className="p-12 text-center">
+            <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-slate-700 mb-1">No remediation plan yet</p>
+            <p className="text-xs text-slate-500 mb-4">The plan is generated automatically after timeline analysis. If it is missing, click below to generate it.</p>
+            {onGeneratePlan && (
+              <button
+                onClick={onGeneratePlan}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Generate Remediation Plan
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }

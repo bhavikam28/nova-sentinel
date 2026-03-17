@@ -114,3 +114,30 @@ export const maskAccountId = (accountId: string | null | undefined): string => {
   if (!accountId || accountId.length < 4) return '••••';
   return `••••${accountId.slice(-4)}`;
 };
+
+/**
+ * Mask any 12-digit AWS account number found inside a string (e.g. inside ARNs).
+ * arn:aws:iam::155610685000:root → arn:aws:iam::••••5000:root
+ * Also shortens long ARNs for readability.
+ */
+export const maskAccountInText = (text: string | null | undefined): string => {
+  if (!text) return '';
+  // Replace 12-digit numbers that appear in ARN account positions (::ACCOUNT: pattern)
+  return text.replace(/\b(\d{12})\b/g, (match) => `••••${match.slice(-4)}`);
+};
+
+/**
+ * Shorten a long ARN for display. Keeps service and resource name, masks account.
+ * arn:aws:iam::155610685000:user/secops-lens-pro → IAM user/secops-lens-pro
+ */
+export const shortenArn = (arn: string | null | undefined): string => {
+  if (!arn) return '';
+  if (!arn.startsWith('arn:')) return maskAccountInText(arn);
+  const parts = arn.split(':');
+  // parts: ['arn', 'aws', service, region, accountId, resource...]
+  if (parts.length < 6) return maskAccountInText(arn);
+  const service = parts[2] || '';
+  const resource = parts.slice(5).join(':');
+  const masked = `${service.toUpperCase()} ${resource}`.trim();
+  return masked.length > 60 ? masked.slice(0, 57) + '…' : masked;
+};

@@ -266,13 +266,40 @@ class TemporalAgent:
             
             # If no code block, try to find JSON object
             if not json_str:
-                start_idx = response_text.find('{')
-                end_idx = response_text.rfind('}') + 1
-                
-                if start_idx >= 0 and end_idx > start_idx:
-                    json_str = response_text[start_idx:end_idx]
-                    logger.info("Found JSON object in response text")
-                else:
+                # Find the outermost { ... } that contains 'timeline' key (skip smaller objects)
+                best_start = -1
+                best_end = -1
+                idx = 0
+                while idx < len(response_text):
+                    s = response_text.find('{', idx)
+                    if s == -1:
+                        break
+                    # Walk forward to find matching closing brace
+                    depth = 0
+                    for j in range(s, len(response_text)):
+                        if response_text[j] == '{':
+                            depth += 1
+                        elif response_text[j] == '}':
+                            depth -= 1
+                            if depth == 0:
+                                candidate = response_text[s:j+1]
+                                if '"timeline"' in candidate or "'timeline'" in candidate:
+                                    best_start, best_end = s, j + 1
+                                idx = j + 1
+                                break
+                    else:
+                        break
+                if best_start >= 0:
+                    json_str = response_text[best_start:best_end]
+                    logger.info("Found JSON object with 'timeline' key in response text")
+                elif response_text.find('{') >= 0:
+                    # Fallback: take outermost { ... }
+                    start_idx = response_text.find('{')
+                    end_idx = response_text.rfind('}') + 1
+                    if end_idx > start_idx:
+                        json_str = response_text[start_idx:end_idx]
+                        logger.info("Fallback: using outermost JSON object")
+                if not json_str:
                     logger.warning("No JSON object found in response")
                     raise ValueError("No JSON found in response")
             
@@ -504,6 +531,24 @@ class TemporalAgent:
                 elif any(kw in action_lower for kw in medium_keywords):
                     severity = SeverityLevel.MEDIUM
                 
+                # Derive a context-aware significance string without AI
+                action_lower_sig = action.lower()
+                if 'putuserpolicy' in action_lower_sig or 'putrolepolicy' in action_lower_sig:
+                    sig = f"IAM policy modification detected — review for privilege escalation."
+                elif 'createpolicyversion' in action_lower_sig or 'attachrolepolicy' in action_lower_sig:
+                    sig = f"IAM policy update on {resource.split('/')[-1] if resource else 'resource'} — verify authorization."
+                elif 'assumerole' in action_lower_sig:
+                    sig = f"Role assumption — verify the requesting principal had legitimate need."
+                elif 'consolelogin' in action_lower_sig:
+                    sig = f"Console login by {actor.split('/')[-1] if actor else 'principal'} — confirm expected access."
+                elif 'createuser' in action_lower_sig or 'deleteuser' in action_lower_sig:
+                    sig = f"IAM user lifecycle event — confirm this was an authorized operation."
+                elif 'putobject' in action_lower_sig or 'getobject' in action_lower_sig:
+                    sig = f"S3 data access event — verify data handling is compliant."
+                elif 'invokemodelwithresponsestream' in action_lower_sig or 'invokemodel' in action_lower_sig:
+                    sig = f"Bedrock model invocation — confirm authorized AI usage."
+                else:
+                    sig = f"Security-relevant event: {action} in {event.get('awsRegion', 'your AWS account')}."
                 # Create TimelineEvent
                 timeline_event = TimelineEvent(
                     timestamp=timestamp,
@@ -511,7 +556,7 @@ class TemporalAgent:
                     action=action,
                     resource=resource,
                     details=f"Event from {event.get('awsRegion', 'unknown')} region",
-                    significance=f"CloudTrail event: {action}",
+                    significance=sig,
                     severity=severity
                 )
                 

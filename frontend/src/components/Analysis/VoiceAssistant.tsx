@@ -57,30 +57,75 @@ function buildBriefMeNarrative(ctx: any): string {
   };
 
   const friendlyActor = (a: string): string => {
+    if (!a) return 'someone';
     if (a.includes('@')) return a.split('@')[0];
     if (a.includes('contractor')) return 'a contractor';
     if (a.includes('attacker') || a.includes('session')) return 'someone';
     if (a.includes('admin-session') || a.includes('admin_session')) return 'an admin';
-    if (a.includes('amazonaws')) return 'GuardDuty';
-    return a;
+    if (a.includes('amazonaws')) return 'an AWS service';
+    // Clean IAMUser: and AssumedRole: prefixes
+    if (/^IAMUser:/i.test(a)) return a.replace(/^IAMUser:/i, '');
+    if (/^AssumedRole:/i.test(a)) return a.replace(/^AssumedRole:/i, 'role ');
+    if (a.toLowerCase() === 'root') return 'the root account';
+    // Short usernames (no colons/slashes) are readable as-is
+    if (!/[:/]/.test(a) && a.length < 30) return a;
+    // ARN → extract last segment
+    const last = a.split(/[/:]/).pop();
+    return last || a;
   };
 
   const storyBits: string[] = [];
   let prevTs = '';
 
+  /** Resource name cleaner — hides UUIDs and Bedrock session IDs */
+  const friendlyResource = (r: string): string => {
+    if (!r) return 'your resources';
+    // UUID pattern — Bedrock session IDs
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.trim())) {
+      return 'a Bedrock session';
+    }
+    // ARN → extract resource name
+    if (r.startsWith('arn:')) {
+      const last = r.split(/[/:*]/).filter(Boolean).pop();
+      return last || 'an AWS resource';
+    }
+    // "IAM user X policy Y" → "the policy for user X"
+    const policyMatch = r.match(/IAM user ([^\s]+) policy ([^\s]+)/i);
+    if (policyMatch) return `policy ${policyMatch[2]} for user ${policyMatch[1]}`;
+    const match = r.match(/:?\s*([a-zA-Z0-9_-]+)$/);
+    return match ? match[1] : r;
+  };
+
   const actionStories: Record<string, (_actor: string, res: string) => string> = {
-    CreateRole: (_actor, r) => `created a role called ${friendlyName(r)} — which may have been overly permissive`,
-    AttachRolePolicy: (_actor, _res) => `attached full admin access to that role`,
-    AuthorizeSecurityGroupIngress: (_actor, _res) => `opened SSH to the internet — which could be a misconfig or risk`,
-    DescribeInstances: (_actor, _res) => `listed your EC2 instances`,
-    RunInstances: (_actor, _res) => `launched GPU instances — possibly for crypto mining or legitimate workloads`,
-    GuardDutyFinding: (_actor, _res) => `detected activity that looks like crypto mining`,
-    GetObject: (_actor, _res) => `accessed sensitive data from your bucket`,
-    ListBucket: (_actor, _res) => `listed bucket contents`,
-    AssumeRole: (_actor, _res) => `assumed the admin role`,
-    CreateUser: (_actor, _res) => `created a new user — possibly for persistence`,
-    AttachUserPolicy: (_actor, _res) => `gave that user full admin access`,
-    ConsoleLogin: (_actor, _res) => `logged into the console`,
+    // IAM / auth
+    CreateRole:                   (_a, r) => `created a role called ${friendlyResource(r)} — which may have been overly permissive`,
+    AttachRolePolicy:             (_a, _r) => `attached full admin access to that role`,
+    AttachUserPolicy:             (_a, _r) => `granted admin access to a user`,
+    PutUserPolicy:                (_a, r) => `updated an inline policy (${friendlyResource(r)})`,
+    DeleteUserPolicy:             (_a, r) => `removed an inline policy (${friendlyResource(r)})`,
+    CreatePolicyVersion:          (_a, r) => `created a new version of ${friendlyResource(r)}`,
+    DeletePolicyVersion:          (_a, r) => `deleted an old version of ${friendlyResource(r)}`,
+    CreateUser:                   (_a, _r) => `created a new IAM user`,
+    AssumeRole:                   (_a, _r) => `assumed a privileged role`,
+    // Console / sessions
+    ConsoleLogin:                 (_a, _r) => `logged into the AWS Console`,
+    StartEnvironment:             (_a, _r) => `started a Bedrock development environment`,
+    StopEnvironment:              (_a, _r) => `stopped a Bedrock development environment`,
+    // Access keys / credentials
+    ListAccessKeys:               (_a, _r) => `reviewed access key metadata — a reconnaissance or audit step`,
+    CreateAccessKey:              (_a, _r) => `created a new access key — watch for persistent credential creation`,
+    DeleteAccessKey:              (_a, _r) => `deleted an access key`,
+    UpdateAccessKey:              (_a, _r) => `changed the status of an access key`,
+    // Network
+    AuthorizeSecurityGroupIngress:(_a, _r) => `opened a port to the internet — possible misconfiguration`,
+    // EC2 / compute
+    DescribeInstances:            (_a, _r) => `listed EC2 instances`,
+    RunInstances:                 (_a, _r) => `launched compute instances — possible crypto-mining or legitimate workload`,
+    // S3 / data
+    GetObject:                    (_a, _r) => `accessed data from a bucket`,
+    ListBucket:                   (_a, _r) => `listed bucket contents`,
+    // GuardDuty
+    GuardDutyFinding:             (_a, _r) => `detected suspicious activity`,
   };
 
   const disclaimer = "Quick note: This is based on CloudTrail data — it could be an incident or a misconfiguration. Always verify before acting. ";
@@ -94,15 +139,16 @@ function buildBriefMeNarrative(ctx: any): string {
     const e = eventsToUse[i];
     const actor = friendlyActor(e.actor || 'someone');
     const resource = e.resource || '';
-    const resName = friendlyName(resource);
     const storyteller = actionStories[e.action || ''];
-    const story = storyteller
+    // IMPORTANT: storyteller returns the predicate only (e.g. "logged into the console")
+    // The default must also return predicate only — NOT include actor again
+    const predicate = storyteller
       ? storyteller(actor, resource)
-      : `${actor} did something with ${resName || 'your resources'}`;
+      : `performed ${e.action || 'an action'} on ${friendlyResource(resource)}`;
 
     const connector = i === 0 ? `So here's what the timeline shows. At ${formatTime(e.timestamp)}` : timeDiff(prevTs, e.timestamp);
     prevTs = e.timestamp || prevTs;
-    storyBits.push(`${connector}, ${actor} ${story}.`);
+    storyBits.push(`${connector}, ${actor} ${predicate}.`);
   }
 
   let rootCause = timeline.root_cause || "something may have gone wrong.";
@@ -110,14 +156,25 @@ function buildBriefMeNarrative(ctx: any): string {
     .replace(/by an? attacker/g, 'by someone — possibly external')
     .replace(/the attacker/g, 'someone')
     .replace(/IAM role with excessive privileges \(AdministratorAccess\) was created for a contractor and later assumed by[^.]+/gi, 'an overly permissive role was created for a contractor and later used by someone — possibly external');
-  let topRemediation = steps.length > 0 ? steps[0]?.action : 'check the remediation plan';
-  topRemediation = topRemediation
-    .replace(/^Revoke IAM role session/i, 'revoke that role session')
-    .replace(/^Terminate suspicious EC2 instances/i, 'terminate those instances')
-    .replace(/^Disable .+ access keys/i, 'disable those access keys');
-  topRemediation = topRemediation.charAt(0).toLowerCase() + topRemediation.slice(1);
 
-  const closing = `Bottom line? The analysis suggests ${rootCause} You may want to ${topRemediation}. Head to the Remediation tab for the full playbook.`;
+  // Determine appropriate closing based on findings
+  const allLow = !timeline.events?.some((e: any) => e.severity === 'CRITICAL' || e.severity === 'HIGH');
+  const noThreat = /no security threats|routine/i.test(rootCause);
+  let closingAction: string;
+  if (noThreat || allLow) {
+    closingAction = 'review the findings and ensure root account usage is reduced in favour of IAM users.';
+  } else if (steps.length > 0) {
+    let topRemediation = steps[0]?.action || 'check the remediation plan';
+    topRemediation = topRemediation
+      .replace(/^Revoke IAM role session/i, 'revoke that role session')
+      .replace(/^Terminate suspicious EC2 instances/i, 'terminate those instances')
+      .replace(/^Disable .+ access keys/i, 'disable those access keys');
+    closingAction = topRemediation.charAt(0).toLowerCase() + topRemediation.slice(1) + '. Head to the Remediation tab for the full playbook.';
+  } else {
+    closingAction = 'check the Remediation tab for the full playbook.';
+  }
+
+  const closing = `Bottom line? The analysis says: ${rootCause} You may want to ${closingAction}`;
 
   return [disclaimer, ...storyBits, closing].join(' ').replace(/\s+/g, ' ').trim();
 }

@@ -5,7 +5,7 @@ wolfir needs the following permissions for full functionality. All permissions a
 | Permission | Purpose | When Needed |
 |------------|---------|-------------|
 | `cloudtrail:LookupEvents`, `ListTrails` | Fetch and verify CloudTrail events | Real AWS analysis, Test Connection |
-| `bedrock:InvokeModel`, `ListFoundationModels`, `ListGuardrails` | Nova AI pipeline, guardrails audit | All analysis |
+| `bedrock:InvokeModel`, `Converse`, `ListFoundationModels`, `ListGuardrails`, `ApplyGuardrail` | Nova AI pipeline, guardrails | All analysis |
 | `dynamodb:PutItem/GetItem/Query/Scan/UpdateItem/DescribeTable/CreateTable` | Cross-incident memory | After each analysis |
 | `cloudformation:ListChangeSets/DescribeChangeSet/ListStacks/DescribeStacks` | ChangeSet Analysis tab | Pre-deployment review |
 | `iam:ListUsers/ListRoles/ListAccessKeys/SimulatePrincipalPolicy` | Blast Radius Simulator, IAM audit | Incident analysis |
@@ -37,8 +37,14 @@ wolfir needs the following permissions for full functionality. All permissions a
             "Action": [
                 "bedrock:InvokeModel",
                 "bedrock:InvokeModelWithResponseStream",
+                "bedrock:Converse",
+                "bedrock:ConverseStream",
                 "bedrock:ListFoundationModels",
-                "bedrock:ListGuardrails"
+                "bedrock:ListGuardrails",
+                "bedrock:ApplyGuardrail",
+                "config:SelectResourceConfig",
+                "config:DescribeConfigurationRecorders",
+                "config:DescribeConfigurationRecorderStatus"
             ],
             "Resource": "*"
         },

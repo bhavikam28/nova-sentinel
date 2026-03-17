@@ -37,7 +37,7 @@ import BlastRadiusSimulator from './components/Analysis/BlastRadiusSimulator';
 import CostImpact from './components/Analysis/CostImpact';
 import SecurityPostureDashboard from './components/Analysis/SecurityPostureDashboard';
 import ReportExport from './components/Analysis/ReportExport';
-import { demoAPI, orchestrationAPI, visualAPI, documentationAPI, authAPI, incidentHistoryAPI, healthCheck } from './services/api';
+import { demoAPI, orchestrationAPI, visualAPI, documentationAPI, authAPI, incidentHistoryAPI, healthCheck, remediationAPI } from './services/api';
 import type { AnalysisResponse, DemoScenario, OrchestrationResponse } from './types/incident';
 import { formatAnalysisTime, formatLastAnalyzed, maskAccountId } from './utils/formatting';
 import { hasAwsServicePrincipalInTimeline } from './utils/awsServiceDetection';
@@ -67,6 +67,29 @@ import {
 } from './components/Analysis/SecurityHealthCheck';
 
 type AppMode = 'landing' | 'login' | 'demo' | 'console';
+
+function RemediationEmptyState({ hasTimeline, onGenerate, loading }: { hasTimeline: boolean; onGenerate: () => void; loading: boolean }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+      <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+      <p className="text-sm font-semibold text-slate-700 mb-1">No remediation plan yet</p>
+      {hasTimeline ? (
+        <>
+          <p className="text-xs text-slate-500 mb-4">Timeline analysis is complete. Generate a remediation plan now.</p>
+          <button
+            onClick={onGenerate}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white"
+          >
+            {loading ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block" /> Generating…</> : 'Generate Remediation Plan'}
+          </button>
+        </>
+      ) : (
+        <p className="text-xs text-slate-500">Run a threat investigation to generate a remediation plan.</p>
+      )}
+    </div>
+  );
+}
 
 function App() {
   const [mode, setMode] = useState<AppMode>('landing');
@@ -297,6 +320,7 @@ function App() {
 
       if (result.results.remediation_plan) {
         setRemediationPlan(result.results.remediation_plan);
+        try { localStorage.setItem('wolfir_remediation_plan', JSON.stringify(result.results.remediation_plan)); } catch { /* storage full */ }
       }
 
       if (result.results.timeline) {
@@ -352,6 +376,7 @@ function App() {
 
       if (result.results?.remediation_plan) {
         setRemediationPlan(result.results.remediation_plan);
+        try { localStorage.setItem('wolfir_remediation_plan', JSON.stringify(result.results.remediation_plan)); } catch { /* storage full */ }
       }
 
       const tl = result.results?.timeline;
@@ -687,6 +712,38 @@ function App() {
               loading={loading}
               healthCheckLoading={healthCheckLoading}
             />
+
+            {/* Demo Scenarios — available in real AWS mode too for simulation/testing */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Play className="w-4 h-4 text-violet-500" />
+                    Demo Simulations
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Explore pre-computed threat scenarios with full pipeline results — no AWS account needed for these.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4">
+                <ScenarioPicker
+                  scenarios={scenarios}
+                  onSelectScenario={(id) => {
+                    // Switch to demo mode to play the scenario
+                    setMode('demo');
+                    handleSelectScenario(id);
+                  }}
+                  onStartSimulation={(id) => {
+                    setMode('demo');
+                    setSimulationScenarioId(id);
+                  }}
+                  loading={loading}
+                  useFullAI={useFullAI}
+                  onUseFullAIChange={setUseFullAI}
+                />
+              </div>
+            </div>
           </div>
         );
       }
@@ -1037,6 +1094,21 @@ function App() {
             incidentType={orchestrationResult?.metadata?.incident_type || analysisResult?.timeline?.attack_pattern || 'Security Incident'}
             rootCause={analysisResult?.timeline?.root_cause || orchestrationResult?.results?.timeline?.root_cause || 'Unknown'}
             onNavigateToFeature={setActiveFeature}
+            onGeneratePlan={async () => {
+              const tl = analysisResult?.timeline || orchestrationResult?.results?.timeline;
+              if (!tl) return;
+              setLoading(true);
+              setError(null);
+              try {
+                const plan = await remediationAPI.generatePlan(tl);
+                setRemediationPlan(plan);
+                try { localStorage.setItem('wolfir_remediation_plan', JSON.stringify(plan)); } catch { /* storage full */ }
+              } catch (e: any) {
+                setError(e?.message || 'Failed to generate remediation plan');
+              } finally {
+                setLoading(false);
+              }
+            }}
             affectedResources={(() => {
               const tl = analysisResult?.timeline || orchestrationResult?.results?.timeline;
               const blast = tl?.blast_radius;
@@ -1077,10 +1149,25 @@ function App() {
             }}
           />
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">Remediation plan not yet generated.</p>
-          </div>
+          <RemediationEmptyState
+            hasTimeline={!!(analysisResult?.timeline)}
+            onGenerate={async () => {
+              const tl = analysisResult?.timeline;
+              if (!tl) return;
+              setLoading(true);
+              setError(null);
+              try {
+                const plan = await remediationAPI.generatePlan(tl);
+                setRemediationPlan(plan);
+                try { localStorage.setItem('wolfir_remediation_plan', JSON.stringify(plan)); } catch { /* storage full */ }
+              } catch (e: any) {
+                setError(e?.message || 'Failed to generate remediation plan');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            loading={loading}
+          />
         );
 
       case 'agentic-query':
@@ -1102,6 +1189,7 @@ function App() {
             timeline={analysisResult?.timeline}
             orchestrationResult={orchestrationResult}
             onNavigateToRemediation={() => setActiveFeature('remediation')}
+            awsAccountId={awsAccountId}
             onUpload={async (file) => {
               try {
                 setLoading(true);

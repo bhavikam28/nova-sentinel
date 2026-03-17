@@ -268,14 +268,16 @@ aws iam enable-mfa-device --user-name <USERNAME> --serial-number <MFA_ARN> --aut
     },
     {
       id: 'cis-5', framework: 'CIS', controlId: 'CIS 1.4', title: 'Ensure root user does not have access keys',
-      status: events.some(e => /root|access.?key/i.test(e.resource || '')) ? 'violated' : 'compliant',
+      // Console login from root ≠ having access keys — CloudTrail cannot confirm access key existence.
+      // Mark at-risk when root is active (run aws iam get-account-summary to verify).
+      status: events.some(e => /root/i.test(e.actor || '')) ? 'at-risk' : 'compliant',
       severity: 'critical',
-      description: 'Root account access keys pose an extreme risk. If compromised, they grant full account access with no restrictions.',
+      description: 'Root account access keys pose an extreme risk. If compromised, they grant full account access with no restrictions. Note: CloudTrail cannot confirm whether root access keys exist — only whether root is actively used.',
       impact: 'Root access keys bypass all IAM policies and MFA. Compromise leads to total account takeover.',
-      remediation: 'Delete root access keys and use IAM users/roles instead. Enable MFA for root account.',
-      awsCli: 'aws iam delete-access-key --access-key-id <ACCESS_KEY_ID> --user-name root',
+      remediation: 'Run the CLI command below to check if root access keys exist. Delete any found. Enable MFA for root and stop using root for day-to-day operations.',
+      awsCli: 'aws iam get-account-summary --query "SummaryMap.AccountAccessKeysPresent"\n# Returns 0 = no root keys (good), 1 = root keys exist (delete immediately)\naws iam delete-access-key --access-key-id <ACCESS_KEY_ID> --user-name root',
       reference: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html',
-      mappingReason: events.some(e => /root|access.?key/i.test(e.resource || '')) ? 'Timeline contains root or access-key events → root credential controls apply.' : baselineMappingReason,
+      mappingReason: 'Root account is actively used for console login → verify that no programmatic access keys exist for root (CloudTrail alone cannot confirm this).',
     },
     {
       id: 'cis-6', framework: 'CIS', controlId: 'CIS 4.2', title: 'Ensure security group rules do not allow unrestricted ingress',
@@ -432,22 +434,26 @@ aws iam enable-mfa-device --user-name <USERNAME> --serial-number <MFA_ARN> --aut
   controls.push(
     // ── CIS additional controls ──
     { id: 'cis-7', framework: 'CIS', controlId: 'CIS 1.10', title: 'Ensure MFA is enabled for all IAM users with console access',
-      status: hasIAMIssue ? 'violated' : 'not_evaluated', severity: 'critical',
-      description: 'Multi-factor authentication adds a second layer of protection to IAM credentials. Without MFA, compromised passwords lead directly to account takeover.',
+      // CloudTrail does not expose MFA status in ConsoleLogin events — cannot confirm violation.
+      // Flag at-risk when IAM users are active (run the CLI check to confirm MFA enrollment).
+      status: hasIAMIssue ? 'at-risk' : 'not_evaluated', severity: 'critical',
+      description: 'Multi-factor authentication adds a second layer of protection to IAM credentials. Note: CloudTrail ConsoleLogin events do not expose whether MFA was used — run the CLI command to enumerate users without MFA devices.',
       impact: 'MFA missing is the #2 cause of cloud breaches. Attackers reuse leaked credentials from other services. A single stolen password gives full console access.',
-      remediation: 'Enable virtual MFA or hardware MFA for all IAM users. Enforce via IAM condition key "aws:MultiFactorAuthPresent".',
-      awsCli: 'aws iam list-users --query "Users[*].UserName" --output text | xargs -I{} aws iam list-mfa-devices --user-name {} --query "MFADevices"',
+      remediation: 'Run the CLI check to list users without MFA. Enable virtual MFA or hardware MFA for all users. Enforce via IAM condition key "aws:MultiFactorAuthPresent".',
+      awsCli: '# List all IAM users and their MFA enrollment status\naws iam generate-credential-report && aws iam get-credential-report --query "Content" --output text | base64 -d | grep -v ",true," | cut -d, -f1',
       reference: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa.html',
-      mappingReason: 'MFA enforcement is a universal baseline control across CIS, NIST, SOC 2, PCI-DSS, and HIPAA.' },
+      mappingReason: 'IAM activity detected in this incident → verify MFA is enforced for all users with console access (CloudTrail cannot confirm MFA status from events alone).' },
 
     { id: 'cis-8', framework: 'CIS', controlId: 'CIS 1.13', title: 'Ensure MFA is enabled for root account',
-      status: events.some(e => /root/i.test(e.actor || '')) ? 'violated' : 'not_evaluated', severity: 'critical',
-      description: 'Root account usage without MFA is an extreme risk. Root bypasses all IAM policies.',
-      impact: 'Compromised root credentials allow complete AWS account takeover with no recourse. All data, compute, and billing are at risk.',
-      remediation: 'Enable hardware MFA for root. Lock root credentials in a vault. Never use root for daily operations.',
-      awsCli: 'aws iam get-account-summary --query "SummaryMap.AccountMFAEnabled"',
+      // Root console login WITH MFA enabled still appears as ConsoleLogin — CloudTrail cannot confirm MFA status.
+      // Mark at-risk when root activity is detected; run the CLI check to confirm.
+      status: events.some(e => /root/i.test(e.actor || '')) ? 'at-risk' : 'not_evaluated', severity: 'critical',
+      description: 'Root account is actively used in this incident. Note: a ConsoleLogin event from root does not tell us whether MFA was required — an account can login as root with or without MFA and produce the same event. Run the CLI check to verify.',
+      impact: 'If root MFA is not enabled, compromised root credentials allow complete AWS account takeover with no recourse. All data, compute, and billing are at risk.',
+      remediation: 'Run the CLI check below. If AccountMFAEnabled returns 0, immediately enable hardware or virtual MFA for root. Lock root credentials. Stop using root for daily operations.',
+      awsCli: 'aws iam get-account-summary --query "SummaryMap.AccountMFAEnabled"\n# Returns 1 = MFA enabled (good), 0 = MFA not enabled (critical risk)',
       reference: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html',
-      mappingReason: 'Root MFA is CIS Level 1 — highest priority baseline control.' },
+      mappingReason: 'Root account is actively used for console login in this incident → verify MFA is enforced (CloudTrail cannot confirm MFA from the ConsoleLogin event alone).' },
 
     { id: 'cis-9', framework: 'CIS', controlId: 'CIS 2.1.2', title: 'Ensure S3 Bucket Policy blocks public access',
       status: hasDataAccess ? 'not_evaluated' : 'compliant', severity: 'high',
@@ -774,6 +780,18 @@ const ComplianceMapping: React.FC<ComplianceMappingProps> = ({ timeline, inciden
         >
           <Download className="w-3.5 h-3.5" /> Download Report
         </button>
+      </div>
+
+      {/* ── SCOPE DISCLAIMER ── */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+        <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠</span>
+        <div className="text-xs text-amber-900 leading-relaxed">
+          <span className="font-semibold">Scope note:</span>{' '}
+          Controls are mapped based on CloudTrail event patterns.{' '}
+          <span className="font-semibold">CIS 1.4, 1.10, 1.13</span> are marked <em>At Risk</em> (not Violated) because CloudTrail alone cannot confirm access key existence or MFA status — run the CLI commands in each control to verify.{' '}
+          <span className="font-semibold">PCI-DSS</span> applies only if your account is in scope for payment card processing.{' '}
+          <span className="font-semibold">HIPAA</span> applies only if your account stores or processes electronic Protected Health Information (ePHI).
+        </div>
       </div>
 
       {/* ── ROW 1: KPI STAT CARDS ── */}

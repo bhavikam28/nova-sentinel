@@ -205,13 +205,27 @@ async def analyze_from_cloudtrail(
             else:
                 formatted_events.append(event)
 
-        incident_label = f"Real AWS (last {days_back} days, {len(formatted_events)} events)"
         result = await orchestrator.plan_and_execute(
             events=formatted_events,
             diagram_data=None,
-            incident_type=incident_label,
+            incident_type="Real AWS CloudTrail Analysis",
             account_id=account_id or "demo-account",
         )
+
+        # Derive a meaningful incident_type from the timeline results for cross-incident memory
+        tl = result.get("results", {}).get("timeline", {}) or {}
+        attack_pattern = tl.get("attack_pattern", "") or ""
+        root_cause = tl.get("root_cause", "") or ""
+        if attack_pattern and attack_pattern.lower() not in ("n/a", "n/a - routine activity only", ""):
+            meaningful_type = attack_pattern[:80].rstrip(".")
+        elif "routine" in root_cause.lower() or "no security threats" in root_cause.lower():
+            meaningful_type = "Routine AWS Operations"
+        elif root_cause:
+            meaningful_type = root_cause[:80].rstrip(".")
+        else:
+            meaningful_type = f"Real AWS Analysis ({len(formatted_events)} events)"
+        result.setdefault("metadata", {})["incident_type"] = meaningful_type
+
         result["status"] = "analyzed"
         result["events_analyzed"] = len(formatted_events)
         result["time_range_days"] = days_back

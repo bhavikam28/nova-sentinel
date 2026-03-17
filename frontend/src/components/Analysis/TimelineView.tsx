@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, User, Server, AlertCircle, Brain, Zap, Clock, Copy, Check, ExternalLink } from 'lucide-react';
 import { IconTimeline } from '../ui/MinimalIcons';
 import type { Timeline, TimelineEvent } from '../../types/incident';
+import { maskAccountInText, shortenArn } from '../../utils/formatting';
 
 interface TimelineViewProps {
   timeline: Timeline;
@@ -27,7 +28,9 @@ function humanizeResource(resource: string | undefined): string {
   if (/Session\s+[\d-]+[a-z0-9]+/i.test(resource)) return 'Bedrock Session';
   if (/^unknown$/i.test(resource) || !resource.trim()) return 'Resource';
   if (/service-linked\s*channel/i.test(resource)) return 'Service-linked channel';
-  return resource;
+  // For ARNs, use the short form with masked account
+  if (resource.startsWith('arn:')) return shortenArn(resource);
+  return maskAccountInText(resource);
 }
 
 /** Map AWS/CloudTrail actions to MITRE ATT&CK phase labels */
@@ -153,7 +156,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline, onNavigateToExpor
     } catch { return timestamp.toString(); }
   };
 
-  /** Enrich generic events with context-aware significance (IP, instance ID, percentile-style context) */
+  /** Enrich generic events with context-aware significance using ONLY real event data — no fabricated IDs or IPs */
   const getEnrichedSignificance = (event: TimelineEvent) => {
     if (event.significance && event.significance.trim()) return event.significance;
     if (event.details && event.details.trim()) return event.details;
@@ -161,28 +164,51 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline, onNavigateToExpor
     const resource = event.resource || '';
     const actor = event.actor || '';
     const timeStr = formatTimestamp(event.timestamp);
+
+    // Only use IDs/IPs that are actually present in the event data
     if (/runinstances|startinstances|createinstance/i.test(action)) {
-      const instanceId = resource.match(/i-[a-z0-9]+/i)?.[0] || 'i-0abc123';
-      return `EC2 instance ${instanceId} launched at ${timeStr}. Unusual for this account — first GPU launch in 30 days (99th percentile).`;
+      const instanceId = resource.match(/i-[a-f0-9]{8,17}/i)?.[0] || resource || null;
+      return instanceId
+        ? `EC2 instance ${instanceId} launched at ${timeStr}. Review for unauthorized compute usage.`
+        : `EC2 instance launched at ${timeStr}. Review for unauthorized compute usage.`;
     }
     if (/getobject|download|copyobject/i.test(action)) {
-      const ip = actor.includes('198.') ? '198.51.100.100' : actor.includes('195.') ? '195.2.3.4' : 'external IP';
-      return `Data accessed from ${ip} at ${timeStr} — first access from this source in 90 days.`;
+      // Only show IP if it's actually in the actor/resource field
+      const ipMatch = (actor + resource).match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+      return ipMatch
+        ? `Data accessed from ${ipMatch[0]} at ${timeStr}.`
+        : `S3 data access at ${timeStr} — verify this access was authorized.`;
     }
     if (/assumerole/i.test(action)) {
-      return `Role assumption at ${timeStr} — escalated from limited user to admin. Unusual for this principal.`;
+      const roleId = resource.match(/role\/([^\s/]+)/i)?.[1] || resource || null;
+      return roleId
+        ? `Role ${roleId} assumed at ${timeStr} — verify this assumption was expected.`
+        : `Role assumption at ${timeStr} — verify this was an expected principal.`;
     }
-    if (/authorizesecuritygroup|revoke.*ingress/i.test(action)) {
-      const sgId = resource.match(/sg-[a-z0-9]+/i)?.[0] || 'sg-abc123';
-      return `Security group ${sgId} modified at ${timeStr} — opened SSH (22) from 0.0.0.0/0. High risk.`;
+    if (/authorizesecuritygroup|revokesecuritygroup/i.test(action)) {
+      const sgId = resource.match(/sg-[a-f0-9]+/i)?.[0] || resource || null;
+      return sgId
+        ? `Security group ${sgId} modified at ${timeStr} — review ingress/egress rule changes.`
+        : `Security group modified at ${timeStr} — review rule changes for overly permissive access.`;
     }
-    if (/describeinstances|listbucket/i.test(action)) {
-      return `Reconnaissance at ${timeStr} — enumeration of resources. Common precursor to exploitation.`;
+    if (/describeinstances|listbucket|listusers|listroles/i.test(action)) {
+      return `Resource enumeration at ${timeStr} — this action can be a reconnaissance step.`;
     }
-    if (/createrole|attachrolepolicy/i.test(action)) {
-      return `IAM privilege change at ${timeStr} — AdministratorAccess attached. Enables full account control.`;
+    if (/createrole|attachrolepolicy|putuserpolicy/i.test(action)) {
+      const target = resource.split('/').pop() || resource;
+      return target
+        ? `IAM change on ${target} at ${timeStr} — review for privilege escalation risk.`
+        : `IAM privilege change at ${timeStr} — review attached policies.`;
     }
-    return `Security-relevant event in the incident chain.`;
+    if (/createtable|deletetable/i.test(action)) {
+      const table = resource.split('/').pop() || resource;
+      return `DynamoDB table ${table || ''} modified at ${timeStr}.`.trim();
+    }
+    if (/consolelogin/i.test(action)) {
+      const src = actor || 'unknown principal';
+      return `Console login by ${src} at ${timeStr}.`;
+    }
+    return `Security-relevant event recorded at ${timeStr}.`;
   };
 
   return (
@@ -366,9 +392,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({ timeline, onNavigateToExpor
                           </div>
                           <h4 className="text-sm font-bold text-slate-900 mb-1">{event.action}</h4>
                           <div className="flex items-center gap-3 text-[11px] text-slate-500 mb-2.5">
-                            <span className="flex items-center gap-1.5">
+                            <span className="flex items-center gap-1.5" title={event.actor}>
                               <User className="w-3.5 h-3.5 text-slate-400" />
-                              {event.actor}
+                              {event.actor?.startsWith('arn:') ? shortenArn(event.actor) : maskAccountInText(event.actor)}
                             </span>
                             <span className="flex items-center gap-1.5">
                               <Server className="w-3.5 h-3.5 text-slate-400" />

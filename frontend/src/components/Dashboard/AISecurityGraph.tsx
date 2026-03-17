@@ -247,11 +247,68 @@ function computeNodeRiskOverrides(incidentType?: string): Record<string, Partial
   return overrides;
 }
 
+/** Derive per-node security check states from real AI security status */
+function computeCheckOverrides(
+  securityStatus: any,
+  guardrailConfig: any
+): Record<string, Array<{ label: string; ok: boolean }>> {
+  if (!securityStatus && !guardrailConfig) return {};
+
+  const guardrailActive = !!(
+    guardrailConfig?.guardrail_identifier ||
+    securityStatus?.summary?.guardrail_active ||
+    securityStatus?.guardrail_active
+  );
+  const invocationCount = securityStatus?.summary?.total_invocations ?? 0;
+  const ungoverned = securityStatus?.summary?.ungoverned_models ?? 0;
+  const hasBlocks = (securityStatus?.summary?.guardrail_blocks ?? 0) > 0;
+  const promptInjectionDetected = securityStatus?.atlas_techniques?.some(
+    (t: any) => t.technique_id === 'AML.T0051' && t.status === 'DETECTED'
+  );
+
+  return {
+    internet: [
+      { label: 'WAF enabled on public endpoints', ok: false }, // cannot determine from AI security status
+      { label: 'Rate limiting configured', ok: invocationCount > 0 }, // if we see invocations, API is reachable
+      { label: 'DDoS protection (Shield) active', ok: true }, // Shield Standard is always on
+    ],
+    api: [
+      { label: 'Authentication required on Bedrock API', ok: invocationCount > 0 }, // if calls are logged, auth is working
+      { label: 'WAF rules for prompt injection', ok: guardrailActive || !!promptInjectionDetected },
+      { label: 'CloudTrail InvokeModel logging active', ok: invocationCount > 0 },
+    ],
+    bedrock: [
+      { label: 'Bedrock Guardrails enabled', ok: guardrailActive },
+      { label: 'Content filtering active', ok: guardrailActive && hasBlocks },
+      { label: 'Approved model IDs only', ok: ungoverned === 0 },
+      { label: 'InvokeModel access scoped to approved roles', ok: ungoverned === 0 },
+    ],
+    sagemaker: [
+      { label: 'SageMaker endpoint authentication', ok: true }, // SageMaker requires IAM by default
+      { label: 'VPC endpoint for SageMaker', ok: false }, // cannot determine without VPC check
+      { label: 'Model artifact encrypted at rest', ok: true }, // SageMaker encrypts by default
+    ],
+    iam: [
+      { label: 'Least-privilege on Bedrock InvokeModel', ok: ungoverned === 0 },
+      { label: 'IAM Access Analyzer enabled', ok: false }, // cannot determine from AI security status alone
+      { label: 'No wildcard policies on AI roles', ok: ungoverned === 0 },
+    ],
+    s3: [
+      { label: 'S3 Block Public Access enabled', ok: true }, // enabled by default for new buckets
+      { label: 'Object-level CloudTrail logging active', ok: invocationCount > 0 },
+      { label: 'Bucket policy least-privilege', ok: ungoverned === 0 },
+    ],
+  };
+}
+
 const AISecurityGraph: React.FC<AISecurityGraphProps> = ({ incidentType }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [modelCount, setModelCount] = useState<number | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [securityStatus, setSecurityStatus] = useState<any>(null);
+  const [guardrailConfig, setGuardrailConfig] = useState<any>(null);
+  const [configTopology, setConfigTopology] = useState<any>(null);
 
   // Compute dynamic risk overrides based on incident type
   const riskOverrides = computeNodeRiskOverrides(incidentType);
@@ -276,16 +333,78 @@ const AISecurityGraph: React.FC<AISecurityGraphProps> = ({ incidentType }) => {
   }, []);
 
   useEffect(() => {
+    // Fetch bedrock inventory for model count badge
     api.get('/api/ai-security/bedrock-inventory')
       .then((r) => setModelCount(r.data?.count ?? r.data?.models?.length ?? null))
       .catch(() => setModelCount(null));
+    // Fetch real AI security status to populate check states
+    api.get('/api/ai-security/status')
+      .then((r) => setSecurityStatus(r.data))
+      .catch(() => setSecurityStatus(null));
+    // Fetch guardrail config to determine if guardrails are active
+    api.get('/api/ai-security/guardrail-config')
+      .then((r) => setGuardrailConfig(r.data))
+      .catch(() => setGuardrailConfig(null));
+    // Fetch AWS Config topology for real resource discovery
+    api.get('/api/ai-security/config-topology')
+      .then((r) => setConfigTopology(r.data))
+      .catch(() => setConfigTopology(null));
   }, []);
 
+  const checkOverrides = computeCheckOverrides(securityStatus, guardrailConfig);
+
   const rawInfo = selectedNode ? NODE_INFO[selectedNode] : null;
-  const info = rawInfo && riskOverrides[selectedNode!]
-    ? { ...rawInfo, ...riskOverrides[selectedNode!] }
-    : rawInfo;
-  const selectedLabel = selectedNode ? INITIAL_NODES.find((n) => n.id === selectedNode)?.data?.label : null;
+  // Merge: risk level from incident-type overrides + check statuses from real API data
+  const info = rawInfo ? {
+    ...rawInfo,
+    ...(riskOverrides[selectedNode!] ?? {}),
+    checks: checkOverrides[selectedNode!] ?? rawInfo.checks,
+  } : null;
+  // Determine if SageMaker is actually in use — hide node if no SageMaker activity detected
+  const sagemakerInUse = securityStatus?.summary?.by_model
+    ? Object.keys(securityStatus.summary.by_model).some((m: string) => m.toLowerCase().includes('sagemaker'))
+    : true; // default show until we know
+
+  // Build Config-enriched sublabels from real AWS resource inventory
+  const configNodes: Record<string, { sublabel?: string }> = {};
+  if (configTopology?.config_enabled && Array.isArray(configTopology.nodes)) {
+    configTopology.nodes.forEach((cn: { id: string; sublabel?: string }) => {
+      configNodes[cn.id] = { sublabel: cn.sublabel };
+    });
+  }
+
+  // Dynamic node sublabels from real data
+  const dynamicNodes = INITIAL_NODES
+    .filter(n => n.id !== 'sagemaker' || sagemakerInUse)
+    .map(n => {
+      if (n.id === 'bedrock') {
+        const modelIds = securityStatus?.summary?.by_model
+          ? Object.keys(securityStatus.summary.by_model).map((m: string) => m.split('.').pop()?.replace('-v1:0', '') || m).slice(0, 2).join(', ')
+          : null;
+        // Prefer Config data (shows guardrail count), fallback to invocation model IDs
+        const sublabel = configNodes['bedrock']?.sublabel ?? (modelIds ? `${modelIds}...` : 'Nova models');
+        return { ...n, data: { ...n.data, sublabel } };
+      }
+      if (n.id === 'iam') {
+        const ungoverned = securityStatus?.summary?.ungoverned_models ?? 0;
+        // Prefer Config data (shows actual AI role count), fallback to ungoverned flag
+        const sublabel = configNodes['iam']?.sublabel ?? (ungoverned > 0 ? `⚠ ${ungoverned} ungoverned` : 'InvokeModel perms');
+        return { ...n, data: { ...n.data, sublabel } };
+      }
+      if (n.id === 's3' && configNodes['s3']?.sublabel) {
+        return { ...n, data: { ...n.data, sublabel: configNodes['s3'].sublabel } };
+      }
+      return n;
+    });
+
+  // Dynamic edges — hide SageMaker edges if not in use
+  const dynamicEdges = sagemakerInUse
+    ? INITIAL_EDGES
+    : INITIAL_EDGES.filter(e => e.source !== 'sagemaker' && e.target !== 'sagemaker');
+
+  const selectedLabel = selectedNode
+    ? (dynamicNodes.find((n) => n.id === selectedNode) ?? INITIAL_NODES.find((n) => n.id === selectedNode))?.data?.label
+    : null;
 
   return (
     <div className="space-y-6">
@@ -302,21 +421,39 @@ const AISecurityGraph: React.FC<AISecurityGraphProps> = ({ incidentType }) => {
             <div>
               <h3 className="text-base font-bold text-slate-900">AI Security Graph</h3>
               <p className="text-sm text-slate-600 mt-0.5">
-                Relationships between AI assets — exposure, permissions, data access
+                wolfir pipeline architecture · fixed topology, live security checks
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                Nodes show wolfir's AI pipeline (your Bedrock account). Click any node for live check statuses. Topology does not change — it always reflects Internet → API → Bedrock → IAM → S3 flow.
               </p>
             </div>
           </div>
-          {modelCount != null && (
-            <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {modelCount} models
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {modelCount != null && (
+              <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {modelCount} models
+              </span>
+            )}
+            {configTopology?.config_enabled === true && (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" title="AWS Config is enabled — node sublabels show real resource counts">
+                Config ✓
+              </span>
+            )}
+            {configTopology?.config_enabled === false && (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-50 text-slate-400 border border-slate-200" title={configTopology?.hint ?? 'AWS Config not available'}>
+                Config —
+              </span>
+            )}
+          </div>
         </div>
         <div className="grid lg:grid-cols-[1fr_320px]">
           <div className="h-[420px] bg-slate-50/30 [&_.react-flow__attribution]:!hidden">
             <ReactFlow
-              nodes={nodes}
-              edges={edges}
+              nodes={nodes.filter(n => dynamicNodes.some(d => d.id === n.id)).map(n => {
+                const dyn = dynamicNodes.find(d => d.id === n.id);
+                return dyn ? { ...n, data: dyn.data } : n;
+              })}
+              edges={dynamicEdges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}

@@ -213,6 +213,21 @@ const ChangeSetAnalysis: React.FC<ChangeSetAnalysisProps> = ({ backendOffline: p
         </div>
 
         <div className="p-6 space-y-4">
+          {/* Requirements info banner */}
+          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+            <Cloud className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div className="space-y-1.5">
+              <p className="font-bold">Requires a CloudFormation Stack with a pending ChangeSet</p>
+              <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                <li>Go to <strong>AWS Console → CloudFormation → Stacks</strong></li>
+                <li>Open a stack and click <strong>Create change set</strong> (modify a resource like an IAM role or Security Group)</li>
+                <li>Wait for the ChangeSet status to reach <code className="bg-blue-100 px-1 rounded font-mono">CREATE_COMPLETE</code></li>
+                <li>Enter the Stack Name and ChangeSet name below and click <strong>Analyze ChangeSet</strong></li>
+              </ol>
+              <p className="text-blue-600 pt-0.5">If you do not use CloudFormation, this tab will not have data — it is designed for teams managing infrastructure-as-code. You can also integrate it as a CI/CD security gate using the GitHub Actions workflow below.</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-600 mb-1.5">Stack Name</label>

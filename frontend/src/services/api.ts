@@ -59,6 +59,21 @@ export const analysisAPI = {
     });
     return response.data;
   },
+
+  /**
+   * Fetch AWS Organizations structure (real mode only)
+   */
+  getOrganizations: async (): Promise<{
+    has_org: boolean;
+    reason?: string;
+    org_id?: string;
+    master_account_id?: string;
+    accounts?: Array<{ id: string; name: string; email: string; status: string; joined_method: string }>;
+    ous?: Array<{ id: string; name: string }>;
+  }> => {
+    const response = await api.get('/api/analysis/organizations');
+    return response.data;
+  },
 };
 
 export const demoAPI = {
@@ -228,11 +243,19 @@ export const visualAPI = {
 };
 
 export const threatModelAPI = {
-  generate: async (description: string, visualAnalysis?: any, includeAiThreats = true): Promise<any> => {
+  generate: async (
+    description: string,
+    visualAnalysis?: any,
+    includeAiThreats = true,
+    accountId?: string,
+    realResources?: string[],
+  ): Promise<any> => {
     const response = await api.post('/api/visual/threat-model', {
       architecture_description: description,
       visual_analysis_json: visualAnalysis ? JSON.stringify(visualAnalysis) : null,
       include_ai_threats: includeAiThreats,
+      account_id: accountId || null,
+      real_resources: realResources ? JSON.stringify(realResources) : null,
     });
     return response.data;
   },
@@ -285,6 +308,25 @@ export const documentationAPI = {
 };
 
 export const remediationAPI = {
+  /**
+   * Generate a fresh remediation plan for an existing timeline.
+   * Used when the orchestration pipeline skipped remediation (e.g. due to an earlier failure).
+   */
+  generatePlan: async (
+    timeline: {
+      root_cause?: string;
+      attack_pattern?: string;
+      blast_radius?: string;
+      events?: any[];
+      [key: string]: any;
+    }
+  ): Promise<any> => {
+    const response = await api.post('/api/remediation/generate-plan', {
+      timeline,
+    });
+    return response.data;
+  },
+
   executeStep: async (
     stepId: string,
     incidentId: string,

@@ -51,6 +51,15 @@ const MITRE_MAP: Record<string, { name: string; desc: string; url: string }> = {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+interface LiveEvent {
+  action: string;
+  timestamp?: string;
+  significance?: string;
+  resource?: string;
+  actor?: string;
+  severity?: string;
+}
+
 interface NodeDef {
   id: string;
   x: number;
@@ -67,6 +76,8 @@ interface NodeDef {
   resourceId?: string;
   riskScore?: number; // 0–100, shown on critical/high nodes
   timestamp?: string; // ISO or display string for replay
+  liveEvents?: LiveEvent[]; // Matched real CloudTrail events for this node
+  nodeType?: 'actor' | 'resource' | 'narrative';
 }
 
 interface EdgeDef {
@@ -227,18 +238,30 @@ function humanizeLabel(s: string, maxLen = 24): string {
     return 'Bedrock Session';
   }
   if (/^Environment\s+/i.test(cleaned) && cleaned.length > 30) return 'Bedrock Environment';
+  // Bare UUID (Bedrock resource/session IDs like ff58df22-... or short tokens)
+  if (/^'?[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'?/.test(cleaned)) return 'Bedrock Resource';
+  if (/^'?[a-z0-9]{8,20}'?$/.test(cleaned)) return 'Bedrock Session';
+  if (/^'?clientReq/i.test(cleaned)) return 'Client Request';
   // IAM Policy: extract policy name
   const policyMatch = cleaned.match(/IAM\s*Policy[:\s]+([\w-]+)/i) || cleaned.match(/([A-Za-z][\w-]*BedrockAccess)/);
   if (policyMatch) return policyMatch[1].length <= maxLen ? policyMatch[1] : policyMatch[1].slice(0, maxLen - 2) + '…';
-  // ARN: extract last meaningful part (role/user name, instance ID, etc.)
+  // ARN: mask account number and extract last meaningful part
+  if (cleaned.startsWith('arn:')) {
+    const parts = cleaned.split(':');
+    const resource = parts.slice(5).join(':');
+    const last = resource.split('/').pop() || resource;
+    if (last && last.length > 3) return shortenFallback(last, maxLen);
+  }
   if (cleaned.includes(':') && cleaned.includes('/')) {
     const parts = cleaned.split(/[:/]/);
     const last = parts[parts.length - 1] || parts[parts.length - 2];
     if (last && last.length > 3) return shortenFallback(last, maxLen);
   }
+  // Mask any bare 12-digit account numbers
+  const noAccount = cleaned.replace(/\b\d{12}\b/g, '••••');
   // IP address — keep as is if short
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(cleaned)) return cleaned;
-  return shortenFallback(cleaned, maxLen);
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(noAccount)) return noAccount;
+  return shortenFallback(noAccount, maxLen);
 }
 
 function shortenFallback(s: string, maxLen: number): string {
@@ -430,16 +453,46 @@ function buildGraphFromTimeline(
       canonicalByGroup.set(h, r);
     }
   }
-  const uniqueResourceGroups = [...new Set(pureResourceIds.map(r => resourceToHumanized.get(r)!))];
+  // Sort actors by severity desc, then event count desc; cap at 4 to keep layout readable
+  const allActorIds = [...actorMap.keys()].sort((a, b) => {
+    const ra = severityRank(actorMap.get(a)!.severity);
+    const rb = severityRank(actorMap.get(b)!.severity);
+    if (rb !== ra) return rb - ra;
+    return actorMap.get(b)!.count - actorMap.get(a)!.count;
+  });
+  const actorIds = allActorIds.slice(0, 4);
 
-  const actorIds = [...actorMap.keys()];
+  // Sort resources to minimise edge crossings: order each resource group by the
+  // y-rank of the actor that has the most connections to it, so edges form
+  // roughly parallel lines instead of an X pattern.
+  const resourcePrimaryActorRank = new Map<string, number>();
+  edgeMap.forEach((_info, key) => {
+    const [actor, resource] = key.split('|||');
+    const group = resourceToHumanized.get(resource);
+    if (!group) return;
+    const actorRank = actorIds.indexOf(actor);
+    if (actorRank === -1) return;
+    const cur = resourcePrimaryActorRank.get(group);
+    if (cur === undefined || actorRank < cur) resourcePrimaryActorRank.set(group, actorRank);
+  });
+  const rawResourceGroups = [...new Set(pureResourceIds.map(r => resourceToHumanized.get(r)!))];
+  // Cap resources to 5 and sort to minimise crossings
+  const uniqueResourceGroups = rawResourceGroups
+    .sort((a, b) => {
+      const ra = resourcePrimaryActorRank.get(a) ?? 999;
+      const rb = resourcePrimaryActorRank.get(b) ?? 999;
+      return ra - rb;
+    })
+    .slice(0, 5);
+
   const leftCount = actorIds.length;
   const rightCount = uniqueResourceGroups.length;
   const maxCount = Math.max(leftCount, rightCount, 1);
 
   const SHIFT = includeNarrativeFrame ? 320 : 0;
   const graphWidth = 960 + SHIFT;
-  const graphHeight = Math.max(380, maxCount * 130 + 80);
+  // Increase vertical spacing to 170px per row (was 130) for cleaner separation
+  const graphHeight = Math.max(480, maxCount * 170 + 100);
   const leftX = includeNarrativeFrame ? 360 : 140;
   const rightX = includeNarrativeFrame ? graphWidth - 200 : graphWidth - 140;
   const centerX = (leftX + rightX) / 2;
@@ -528,6 +581,12 @@ function buildGraphFromTimeline(
     const actionsArr = [...info.actions];
     const mitreId = actionsArr.map(a => mitreMap.get(a)).find(Boolean);
 
+    // Collect actual timeline events for this actor for the rich detail panel
+    const actorLiveEvents: LiveEvent[] = timeline.events
+      .filter(ev => ev.actor === actor)
+      .slice(0, 10)
+      .map(ev => ({ action: ev.action, timestamp: ev.timestamp, significance: ev.significance, resource: ev.resource, severity: ev.severity }));
+
     nodes.push({
       id,
       x: leftX,
@@ -543,6 +602,8 @@ function buildGraphFromTimeline(
       mitreId,
       resourceId: actor.includes(':') ? actor : undefined,
       timestamp: info.firstTimestamp,
+      liveEvents: actorLiveEvents,
+      nodeType: 'actor',
     });
   });
 
@@ -569,6 +630,12 @@ function buildGraphFromTimeline(
     const mitreId = actionsArr.map(a => mitreMap.get(a)).find(Boolean);
     const detailSuffix = totalCount > 1 ? ` (${totalCount} related resources)` : '';
 
+    // Collect actual timeline events for this resource group
+    const resourceLiveEvents: LiveEvent[] = timeline.events
+      .filter(ev => resourcesInGroup.some(r => ev.resource === r || (ev.resource || '').includes(r)))
+      .slice(0, 10)
+      .map(ev => ({ action: ev.action, timestamp: ev.timestamp, significance: ev.significance, resource: ev.resource, actor: ev.actor, severity: ev.severity }));
+
     nodes.push({
       id,
       x: rightX,
@@ -584,6 +651,8 @@ function buildGraphFromTimeline(
       mitreId,
       resourceId: canonical.includes(':') ? canonical : undefined,
       timestamp: info.firstTimestamp,
+      liveEvents: resourceLiveEvents,
+      nodeType: 'resource',
     });
   });
 
@@ -871,11 +940,34 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
     return Math.max(320, Math.max(...NODES.map(n => n.y)) + 80);
   }, [NODES]);
 
+  // Auto-fit: whenever the node layout changes, pick the zoom level that best fits the container
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || svgWidth <= 0) return;
+    const containerW = el.offsetWidth || 800;
+    const containerH = el.offsetHeight || 440;
+    const fitZoom = Math.min((containerW - 32) / svgWidth, (containerH - 32) / svgHeight, 1.0);
+    const best = ZOOM_LEVELS.reduce((bi, z, i) =>
+      Math.abs(z - fitZoom) < Math.abs(ZOOM_LEVELS[bi] - fitZoom) ? i : bi
+    , 0);
+    setZoomIndex(best);
+    setPan({ x: 0, y: 0 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [svgWidth, svgHeight, NODES.length]);
+
   const showMinimap = zoom > 1 || pan.x !== 0 || pan.y !== 0;
   const zoomIn = () => setZoomIndex(prev => Math.min(prev + 1, ZOOM_LEVELS.length - 1));
   const zoomOut = () => setZoomIndex(prev => Math.max(prev - 1, 0));
   const resetZoom = () => {
-    setZoomIndex(3);
+    if (!containerRef.current) { setZoomIndex(3); setPan({ x: 0, y: 0 }); return; }
+    const el = containerRef.current;
+    const containerW = el.offsetWidth || 800;
+    const containerH = el.offsetHeight || 440;
+    const fitZoom = Math.min((containerW - 32) / svgWidth, (containerH - 32) / svgHeight, 1.0);
+    const best = ZOOM_LEVELS.reduce((bi, z, i) =>
+      Math.abs(z - fitZoom) < Math.abs(ZOOM_LEVELS[bi] - fitZoom) ? i : bi
+    , 0);
+    setZoomIndex(best);
     setPan({ x: 0, y: 0 });
   };
 
@@ -1390,69 +1482,180 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
               </g>
             )}
 
-            {/* ===== EDGES with animated flow — arrow stops at node edge (no overlap) ===== */}
-            {EDGES.map((edge, i) => {
-              const from = nodeMap[edge.from];
-              const to = nodeMap[edge.to];
-              if (!from || !to) return null;
-              const fromIdx = replayOrderMap[edge.from] ?? -1;
-              const toIdx = replayOrderMap[edge.to] ?? -1;
-              const edgeRevealed = !replayMode || (fromIdx <= replayIndex && toIdx <= replayIndex);
-              if (!edgeRevealed) return null;
-
-              const dx = to.x - from.x;
-              const dy = to.y - from.y;
-              const dist = Math.hypot(dx, dy) || 1;
-              const NODE_RADIUS = 30;
-              const stopX = to.x - (dx / dist) * NODE_RADIUS;
-              const stopY = to.y - (dy / dist) * NODE_RADIUS;
-              const curveOffset = dist < 80 ? 0 : (Math.abs(dy) > 80 ? (dx > 0 ? -20 : 20) : (dy > 0 ? 24 : -24));
-              const cpx = (from.x + to.x) / 2 + (Math.abs(dy) > 50 ? curveOffset : 0);
-              const cpy = (from.y + to.y) / 2 + (Math.abs(dy) <= 50 ? curveOffset : 0);
-              const t = 0.5;
-              const t1 = 0.48;
-              const t2 = 0.52;
-              const bezier = (tVal: number) => ({
-                x: (1 - tVal) ** 2 * from.x + 2 * (1 - tVal) * tVal * cpx + tVal ** 2 * to.x,
-                y: (1 - tVal) ** 2 * from.y + 2 * (1 - tVal) * tVal * cpy + tVal ** 2 * to.y,
-              });
-              const mid = bezier(t);
-              const p1 = bezier(t1);
-              const p2 = bezier(t2);
-              const q1x = (1 - t1) * from.x + t1 * cpx;
-              const q1y = (1 - t1) * from.y + t1 * cpy;
-              const q2x = (1 - t2) * cpx + t2 * to.x;
-              const q2y = (1 - t2) * cpy + t2 * to.y;
-              const path1 = `M ${from.x} ${from.y} Q ${q1x} ${q1y} ${p1.x} ${p1.y}`;
-              const path2 = `M ${p2.x} ${p2.y} Q ${q2x} ${q2y} ${stopX} ${stopY}`;
-              const pathFull = `M ${from.x} ${from.y} Q ${cpx} ${cpy} ${stopX} ${stopY}`;
-              const hasLabel = !!edge.label;
-
+            {/* ===== Real AWS live graph — account boundary box around all actor/resource nodes ===== */}
+            {!useNarrative && hasRealTimeline && (() => {
+              const realNodes = NODES.filter(n => !n.id.startsWith('narrative_'));
+              if (realNodes.length === 0) return null;
+              const xs = realNodes.map(n => n.x);
+              const ys = realNodes.map(n => n.y);
+              const pad = 60;
+              const bx = Math.min(...xs) - pad;
+              const by = Math.min(...ys) - pad;
+              // +80 accounts for node label text below the node circle
+              const bw = Math.max(...xs) - Math.min(...xs) + pad * 2 + 80;
+              const bh = Math.max(...ys) - Math.min(...ys) + pad * 2 + 80;
+              const actorNodes = realNodes.filter(n => n.id.startsWith('actor_'));
+              const axs = actorNodes.map(n => n.x);
+              const ays = actorNodes.map(n => n.y);
               return (
-                <g key={`edge-${i}`}>
-                  {hasLabel ? (
+                <g style={{ pointerEvents: 'none' }}>
+                  {/* Outer: AWS Account */}
+                  <rect x={bx} y={by} width={bw} height={bh} rx={12}
+                    fill="rgba(251,146,60,0.04)" stroke="#f97316" strokeWidth={1.5} strokeDasharray="10 6" />
+                  <text x={bx + 14} y={by + 18} fill="#f97316" fontSize={10} fontWeight={700}
+                    fontFamily="Inter, system-ui, sans-serif">AWS Account</text>
+                  {/* Inner: IAM / Identity zone (around actors) */}
+                  {actorNodes.length > 0 && (
                     <>
-                      {/* First half — line breaks at midpoint for label */}
-                      <path d={path1} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
-                      <path d={path1} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
-                      {/* Second half — with arrow */}
-                      <path d={path2} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
-                      <path d={path2} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" markerEnd="url(#arrow-flow)" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
-                      {/* Label — offset perpendicular to line to avoid clashing with arrow */}
-                      <rect x={mid.x - Math.max((edge.label?.length || 6) * 3.5, 20)} y={mid.y - 22} width={Math.max((edge.label?.length || 6) * 7, 40)} height={18} rx={9} fill="white" stroke="#e2e8f0" strokeWidth="1" pointerEvents="none" />
-                      <text x={mid.x} y={mid.y - 13} textAnchor="middle" dominantBaseline="middle" fill="#334155" stroke="none" fontSize="10" fontWeight="600" fontFamily="Inter, system-ui, sans-serif" pointerEvents="none">
-                        {edge.label}
-                      </text>
-                    </>
-                  ) : (
-                    <>
-                      <path d={pathFull} stroke={edge.color} strokeWidth="1.5" fill="none" opacity="0.3" strokeDasharray="6 4" />
-                      <path d={pathFull} stroke={edge.color} strokeWidth="2" fill="none" strokeDasharray="8 6" strokeLinecap="round" markerEnd="url(#arrow-flow)" opacity="0.9" className="attack-path-line" style={{ strokeDashoffset: 0, animation: 'dash-flow 2s linear infinite' }} />
+                      <rect
+                        x={Math.min(...axs) - 52} y={Math.min(...ays) - 42}
+                        width={72 + 32} height={(Math.max(...ays) - Math.min(...ays)) + 84}
+                        rx={10} fill="rgba(239,68,68,0.04)" stroke="#ef4444" strokeWidth={1.5} strokeDasharray="6 4"
+                      />
+                      <text x={Math.min(...axs) - 38} y={Math.min(...ays) - 26}
+                        fill="#ef4444" fontSize={9} fontWeight={700}
+                        fontFamily="Inter, system-ui, sans-serif">IAM Identities</text>
                     </>
                   )}
+                  {/* AWS Resources inner box */}
+                  {(() => {
+                    const resNodes = realNodes.filter(n => n.id.startsWith('res_'));
+                    if (resNodes.length === 0) return null;
+                    const rxs = resNodes.map(n => n.x);
+                    const rys = resNodes.map(n => n.y);
+                    return (
+                      <>
+                        <rect
+                          x={Math.min(...rxs) - 52} y={Math.min(...rys) - 42}
+                          width={72 + 32} height={(Math.max(...rys) - Math.min(...rys)) + 84}
+                          rx={10} fill="rgba(99,102,241,0.04)" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="6 4"
+                        />
+                        <text x={Math.min(...rxs) - 38} y={Math.min(...rys) - 26}
+                          fill="#6366f1" fontSize={9} fontWeight={700}
+                          fontFamily="Inter, system-ui, sans-serif">AWS Resources</text>
+                      </>
+                    );
+                  })()}
                 </g>
               );
-            })}
+            })()
+            }
+
+            {/* ===== EDGES — cubic S-curve routing for clean left-to-right flow ===== */}
+            {(() => {
+              // Pre-compute stagger offsets: parallel edges (same from→to pair) are offset
+              // vertically so they don't overlap. Each subsequent parallel edge shifts ±8px.
+              const pairCount = new Map<string, number>();
+              const pairIndex = new Map<string, number>();
+              EDGES.forEach(e => {
+                const k = `${e.from}→${e.to}`;
+                pairCount.set(k, (pairCount.get(k) || 0) + 1);
+              });
+              return EDGES.map((edge, i) => {
+                const from = nodeMap[edge.from];
+                const to = nodeMap[edge.to];
+                if (!from || !to) return null;
+                const fromIdx = replayOrderMap[edge.from] ?? -1;
+                const toIdx = replayOrderMap[edge.to] ?? -1;
+                const edgeRevealed = !replayMode || (fromIdx <= replayIndex && toIdx <= replayIndex);
+                if (!edgeRevealed) return null;
+
+                const pairKey = `${edge.from}→${edge.to}`;
+                const parallelCount = pairCount.get(pairKey) || 1;
+                const curPairIdx = pairIndex.get(pairKey) || 0;
+                pairIndex.set(pairKey, curPairIdx + 1);
+                // Spread parallel edges: -offset, 0, +offset, -2offset…
+                const stagger = parallelCount > 1
+                  ? (curPairIdx - (parallelCount - 1) / 2) * 10
+                  : 0;
+
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const dist = Math.hypot(dx, dy) || 1;
+                const NODE_R = 28;
+
+                // Start/end at node boundary
+                const sx = from.x + (dx / dist) * NODE_R;
+                const sy = from.y + (dy / dist) * NODE_R + stagger;
+                const ex = to.x - (dx / dist) * NODE_R;
+                const ey = to.y - (dy / dist) * NODE_R + stagger;
+
+                // Cubic bezier: depart horizontally from source, arrive horizontally at target.
+                // Tension = 40-45% of horizontal distance, clamped so short edges still curve.
+                const isHorizontalFlow = Math.abs(dx) > Math.abs(dy) * 0.5;
+                const tension = isHorizontalFlow
+                  ? Math.min(Math.max(Math.abs(dx) * 0.42, 50), 200)
+                  : Math.min(Math.max(dist * 0.35, 40), 160);
+
+                const dirSign = dx >= 0 ? 1 : -1;
+                const cp1x = sx + dirSign * tension;
+                const cp1y = sy;
+                const cp2x = ex - dirSign * tension;
+                const cp2y = ey;
+
+                const pathD = `M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`;
+
+                // Midpoint of cubic bezier at t=0.5 for label placement
+                const midX = 0.125 * sx + 0.375 * cp1x + 0.375 * cp2x + 0.125 * ex;
+                const midY = 0.125 * sy + 0.375 * cp1y + 0.375 * cp2y + 0.125 * ey - 10;
+
+                // Short label: max 12 chars to prevent clutter
+                const shortLabel = edge.label
+                  ? (edge.label.length > 12 ? edge.label.slice(0, 11) + '…' : edge.label)
+                  : null;
+                // Only render label when edges are far enough apart (suppress for dense bundles)
+                const showLabel = !!shortLabel && parallelCount <= 2;
+
+                return (
+                  <g key={`edge-${i}`}>
+                    {/* Shadow/glow layer */}
+                    <path d={pathD} stroke={edge.color} strokeWidth="4" fill="none" opacity="0.1" strokeLinecap="round" />
+                    {/* Main animated dashed line */}
+                    <path
+                      d={pathD}
+                      stroke={edge.color}
+                      strokeWidth="2"
+                      fill="none"
+                      strokeDasharray="8 5"
+                      strokeLinecap="round"
+                      markerEnd="url(#arrow-flow)"
+                      opacity="0.85"
+                      className="attack-path-line"
+                      style={{ animation: 'dash-flow 2s linear infinite' }}
+                    />
+                    {showLabel && (
+                      <>
+                        <rect
+                          x={midX - (shortLabel!.length * 3.4 + 6)}
+                          y={midY - 9}
+                          width={shortLabel!.length * 6.8 + 12}
+                          height={15}
+                          rx={7}
+                          fill="white"
+                          stroke={edge.color}
+                          strokeWidth="0.8"
+                          opacity="0.92"
+                          pointerEvents="none"
+                        />
+                        <text
+                          x={midX}
+                          y={midY + 1}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#334155"
+                          fontSize="9"
+                          fontWeight="600"
+                          fontFamily="Inter, system-ui, sans-serif"
+                          pointerEvents="none"
+                        >
+                          {shortLabel}
+                        </text>
+                      </>
+                    )}
+                  </g>
+                );
+              });
+            })()}
 
             {/* ===== NODES ===== */}
             {NODES.map((node) => {
@@ -1575,89 +1778,212 @@ const AttackPathDiagram: React.FC<AttackPathDiagramProps> = (props) => {
         </div>
       )}
 
-      {/* Detail Panel (bottom) — only when node is clicked/selected, so user can reach the View Remediation button */}
+      {/* Detail Panel (bottom) — rich panel for real AWS nodes, matches demo mode depth */}
       {detailPanelNode && (() => {
         const DetailIcon = /secret|credential|key|lock/i.test(detailPanelNode.label + detailPanelNode.subLabel) ? IconLock : IconShield;
+        const isLiveNode = !!(detailPanelNode.liveEvents && detailPanelNode.liveEvents.length > 0);
+        const liveEvts = detailPanelNode.liveEvents || [];
+        const uniqueActions = [...new Set(liveEvts.map(e => e.action).filter(Boolean))];
+
+        // Derive "What this node is" description from node type + actions
+        const getNodeDescription = () => {
+          const lbl = detailPanelNode.label.toLowerCase();
+          const sub = detailPanelNode.subLabel.toLowerCase();
+          if (detailPanelNode.id.startsWith('narrative_')) return detailPanelNode.detail;
+          if (sub.includes('root user') || lbl.includes('root')) return `AWS root account — highest privilege identity in your account. Used for ${uniqueActions.length} operation${uniqueActions.length !== 1 ? 's' : ''} during this period. Best practice: avoid root for routine tasks; use IAM users instead.`;
+          if (sub.includes('iam role') || lbl.includes('role')) return `IAM role — federated or service identity. Performed ${liveEvts.length} CloudTrail event${liveEvts.length !== 1 ? 's' : ''} including: ${uniqueActions.slice(0, 3).join(', ')}.`;
+          if (sub.includes('iam user') || sub.includes('iam policy') || lbl.includes('secops') || lbl.includes('wolfir')) return `IAM identity or policy — ${detailPanelNode.label}. Involved in ${liveEvts.length} event${liveEvts.length !== 1 ? 's' : ''}: ${uniqueActions.slice(0, 3).join(', ')}.`;
+          if (sub.includes('bedrock')) return `Amazon Bedrock resource — compute environment or session used by your AI workloads. Initiated by root or service principal.`;
+          if (sub.includes('cloudtrail')) return `AWS CloudTrail — event logging and monitoring. wolfir analyzed these events to reconstruct this activity graph.`;
+          return `${detailPanelNode.subLabel} — ${liveEvts.length || 'unknown'} events observed: ${uniqueActions.slice(0, 4).join(', ')}${uniqueActions.length > 4 ? '…' : ''}.`;
+        };
+
+        // Derive security checks from actual actions
+        const getSecurityChecks = () => {
+          const checks: Array<{ ok: boolean; label: string }> = [];
+          const actSet = new Set(uniqueActions.map(a => a.toLowerCase()));
+          const lbl = detailPanelNode.label.toLowerCase();
+          const sub = detailPanelNode.subLabel.toLowerCase();
+          const isRoot = sub.includes('root') || lbl === 'root';
+          if (isRoot) checks.push({ ok: false, label: 'Root account used for API calls (use IAM users instead)' });
+          if (actSet.has('putuserpolicy') || actSet.has('putrolepolicy')) checks.push({ ok: false, label: 'Inline policies attached (prefer managed policies for auditability)' });
+          if (actSet.has('createpolicyversion') && actSet.has('deletepolicyversion')) checks.push({ ok: true, label: 'Policy version lifecycle managed (old versions cleaned up)' });
+          if (actSet.has('createpolicyversion')) checks.push({ ok: true, label: 'Policy updated via versioning (not wholesale replacement)' });
+          if (actSet.has('listaccesskeys')) checks.push({ ok: true, label: 'Access key review performed (security audit pattern)' });
+          if (actSet.has('deleteuserpolicy')) checks.push({ ok: true, label: 'Old inline policies removed before replacement' });
+          if (actSet.has('consolelogin')) {
+            checks.push({ ok: false, label: 'Console login recorded — verify MFA was enforced' });
+            checks.push({ ok: true, label: 'Login event captured in CloudTrail' });
+          }
+          if (actSet.has('startenvironment')) checks.push({ ok: true, label: 'Bedrock environment sessions tracked' });
+          if (checks.length === 0) {
+            checks.push({ ok: true, label: 'Actions recorded in CloudTrail (audit trail complete)' });
+            checks.push({ ok: true, label: 'No outbound data transfer detected' });
+          }
+          return checks;
+        };
+
+        // Derive attack implications / risk context
+        const getImplications = () => {
+          const implications: string[] = [];
+          const actSet = new Set(uniqueActions.map(a => a.toLowerCase()));
+          const isRoot = detailPanelNode.subLabel.toLowerCase().includes('root') || detailPanelNode.label.toLowerCase() === 'root';
+          if (isRoot && liveEvts.length > 3) implications.push(`Root account used ${liveEvts.length} times — frequent root usage increases credential compromise risk`);
+          if (isRoot) implications.push('Root credentials cannot be scoped — any compromise grants full account access');
+          if (actSet.has('putuserpolicy') || actSet.has('putrolepolicy')) implications.push('Inline policies bypass SCP inheritance and are harder to audit at scale');
+          if (actSet.has('createpolicyversion')) implications.push('Policy version updated — review new version for overly permissive statements');
+          if (actSet.has('startenvironment')) implications.push('Bedrock environment sessions indicate active AI workload usage');
+          if (actSet.has('listaccesskeys')) implications.push('Cross-user key listing can indicate access audit or credential review — verify intent');
+          if (implications.length === 0) implications.push(`${liveEvts.length} event${liveEvts.length !== 1 ? 's' : ''} observed — all classified as routine operations`);
+          return implications;
+        };
+
+        const checks = getSecurityChecks();
+        const implications = getImplications();
+        const sev = detailPanelNode.severity;
+        const sevBadge = sev === 'critical' ? 'bg-red-50 text-red-700 border-red-200' : sev === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' : sev === 'low' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200';
+
         return (
         <motion.div
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="px-6 py-3 border-t border-slate-100 bg-slate-50/50"
+          className="border-t border-slate-100 bg-white"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
-              <DetailIcon className="w-4 h-4 text-indigo-600" />
+          {/* Header row */}
+          <div className="px-5 pt-4 pb-3 flex items-start gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              sev === 'critical' ? 'bg-red-50 border border-red-200' :
+              sev === 'high' ? 'bg-orange-50 border border-orange-200' :
+              'bg-slate-100 border border-slate-200'
+            }`}>
+              <DetailIcon className={`w-4 h-4 ${sev === 'critical' ? 'text-red-600' : sev === 'high' ? 'text-orange-600' : 'text-indigo-600'}`} />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-bold text-slate-900">{detailPanelNode.label}</span>
-                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${
-                  detailPanelNode.severity === 'critical' ? 'bg-red-50 text-red-700 border-red-200' :
-                  detailPanelNode.severity === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                  detailPanelNode.severity === 'low' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                  'bg-blue-50 text-blue-700 border-blue-200'
-                }`}>
-                  {detailPanelNode.severity.toUpperCase()}
-                </span>
+                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${sevBadge}`}>{sev.toUpperCase()}</span>
                 {detailPanelNode.riskScore != null && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white border border-slate-700">
-                    {detailPanelNode.riskScore}/100
-                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white border border-slate-700">{detailPanelNode.riskScore}/100</span>
                 )}
                 {detailPanelNode.mitreId && (
-                  <a
-                    href={MITRE_MAP[detailPanelNode.mitreId]?.url ?? `https://attack.mitre.org/techniques/${detailPanelNode.mitreId}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono hover:bg-indigo-100"
-                  >
-                    MITRE {detailPanelNode.mitreId}
+                  <a href={MITRE_MAP[detailPanelNode.mitreId]?.url ?? `https://attack.mitre.org/techniques/${detailPanelNode.mitreId}/`} target="_blank" rel="noopener noreferrer"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono hover:bg-indigo-100">
+                    {detailPanelNode.mitreId}
                   </a>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">{detailPanelNode.detail}</p>
-              {detailPanelNode.mitreId && (
-                <div className="mt-2 p-2 rounded-lg bg-slate-100 border border-slate-200">
-                  <p className="text-[10px] font-bold text-slate-700">{detailPanelNode.mitreId}{MITRE_MAP[detailPanelNode.mitreId] ? `: ${MITRE_MAP[detailPanelNode.mitreId].name}` : ''}</p>
-                  {MITRE_MAP[detailPanelNode.mitreId] && <p className="text-[10px] text-slate-600 mt-0.5">{MITRE_MAP[detailPanelNode.mitreId].desc}</p>}
-                  <a href={MITRE_MAP[detailPanelNode.mitreId]?.url ?? `https://attack.mitre.org/techniques/${detailPanelNode.mitreId}/`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 hover:underline mt-1 inline-block">
-                    Learn more on MITRE ATT&CK →
-                  </a>
+              <p className="text-[11px] text-slate-500 mt-0.5">{detailPanelNode.subLabel}</p>
+            </div>
+          </div>
+
+          {/* Body — 3-column grid for live nodes */}
+          {isLiveNode ? (
+            <div className="px-5 pb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Col 1: What this node is + Observed Activity */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">What this node is</p>
+                  <p className="text-[11px] text-slate-700 leading-snug">{getNodeDescription()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Observed Activity</p>
+                  <div className="space-y-1.5">
+                    {liveEvts.slice(0, 5).map((ev, idx) => (
+                      <div key={idx} className="flex items-start gap-1.5">
+                        <span className="text-slate-400 text-[9px] font-mono shrink-0 mt-0.5">{ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                        <div>
+                          <span className="text-[11px] font-semibold text-slate-800">{ev.action}</span>
+                          {ev.resource && <span className="text-[10px] text-slate-400 ml-1">→ {ev.resource.split('/').pop()?.slice(0, 24) || ev.resource.slice(0, 24)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {liveEvts.length > 5 && <p className="text-[10px] text-slate-400">{liveEvts.length - 5} more events — see Timeline tab</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Col 2: Attack Implications */}
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Risk Context</p>
+                <ul className="space-y-1.5">
+                  {implications.map((imp, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-700">
+                      <span className="text-indigo-500 shrink-0 font-bold mt-0.5">▸</span>
+                      {imp}
+                    </li>
+                  ))}
+                </ul>
+                {/* MITRE box */}
+                {detailPanelNode.mitreId && MITRE_MAP[detailPanelNode.mitreId] && (
+                  <div className="mt-3 p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <p className="text-[10px] font-bold text-slate-700">{detailPanelNode.mitreId}: {MITRE_MAP[detailPanelNode.mitreId].name}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{MITRE_MAP[detailPanelNode.mitreId].desc}</p>
+                    <a href={MITRE_MAP[detailPanelNode.mitreId].url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 hover:underline mt-1 inline-flex items-center gap-1">View on MITRE ATT&CK →</a>
+                  </div>
+                )}
+              </div>
+
+              {/* Col 3: Security Checks */}
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Security Checks</p>
+                <ul className="space-y-1.5">
+                  {checks.map((c, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5 text-[11px]">
+                      <span className={`shrink-0 font-bold mt-0.5 ${c.ok ? 'text-emerald-500' : 'text-red-500'}`}>{c.ok ? '✓' : '✗'}</span>
+                      <span className={c.ok ? 'text-slate-600' : 'text-slate-700 font-medium'}>{c.label}</span>
+                    </li>
+                  ))}
+                </ul>
+                {/* Threat intel */}
+                {(threatIntelLoading || threatIntelData) && extractIpFromNode(detailPanelNode) && (
+                  <div className="mt-3 p-2 rounded-lg bg-slate-900 text-slate-100 border border-slate-700">
+                    <p className="text-[10px] font-bold text-amber-400 mb-1">Threat Intelligence</p>
+                    {threatIntelLoading ? <p className="text-[10px] text-slate-400">Loading…</p>
+                    : threatIntelData?.source === 'demo' ? <p className="text-[10px] text-slate-400">Add API key for real IP reputation lookup.</p>
+                    : <p className="text-[10px]">IP {threatIntelData?.ip} — {threatIntelData?.abuse_score ?? 0}% abuse confidence</p>}
+                  </div>
+                )}
+                {props.onNavigateToRemediation && (sev === 'critical' || sev === 'high') && (
+                  <button type="button" onClick={props.onNavigateToRemediation}
+                    className="mt-3 w-full px-3 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+                    View Remediation Plan →
+                  </button>
+                )}
+                {props.onNavigateToRemediation && sev === 'low' && (
+                  <button type="button" onClick={props.onNavigateToRemediation}
+                    className="mt-3 w-full px-3 py-1.5 text-[11px] font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 transition-colors">
+                    View Full Analysis →
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Fallback for narrative/demo nodes */
+            <div className="px-5 pb-4">
+              <p className="text-[11px] text-slate-600 leading-snug">{detailPanelNode.detail}</p>
+              {detailPanelNode.mitreId && MITRE_MAP[detailPanelNode.mitreId] && (
+                <div className="mt-2 p-2 rounded-lg bg-slate-50 border border-slate-200">
+                  <p className="text-[10px] font-bold text-slate-700">{detailPanelNode.mitreId}: {MITRE_MAP[detailPanelNode.mitreId].name}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{MITRE_MAP[detailPanelNode.mitreId].desc}</p>
+                  <a href={MITRE_MAP[detailPanelNode.mitreId]?.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 hover:underline mt-1 inline-block">View on MITRE ATT&CK →</a>
                 </div>
               )}
               {(threatIntelLoading || threatIntelData) && extractIpFromNode(detailPanelNode) && (
                 <div className="mt-2 p-3 rounded-lg bg-slate-900 text-slate-100 border border-slate-700">
-                  <p className="text-[10px] font-bold text-amber-400 flex items-center gap-1.5">🛡️ Threat Intelligence</p>
-                  {threatIntelLoading ? (
-                    <p className="text-[10px] text-slate-400 mt-1">Loading reputation…</p>
-                  ) : threatIntelData?.error ? (
-                    <p className="text-[10px] text-slate-400 mt-1">{threatIntelData.error}</p>
-                  ) : threatIntelData?.source === 'demo' ? (
-                    <div className="mt-1.5 text-[10px] space-y-1">
-                      <p className="text-amber-200/90 font-medium">Threat intel is demo data — not a live lookup.</p>
-                      <p className="text-slate-500">Add ABUSEIPDB_API_KEY or VIRUSTOTAL_API_KEY for real IP reputation. The scores shown above are generic placeholders and may not reflect your actual IP.</p>
-                    </div>
-                  ) : (
-                    <div className="mt-1.5 text-[10px] space-y-0.5">
-                      <p><span className="text-slate-400">IP {threatIntelData?.ip}</span> — {threatIntelData?.abuse_score ?? 0}% abuse confidence, reported {threatIntelData?.reports ?? 0} times</p>
-                      {(threatIntelData?.categories?.length > 0) && (
-                        <p className="text-slate-400">Categories: {threatIntelData.categories.join(', ')}</p>
-                      )}
-                    </div>
-                  )}
+                  <p className="text-[10px] font-bold text-amber-400">Threat Intelligence</p>
+                  {threatIntelLoading ? <p className="text-[10px] text-slate-400 mt-1">Loading…</p>
+                  : threatIntelData?.source === 'demo' ? <p className="text-[10px] text-slate-400 mt-1">Add ABUSEIPDB_API_KEY for real IP reputation.</p>
+                  : <p className="text-[10px] mt-1">IP {threatIntelData?.ip} — {threatIntelData?.abuse_score ?? 0}% abuse confidence, {threatIntelData?.reports ?? 0} reports</p>}
                 </div>
               )}
-              {props.onNavigateToRemediation && (detailPanelNode.severity === 'critical' || detailPanelNode.severity === 'high') && (
-                <button
-                  type="button"
-                  onClick={props.onNavigateToRemediation}
-                  className="mt-2 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
-                >
+              {props.onNavigateToRemediation && (sev === 'critical' || sev === 'high') && (
+                <button type="button" onClick={props.onNavigateToRemediation}
+                  className="mt-2 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer">
                   View Remediation →
                 </button>
               )}
             </div>
-          </div>
+          )}
         </motion.div>
         );
       })()}

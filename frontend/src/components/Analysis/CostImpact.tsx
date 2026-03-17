@@ -42,8 +42,13 @@ export function estimateCosts(
   const eventCount = timeline.events?.length || 0;
   const eventsAnalyzed = opts?.eventsAnalyzed ?? eventCount;
   const hasAwsService = opts?.hasAwsServicePrincipal ?? false;
+  // Routine ops: no critical severity, no threat keywords in incidentType, all events LOW
+  const isRoutineOps = /routine|no.*threat|normal.*admin|standard.*ops/i.test(incidentType || '') ||
+    (!timeline.events?.some(e => e.severity === 'CRITICAL' || e.severity === 'HIGH') &&
+     !/crypto|mining|exfil|priv.*esc|shadow.?ai|unauthorized|external|malicious|attack/i.test(incidentType || ''));
+  // Apply much heavier scale-down for routine ops — costs are hypothetical worst-case only
   const isLowEventScope = eventsAnalyzed <= 3 || (eventsAnalyzed <= 10 && hasAwsService);
-  const scaleDown = hasAwsService ? 0.15 : (isLowEventScope ? 0.35 : 1);
+  const scaleDown = isRoutineOps ? 0.08 : hasAwsService ? 0.15 : (isLowEventScope ? 0.35 : 1);
 
   const hasCritical = timeline.events?.some(e => e.severity === 'CRITICAL');
   const hasDataAccess = timeline.events?.some(e =>
@@ -218,6 +223,14 @@ const CostImpact: React.FC<CostImpactProps> = ({
     [timeline, incidentType, eventsAnalyzed, timeRangeDays, hasAwsServicePrincipal]
   );
 
+  // Detect routine ops inside the component to drive the disclaimer banner
+  const isRoutineOpsMode = useMemo(() => {
+    const allLow = !timeline.events?.some(e => e.severity === 'CRITICAL' || e.severity === 'HIGH');
+    const noThreatKeywords = !/crypto|mining|exfil|priv.*esc|shadow.?ai|unauthorized|external|malicious|attack/i.test(incidentType || '');
+    const routineKeyword = /routine|no.*threat|normal.*admin/i.test(incidentType || '');
+    return routineKeyword || (allLow && noThreatKeywords);
+  }, [timeline, incidentType]);
+
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -295,6 +308,17 @@ const CostImpact: React.FC<CostImpactProps> = ({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+      {/* Routine-ops disclaimer */}
+      {isRoutineOpsMode && (
+        <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-start gap-3">
+          <span className="text-blue-500 text-base shrink-0 mt-0.5">ℹ</span>
+          <p className="text-xs text-blue-900 leading-relaxed">
+            <span className="font-semibold">Hypothetical worst-case scenario</span> — no active security incident was detected (all events are routine administrative operations).
+            Costs are scaled to ~8% of full-incident values as a planning reference only. Actual cost for these events is{' '}
+            <span className="font-semibold">$0</span> — no breach, no downtime, no remediation required.
+          </p>
+        </div>
+      )}
       {/* Header */}
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/30">
         <div className="flex items-center justify-between mb-4">
@@ -305,7 +329,7 @@ const CostImpact: React.FC<CostImpactProps> = ({
             <div>
             <h3 className="text-lg font-bold text-slate-800 tracking-tight">Cost Impact Estimation</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Estimated financial exposure and wolfir savings
+              {isRoutineOpsMode ? 'Hypothetical worst-case · no active incident detected' : 'Estimated financial exposure and wolfir savings'}
             </p>
             </div>
           </div>

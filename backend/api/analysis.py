@@ -353,6 +353,65 @@ async def what_if_simulation(request: WhatIfRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/organizations")
+async def get_organizations():
+    """
+    Fetch AWS Organizations structure for the connected account.
+    Returns org accounts and OUs if the account is part of an organization.
+    Returns has_org=False if not in an AWS Organization.
+    """
+    try:
+        import boto3
+        from botocore.exceptions import ClientError
+
+        profile = settings.aws_profile
+        if profile and profile != "default":
+            session = boto3.Session(profile_name=profile)
+        else:
+            session = boto3.Session()
+
+        org_client = session.client("organizations", region_name=settings.aws_region)
+
+        # Check if this account is part of an organization
+        try:
+            org = org_client.describe_organization()["Organization"]
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code in ("AWSOrganizationsNotInUseException", "AccessDeniedException"):
+                return {"has_org": False, "reason": code}
+            raise
+
+        accounts_resp = org_client.list_accounts()
+        accounts = accounts_resp.get("Accounts", [])
+
+        roots_resp = org_client.list_roots()
+        roots = roots_resp.get("Roots", [])
+        ous = []
+        for root in roots:
+            ou_resp = org_client.list_organizational_units_for_parent(ParentId=root["Id"])
+            ous.extend(ou_resp.get("OrganizationalUnits", []))
+
+        return {
+            "has_org": True,
+            "org_id": org.get("Id"),
+            "master_account_id": org.get("MasterAccountId"),
+            "accounts": [
+                {
+                    "id": a["Id"],
+                    "name": a["Name"],
+                    "email": a["Email"],
+                    "status": a["Status"],
+                    "joined_method": a["JoinedMethod"],
+                }
+                for a in accounts
+            ],
+            "ous": [{"id": ou["Id"], "name": ou["Name"]} for ou in ous],
+        }
+    except Exception as e:
+        logger.error(f"Organizations fetch error: {e}")
+        return {"has_org": False, "reason": str(e)}
+
+
 @router.get("/test-bedrock")
 async def test_bedrock():
     """Test Bedrock connectivity"""

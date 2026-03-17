@@ -160,13 +160,13 @@ const ATLAS_DETAILS: Record<string, {
   },
 };
 
-/** Top AI API risks ? wolfir reference table */
+/** Top AI API risks — OWASP LLM Top 10 reference table (static industry patterns) */
 const AI_API_RISKS = [
-  { risk: 'Prompt injection', owasp: 'LLM01', description: 'Manipulating prompts via API to reveal data or trigger actions', example: 'Microsoft Bing Chat injection' },
-  { risk: 'Poor auth/authorization', owasp: '?', description: 'Broken verification or excessive permissions on model tools', example: 'Ray AI job API auth failure' },
-  { risk: 'API misconfigurations', owasp: '?', description: 'Exposed endpoints, weak rate limiting enable DDoS and abuse', example: 'Microsoft AI repo SAS token exposure' },
-  { risk: 'Model poisoning', owasp: 'LLM04', description: 'Poisoned data in training/inference pipelines corrupts models', example: 'Hugging Face pipeline poisoning' },
-  { risk: 'Data leakage', owasp: 'LLM02', description: 'APIs exposing training data, PII, or business logic in output', example: 'NVIDIA Triton breach' },
+  { risk: 'Prompt injection',        owasp: 'LLM01', description: 'Manipulating prompts via API to reveal data or trigger actions',             example: 'Microsoft Bing Chat injection' },
+  { risk: 'Poor auth/authorization', owasp: 'LLM08', description: 'Excessive permissions on model tools or broken role/scope enforcement',      example: 'Ray AI job API auth failure' },
+  { risk: 'API misconfigurations',   owasp: 'LLM07', description: 'Exposed endpoints, weak rate limiting, insecure plugin design enabling abuse', example: 'Microsoft AI repo SAS token exposure' },
+  { risk: 'Model poisoning',         owasp: 'LLM04', description: 'Poisoned data in training/inference pipelines corrupts model behaviour',      example: 'Hugging Face pipeline poisoning' },
+  { risk: 'Data leakage',            owasp: 'LLM02', description: 'APIs exposing training data, PII, or business logic in model output',         example: 'NVIDIA Triton breach' },
 ];
 
 // Demo fallback when backend offline (Vercel / no backend)
@@ -253,20 +253,15 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
   const [activeFramework, setActiveFramework] = useState<'overview' | 'mitre' | 'bedrock' | 'cost' | 'bom'>('overview');
 
   const loadStatus = () => {
-    const useDemoFallback = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
-    if (useDemoFallback) {
-      setStatus(DEMO_AI_SECURITY_STATUS);
-      setLastScannedAt(new Date());
-      setLoading(false);
-      return;
-    }
+    // Never silently fall back to demo data — show real backend state or an error
     api.get('/api/ai-security/status')
       .then((r) => {
         setStatus(r.data);
         setLastScannedAt(new Date());
       })
       .catch(() => {
-        setStatus(DEMO_AI_SECURITY_STATUS);
+        // Leave status=null so the UI can show "Connect backend" state rather than fake counts
+        setStatus(null);
         setLastScannedAt(new Date());
       })
       .finally(() => setLoading(false));
@@ -277,24 +272,6 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
   }, []);
 
   useEffect(() => {
-    const useDemo = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
-    if (useDemo) {
-      setGuardrailConfig({ active: false, hint: 'Connect backend to see guardrail status' });
-      setGuardrailsList({ guardrails: [], error: 'Backend required' });
-      setBedrockInventory({ models: [], count: 0, error: 'Backend required' });
-      setGuardrailRecs({ recommendations: [], error: 'Backend required' });
-      setShadowAi({
-        findings: [
-          { principal: 'arn:aws:iam::DEMO:role/wolfir-bedrock-role', suspicious: false, event_time: '2024-01-15T14:32:00Z' },
-          { principal: 'arn:aws:iam::DEMO:role/demo-pipeline-role', suspicious: false, event_time: '2024-01-15T14:31:00Z' },
-          { principal: 'arn:aws:sts::DEMO:assumed-role/AdminRole/session', suspicious: true, event_time: '2024-01-15T14:30:00Z' },
-        ],
-        suspicious_count: 1,
-        total_invocations: 24,
-        is_simulated: true,
-      });
-      return;
-    }
     api.get('/api/ai-security/guardrail-config')
       .then((r) => setGuardrailConfig(r.data))
       .catch(() => setGuardrailConfig({ active: false }));
@@ -382,15 +359,16 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
       const cost = count * tokensPerCall * (0.000053 / 1000);
       rows.push({ agent: 'Pipeline', model, calls: count, tokens, latency: '~1.2s', cost });
     });
-    return rows.length > 0 ? rows : COST_TABLE_DATA;
+    // Return empty array when no real data — don't fall back to hardcoded fake counts
+    return rows;
   }, [status?.summary?.by_model, status?.summary?.total_invocations]);
 
   const totalCost = costTableData.reduce((sum, r) => sum + r.cost, 0);
   const totalCalls = costTableData.reduce((sum, r) => sum + r.calls, 0);
   const totalTokens = costTableData.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Issues by severity ? wolfir (from techniques + OWASP + guardrails + shadow AI)
-  const owaspCategories = (status?.owasp_llm ?? DEMO_AI_SECURITY_STATUS.owasp_llm)?.categories ?? [];
+  // Issues by severity — only from real status data, never from demo fallback
+  const owaspCategories = status?.owasp_llm?.categories ?? [];
   const criticalCount = techniques.filter(t => t.status !== 'CLEAN').length + owaspCategories.filter((c: { status: string }) => c.status !== 'CLEAN').length;
   const highCount = guardrailRecs?.recommendations?.filter(r => r.status === 'FAIL').length ?? 0;
   const mediumCount = shadowAi?.suspicious_count ?? 0;
@@ -408,11 +386,16 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
         <div>
           <h1 className="text-lg font-bold text-slate-900">AI Security Posture</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            OWASP LLM Top 10 ? Bedrock inventory ? Cost analysis ? Shadow AI detection ? <span className="text-violet-600 font-medium">MITRE ATLAS ? AI Compliance tab</span>
+            OWASP LLM Top 10 · Bedrock inventory · Cost analysis · Shadow AI detection · <span className="text-violet-600 font-medium">MITRE ATLAS → AI Compliance tab</span>
           </p>
+          {!loading && !status && (
+            <span className="inline-block mt-2 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+              Backend offline — start the backend and click Scan Now to see live AI security data.
+            </span>
+          )}
           {status?.is_simulated && (
             <span className="inline-block mt-2 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-              Simulated ? based on wolfir architecture analysis. Run backend for live scan data.
+              Simulated · based on wolfir architecture analysis. Run backend for live scan data.
             </span>
           )}
         </div>
@@ -546,11 +529,17 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
             </div>
           </div>
 
-          {/* Top AI Security Issues ? wolfir prioritized list */}
+          {/* Top AI Security Issues — wolfir prioritized list */}
           {(() => {
-            const topIssues: Array<{ title: string; count: number; severity: string; navigateTo?: string }> = [];
-            techniques.filter(t => t.status === 'WARNING').forEach(t => topIssues.push({ title: `${t.id} ${t.name}`, count: 1, severity: 'Critical', navigateTo: 'overview' }));
-            owaspCategories.filter((c: { status: string }) => c.status === 'WARNING').forEach((c: { id: string; name: string }) => topIssues.push({ title: `${c.id} ${c.name}`, count: 1, severity: 'High', navigateTo: 'overview' }));
+            const topIssues: Array<{ id?: string; title: string; count: number; severity: string; navigateTo?: string; selfMonitorNote?: string }> = [];
+            techniques.filter(t => t.status !== 'CLEAN').forEach(t => {
+              // AML.T0024 fired on wolfir's own pipeline outputs — this is a known expected detection
+              const selfMonitorNote = t.id === 'AML.T0024'
+                ? 'Expected: wolfir\'s output scanner flagged its own pipeline analysis (AWS ARNs in responses). Verify by reviewing AI Compliance → AML.T0024 evidence.'
+                : undefined;
+              topIssues.push({ id: t.id, title: `${t.id} ${t.name}`, count: 1, severity: 'Critical', navigateTo: 'overview', selfMonitorNote });
+            });
+            owaspCategories.filter((c: { status: string }) => c.status !== 'CLEAN').forEach((c: { id: string; name: string }) => topIssues.push({ title: `${c.id} ${c.name}`, count: 1, severity: 'High', navigateTo: 'overview' }));
             (guardrailRecs?.recommendations ?? []).filter(r => r.status === 'FAIL').forEach(r => topIssues.push({ title: r.title, count: 1, severity: 'High', navigateTo: 'overview' }));
             if ((shadowAi?.suspicious_count ?? 0) > 0) topIssues.push({ title: 'Shadow AI: InvokeModel from unexpected principals', count: shadowAi?.suspicious_count ?? 0, severity: 'Medium', navigateTo: 'agentic-query' });
             if (topIssues.length === 0) topIssues.push({ title: 'No critical AI security issues detected', count: 0, severity: 'Low', navigateTo: undefined });
@@ -562,22 +551,31 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
               >
                 <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="text-sm font-bold text-slate-900">Top AI Security Issues</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Prioritized queue ? click to investigate</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Prioritized queue · click to investigate</p>
                 </div>
                 <div className="divide-y divide-slate-100">
                   {topIssues.slice(0, 5).map((issue, i) => (
                     <div
                       key={i}
-                      className={`px-5 py-3 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors cursor-pointer ${issue.navigateTo ? '' : 'cursor-default'}`}
+                      className={`px-5 py-3 flex flex-col gap-1 hover:bg-slate-50/50 transition-colors ${issue.navigateTo ? 'cursor-pointer' : 'cursor-default'}`}
                       onClick={() => issue.navigateTo && onNavigateToFeature?.(issue.navigateTo)}
                     >
-                      <span className="text-sm text-slate-700 flex-1 truncate">{issue.title}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        issue.severity === 'Critical' ? 'bg-red-100 text-red-700' :
-                        issue.severity === 'High' ? 'bg-amber-100 text-amber-700' :
-                        issue.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>{issue.severity}</span>
-                      {issue.count > 0 && <span className="text-xs text-slate-500">{issue.count}</span>}
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-slate-700 flex-1 truncate">{issue.title}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                            issue.severity === 'Critical' ? 'bg-red-100 text-red-700' :
+                            issue.severity === 'High' ? 'bg-amber-100 text-amber-700' :
+                            issue.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
+                          }`}>{issue.severity}</span>
+                          {issue.count > 0 && <span className="text-xs text-slate-500">{issue.count}</span>}
+                        </div>
+                      </div>
+                      {issue.selfMonitorNote && (
+                        <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 leading-relaxed">
+                          ⚠ Self-monitor: {issue.selfMonitorNote}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -594,7 +592,7 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
           >
             <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-sm font-bold text-slate-900">Top AI API Risks</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Identified from your AWS CloudTrail &amp; Bedrock invocation logs ? dynamically generated, not hardcoded.</p>
+              <p className="text-xs text-slate-500 mt-0.5">OWASP LLM Top 10 reference — known AI API attack patterns mapped to your Bedrock setup. Your live posture is in the <span className="font-medium text-violet-600">AI Compliance</span> tab.</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -845,20 +843,37 @@ export default function AIPipelineSecurity({ onNavigateToFeature }: AIPipelineSe
                 {shadowAi.error && !(shadowAi as { is_simulated?: boolean })?.is_simulated ? (
                   <p className="text-xs text-slate-500">{shadowAi.error}</p>
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-600">
-                      {shadowAi.total_invocations ?? 0} InvokeModel call(s) in last 7 days
-                      {(shadowAi.suspicious_count ?? 0) > 0 && (
-                        <span className="text-amber-600 font-semibold"> ? {shadowAi.suspicious_count} suspicious</span>
-                      )}
-                    </p>
-                    {(shadowAi.findings ?? []).slice(0, 5).map((f, i) => (
-                      <div key={i} className={`text-[11px] py-1.5 px-2 rounded border truncate ${f.suspicious ? 'border-amber-200 bg-amber-50/50' : 'border-slate-100 bg-slate-50/50'}`}>
-                        <span className="font-mono">{f.principal}</span>
-                        {f.suspicious && <span className="text-amber-600 font-semibold ml-2">Suspicious</span>}
+                  {(() => {
+                    // Deduplicate findings by principal — show one row per unique caller with event count
+                    const principalMap = new Map<string, { count: number; suspicious: boolean }>();
+                    (shadowAi.findings ?? []).forEach(f => {
+                      const existing = principalMap.get(f.principal);
+                      if (existing) { existing.count++; if (f.suspicious) existing.suspicious = true; }
+                      else principalMap.set(f.principal, { count: 1, suspicious: !!f.suspicious });
+                    });
+                    const maskAccountId = (arn: string) =>
+                      arn.replace(/(\d{4})\d{4}(\d{4})/, '$1••••$2');
+                    return (
+                      <div className="space-y-2">
+                        <p className="text-xs text-slate-600">
+                          {shadowAi.total_invocations ?? 0} InvokeModel call(s) in last 7 days
+                          {' · '}<span className="font-medium">{principalMap.size} unique caller{principalMap.size !== 1 ? 's' : ''}</span>
+                          {(shadowAi.suspicious_count ?? 0) > 0 && (
+                            <span className="text-amber-600 font-semibold"> · {shadowAi.suspicious_count} suspicious</span>
+                          )}
+                        </p>
+                        {[...principalMap.entries()].map(([principal, info]) => (
+                          <div key={principal} className={`text-[11px] py-1.5 px-2 rounded border flex items-center justify-between gap-2 ${info.suspicious ? 'border-amber-200 bg-amber-50/50' : 'border-slate-100 bg-slate-50/50'}`}>
+                            <span className="font-mono truncate">{maskAccountId(principal)}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-slate-400">{info.count}×</span>
+                              {info.suspicious && <span className="text-amber-600 font-semibold">Suspicious</span>}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 )}
               </div>
             )}

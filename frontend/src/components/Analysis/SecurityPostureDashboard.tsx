@@ -35,6 +35,48 @@ interface SecurityPostureDashboardProps {
 
 // Demo fallback when backend is offline
 const DEMO_WHAT_IF: Record<string, any> = {
+  'What if CloudTrail alerts were configured for root account API calls?': {
+    original_scenario: 'Root account was used for routine administrative operations without real-time alerting.',
+    modified_scenario: 'With CloudTrail → CloudWatch Events → SNS alerts configured on root account activity, each API call by root would generate an immediate alert, giving SOC visibility into every privileged operation.',
+    impact_changes: {
+      blast_radius: 'No change to current blast radius (routine ops), but future incidents detected minutes instead of hours later.',
+      severity_change: 'Proactive detection: LOW stays LOW but any suspicious root activity would be caught immediately',
+      cost_change: 'Estimated $0 additional risk cost; alert setup takes ~15 minutes',
+      timeline_changes: ['Root API calls trigger SNS notifications within seconds', 'Unusual root activity flagged before it escalates', 'SOC team can respond in minutes instead of hours'],
+    },
+    key_insight: 'Root account should never perform routine operations. Alerts on root API calls are a low-cost, high-value control.',
+    preventive_controls: [
+      { control: 'Create CloudTrail metric filter for root account usage', effectiveness: 'Instant notification on root API calls', aws_cli: 'aws cloudwatch put-metric-alarm --alarm-name RootAccountUsage --metric-name RootAccountUsage --namespace CloudTrailMetrics --comparison-operator GreaterThanOrEqualToThreshold --threshold 1 --evaluation-periods 1 --period 300 --alarm-actions arn:aws:sns:REGION:ACCOUNT:SecurityAlerts' },
+    ],
+  },
+  'What if IAM Access Analyzer flagged unused permissions?': {
+    original_scenario: 'IAM roles and users may have permissions that were never used — over-privileged accounts are a common attack surface.',
+    modified_scenario: 'With IAM Access Analyzer and AWS IAM last-used data reviewed weekly, unused permissions would be removed, shrinking the attack surface significantly.',
+    impact_changes: {
+      blast_radius: 'Reduced — fewer permissions available if credentials are ever compromised.',
+      severity_change: 'No immediate change, but future incidents downgraded from CRITICAL to LOW with least-privilege applied',
+      cost_change: 'No direct cost change; risk reduction is the value',
+      timeline_changes: ['Unused role permissions removed quarterly', 'IAM Access Analyzer reports external access paths', 'Policy generation creates tighter boundaries'],
+    },
+    key_insight: 'Most IAM credentials are significantly over-privileged. Regularly reviewing last-used data and trimming permissions is the highest ROI security control.',
+    preventive_controls: [
+      { control: 'Enable IAM Access Analyzer', effectiveness: 'Identifies resources shared with external entities', aws_cli: 'aws accessanalyzer create-analyzer --analyzer-name account-analyzer --type ACCOUNT' },
+    ],
+  },
+  'What if access key rotation was automated every 90 days?': {
+    original_scenario: 'Long-lived access keys increase the window of opportunity if credentials are ever leaked.',
+    modified_scenario: 'Automated 90-day key rotation via AWS Secrets Manager or a Lambda function ensures keys are short-lived, reducing leak exposure window by 75% compared to year-old keys.',
+    impact_changes: {
+      blast_radius: 'No change to current blast radius; significant risk reduction against future credential compromise.',
+      severity_change: 'Leaked credentials expire within 90 days instead of remaining valid indefinitely',
+      cost_change: 'Key rotation automation: ~$5/month in Lambda costs',
+      timeline_changes: ['Keys auto-rotated every 90 days', 'Old keys disabled and reported to SOC', 'Credential exposure window capped at 90 days max'],
+    },
+    key_insight: 'Automated key rotation is a foundational control. Human-managed rotation is consistently missed; automation removes the compliance gap entirely.',
+    preventive_controls: [
+      { control: 'List access keys older than 90 days', effectiveness: 'Identifies rotation candidates', aws_cli: 'aws iam list-access-keys --query "AccessKeyMetadata[?CreateDate<=\\`2025-12-01\\`].{User:UserName,Key:AccessKeyId,Created:CreateDate}"' },
+    ],
+  },
   'What if MFA was required?': {
     original_scenario: 'IAM role with AdministratorAccess was created for a contractor and assumed by an attacker.',
     modified_scenario: 'With MFA required on the contractor role, the attacker could not have assumed it without the second factor. Initial access would have been blocked.',
@@ -329,22 +371,29 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
     const type = (orchestrationResult?.metadata as any)?.incident_type || '';
     const rc = (timeline?.root_cause || '').toLowerCase();
     const ap = (timeline?.attack_pattern || '').toLowerCase();
-    if (/crypto|mining|miner/.test(type + rc + ap)) return 'crypto-mining';
-    if (/exfil|data|s3|getobject|bucket/.test(type + rc + ap)) return 'data-exfiltration';
-    if (/privilege|escalat|assumerole|admin/.test(type + rc + ap)) return 'privilege-escalation';
-    if (/unauthorized|external|credential|stolen/.test(type + rc + ap)) return 'unauthorized-access';
-    return 'crypto-mining'; // default for demo
+    const combined = type + rc + ap;
+    // Detect routine / no-threat analysis first (before aggressive pattern matches)
+    if (/no security threat|routine.*operation|no.*threat.*detected|normal.*admin|routine.*aws|administrative.*task/i.test(combined)) return 'routine-ops';
+    if (/crypto|mining|miner/.test(combined)) return 'crypto-mining';
+    if (/exfil|data|s3|getobject|bucket/.test(combined)) return 'data-exfiltration';
+    if (/privilege|escalat|assumerole|admin/.test(combined)) return 'privilege-escalation';
+    if (/unauthorized|external|credential|stolen/.test(combined)) return 'unauthorized-access';
+    if (/shadow.*ai|ungoverned.*llm|bedrock.*invoke|invokemodel/i.test(combined)) return 'shadow-ai';
+    // No specific pattern matched — check severity distribution before defaulting
+    const hasThreats = (timeline?.events || []).some(e => ['CRITICAL', 'HIGH', 'MEDIUM'].includes((e.severity || '').toUpperCase()));
+    return hasThreats ? 'unauthorized-access' : 'routine-ops';
   }, [timeline, orchestrationResult]);
 
   const suggestedQuestions = useMemo(() => {
     const byType: Record<string, string[]> = {
+      'routine-ops':          ['What if CloudTrail alerts were configured for root account API calls?', 'What if IAM Access Analyzer flagged unused permissions?', 'What if access key rotation was automated every 90 days?'],
       'crypto-mining':        ['What if MFA was required?', 'What if the role had least-privilege?', 'What if GuardDuty was enabled sooner?'],
       'data-exfiltration':    ['What if S3 bucket had block public access?', 'What if the user\'s permissions were scoped?', 'What if DLP was enabled?'],
       'privilege-escalation': ['What if the trust policy restricted AssumeRole?', 'What if MFA was required?', 'What if IAM Access Analyzer was enabled?'],
       'unauthorized-access':  ['What if credentials were rotated every 90 days?', 'What if IP-based conditions were on the role?', 'What if CloudTrail alerts were configured?'],
       'shadow-ai':            ['What if Bedrock Guardrails were enabled?', 'What if AI invocations required IAM MFA?', 'What if rate limits were set on the AI API?'],
     };
-    return byType[incidentType] || byType['crypto-mining'];
+    return byType[incidentType] || byType['routine-ops'];
   }, [incidentType]);
 
   const timelineJson = useMemo(() => JSON.stringify({
@@ -749,6 +798,11 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               ))}
             </div>
             <p className="text-[10px] text-slate-400 mt-2">CI: {metrics.riskMin}–{metrics.riskMax} (3× Nova Micro)</p>
+            {incidentType === 'routine-ops' && metrics.avgRiskScore >= 40 && (
+              <p className="text-[10px] text-slate-400 mt-1 text-center leading-snug">
+                Nova Micro scores IAM change events at medium-range regardless of intent — routine ops can score higher than their severity suggests.
+              </p>
+            )}
           </div>
         </motion.div>
 
@@ -847,9 +901,11 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               return (
                 <div>
                   <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-slate-700 font-semibold">CIS AWS Benchmarks</span>
+                    <span className="text-slate-700 font-semibold" title="Approximation based on CRITICAL/HIGH event ratio — not a full AWS Config scan">
+                      CIS AWS Benchmarks
+                    </span>
                     {hasData
-                      ? <span className={`font-bold ${pct >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>{pct}% passing</span>
+                      ? <span className={`font-bold ${pct >= 70 ? 'text-emerald-600' : 'text-amber-600'}`} title="Events without CRITICAL/HIGH findings">{pct}% no violations</span>
                       : <span className="font-medium text-slate-400 italic">Not evaluated</span>}
                   </div>
                   <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -868,8 +924,8 @@ const SecurityPostureDashboard: React.FC<SecurityPostureDashboardProps> = ({
               return (
                 <div>
                   <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-slate-700 font-semibold">SOC 2 Trust Controls</span>
-                    <span className={`font-bold ${pct >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>{pct}% coverage</span>
+                    <span className="text-slate-700 font-semibold" title="Based on: CloudTrail active, remediation plan generated, documentation generated">SOC 2 Trust Controls</span>
+                    <span className={`font-bold ${pct >= 75 ? 'text-emerald-600' : 'text-amber-600'}`} title={`CloudTrail: ${hasCT ? '✓' : '✗'} | Remediation: ${hasRemediation ? '✓' : '✗'} | Docs: ${hasDoc ? '✓' : '✗'}`}>{pct}% workflow</span>
                   </div>
                   <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-700 bg-blue-500" style={{ width: `${pct}%` }} />

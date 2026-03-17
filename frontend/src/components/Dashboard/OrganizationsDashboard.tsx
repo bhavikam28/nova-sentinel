@@ -5,7 +5,7 @@
  *
  * Works in demo mode (pre-computed data) and real-AWS mode (live API).
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Shield, AlertTriangle, ChevronDown, ChevronUp,
@@ -13,7 +13,7 @@ import {
   ArrowRight, Target, Clock, Activity, Info,
   Play, Loader2, CheckCircle, Wrench,
 } from 'lucide-react';
-import { remediationAPI } from '../../services/api';
+import { remediationAPI, analysisAPI } from '../../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -260,6 +260,29 @@ export default function OrganizationsDashboard({ awsAccountId: _awsAccountId, is
   const [scpGaps, setScpGaps] = useState<SCPGap[]>(SCP_GAPS);
   const [expandedGap, setExpandedGap] = useState<string | null>(null);
   const [threatFilter, setThreatFilter] = useState<'all' | 'active' | 'contained'>('all');
+  const [orgStatus, setOrgStatus] = useState<'loading' | 'no_org' | 'has_org' | 'demo'>( isRealMode ? 'loading' : 'demo');
+  const [realOrgInfo, setRealOrgInfo] = useState<{ account_count: number; ou_count: number; master_account_id?: string } | null>(null);
+
+  useEffect(() => {
+    if (!isRealMode) { setOrgStatus('demo'); return; }
+    let cancelled = false;
+    analysisAPI.getOrganizations().then(data => {
+      if (cancelled) return;
+      if (data.has_org) {
+        setRealOrgInfo({
+          account_count: data.accounts?.length ?? 0,
+          ou_count: data.ous?.length ?? 0,
+          master_account_id: data.master_account_id,
+        });
+        setOrgStatus('has_org');
+      } else {
+        setOrgStatus('no_org');
+      }
+    }).catch(() => {
+      if (!cancelled) setOrgStatus('no_org');
+    });
+    return () => { cancelled = true; };
+  }, [isRealMode]);
 
   const allAccounts = useMemo(() => [
     DEMO_ORG.managementAccount,
@@ -295,6 +318,56 @@ export default function OrganizationsDashboard({ awsAccountId: _awsAccountId, is
     }
   };
 
+  // Loading state while checking org status
+  if (orgStatus === 'loading') {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-16 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        <p className="text-sm font-semibold text-slate-600">Checking AWS Organizations status…</p>
+      </div>
+    );
+  }
+
+  // No org — user doesn't have AWS Organizations configured
+  if (orgStatus === 'no_org') {
+    return (
+      <div className="space-y-4">
+        <div className="bg-gradient-to-r from-indigo-700 to-violet-700 rounded-2xl px-6 py-5 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+              <Building2 className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">AWS Organizations Security Posture</h2>
+              <p className="text-sm text-white/80 mt-0.5">Cross-account threat detection, SCP gap analysis, and org-wide security posture.</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+          <Building2 className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+          <p className="text-base font-bold text-amber-800 mb-1">No AWS Organization Found</p>
+          <p className="text-sm text-amber-700 max-w-md mx-auto">
+            Your account is not part of an AWS Organization, or the IAM user does not have
+            <code className="mx-1 px-1 py-0.5 rounded bg-amber-100 font-mono text-xs">organizations:DescribeOrganization</code>
+            permission.
+          </p>
+          <p className="text-xs text-amber-600 mt-3">
+            To use this feature, set up AWS Organizations or add the required IAM permissions from <code className="font-mono">docs/IAM-POLICY-CLOUDTRAIL.md</code>.
+          </p>
+          <div className="mt-5 pt-5 border-t border-amber-200">
+            <p className="text-xs font-semibold text-amber-700 mb-2">Want to see how it works? Preview with example data:</p>
+            <button
+              onClick={() => setOrgStatus('demo')}
+              className="px-4 py-2 text-sm font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              View Demo Data
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -308,7 +381,7 @@ export default function OrganizationsDashboard({ awsAccountId: _awsAccountId, is
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-white">AWS Organizations Security Posture</h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white border border-white/25">
-                  {isRealMode ? 'LIVE' : 'DEMO'} · {allAccounts.length} accounts · 4 OUs
+                  {orgStatus === 'has_org' ? 'LIVE' : 'DEMO'} · {orgStatus === 'has_org' && realOrgInfo ? `${realOrgInfo.account_count} accounts · ${realOrgInfo.ou_count} OUs` : `${allAccounts.length} accounts · 4 OUs`}
                 </span>
               </div>
               <p className="text-sm text-white/80 mt-0.5">
@@ -316,13 +389,21 @@ export default function OrganizationsDashboard({ awsAccountId: _awsAccountId, is
               </p>
             </div>
           </div>
-          {!isRealMode && (
+          {orgStatus !== 'has_org' && (
             <div className="px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-[11px] text-white/80">
               <p className="font-bold text-white mb-0.5">Demo Scenario</p>
               <p>Dev account breach → Production lateral movement</p>
             </div>
           )}
         </div>
+        {orgStatus === 'has_org' && realOrgInfo && (
+          <div className="mt-3 pt-3 border-t border-white/20">
+            <p className="text-xs text-white/70">
+              Live data — Master account: <code className="font-mono text-white/90">{realOrgInfo.master_account_id}</code>
+              {' · '}Showing example security posture (SCP gap analysis uses your real org structure).
+            </p>
+          </div>
+        )}
       </div>
 
       {/* KPI Summary Row */}

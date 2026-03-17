@@ -139,23 +139,83 @@ function deriveTimelineMetrics(timeline: any): {
   return { detectionTimeMins, containmentTimeMins, firstEventTs: firstTs, lastEventTs: lastTs, evidenceByPhase };
 }
 
-function buildDemo(documentation: any, timeline?: any): { phases: Phase[]; overall_score: number; phases_completed: number; phases_total: number; recommendation: string } {
+function buildDemo(documentation: any, timeline?: any, remediationPlan?: any): { phases: Phase[]; overall_score: number; phases_completed: number; phases_total: number; recommendation: string } {
   const metrics = deriveTimelineMetrics(timeline);
-
-  const phases = DEMO_PHASES.map(p => {
-    const dynamicEvidence = metrics.evidenceByPhase[p.id];
-    if (p.id === 'post_incident') {
-      return { ...p, completed: !!documentation, evidence: documentation ? 'Incident report generated — lessons learned captured.' : (dynamicEvidence || 'Incident report not yet generated'), checklistMet: [!!documentation, false, false] };
+  const events = timeline?.events || [];
+  const remSteps: string[] = [];
+  if (remediationPlan?.plan) {
+    for (const s of remediationPlan.plan) {
+      remSteps.push((s.action + ' ' + (s.api_call || '')).toLowerCase());
     }
-    return dynamicEvidence ? { ...p, evidence: dynamicEvidence } : p;
-  });
+  }
+
+  // Derive per-phase checklist booleans from real data
+  const hasCloudTrail = events.some((e: any) => e.action);
+  const hasPlaybook   = !!(timeline?.root_cause);
+  const hasSeverity   = events.some((e: any) => e.severity);
+  const hasActors     = events.some((e: any) => e.actor);
+  const hasCritical   = events.some((e: any) => /critical|high/i.test(e.severity || ''));
+  const hasRevoke     = remSteps.some(s => /revoke|deactivate|detach|delete.*key|disable/i.test(s));
+  const hasIsolate    = remSteps.some(s => /isolat|block|deny|restrict|scp|security.group/i.test(s));
+  const hasRotate     = remSteps.some(s => /rotat|new.*key|access.?key/i.test(s));
+  const hasPatch      = remSteps.some(s => /patch|update|fix|remediat/i.test(s));
+  const hasDoc        = !!documentation;
+
+  const phases: Phase[] = [
+    {
+      id: 'preparation', label: 'Preparation', description: 'IR team, playbooks, tooling in place',
+      completed: hasCloudTrail && hasPlaybook,
+      evidence: metrics.evidenceByPhase.preparation,
+      checklist: ['CloudTrail enabled', 'Playbook / root cause identified', 'Runbook attached', 'Contact list ready'],
+      checklistMet: [hasCloudTrail, hasPlaybook, remSteps.length > 0, false],
+    },
+    {
+      id: 'detection', label: 'Detection & Analysis', description: 'Event detection, initial triage',
+      completed: hasCloudTrail && hasSeverity && hasActors,
+      evidence: metrics.evidenceByPhase.detection,
+      checklist: ['Event detection', 'Initial triage', 'Severity assessment', 'Actor attribution'],
+      checklistMet: [hasCloudTrail, hasCritical || hasSeverity, hasSeverity, hasActors],
+    },
+    {
+      id: 'containment', label: 'Containment', description: 'Short-term and long-term containment',
+      completed: hasRevoke || hasIsolate,
+      evidence: metrics.evidenceByPhase.containment,
+      checklist: ['Short-term containment', 'Evidence preservation', 'Network isolation'],
+      checklistMet: [hasRevoke, hasCloudTrail, hasIsolate],
+    },
+    {
+      id: 'eradication', label: 'Eradication', description: 'Remove threat, patch vulnerabilities',
+      completed: hasRevoke && (hasRotate || hasPatch),
+      evidence: metrics.evidenceByPhase.eradication,
+      checklist: ['Threat removed', 'Credentials rotated', 'Vulnerabilities patched'],
+      checklistMet: [hasRevoke, hasRotate, hasPatch],
+    },
+    {
+      id: 'recovery', label: 'Recovery', description: 'Restore systems, validate',
+      completed: false, // requires manual validation
+      evidence: metrics.evidenceByPhase.recovery,
+      checklist: ['Systems restored', 'Validation complete', 'Monitoring re-enabled'],
+      checklistMet: [false, false, hasCloudTrail],
+    },
+    {
+      id: 'post_incident', label: 'Post-Incident', description: 'Documentation, lessons learned',
+      completed: hasDoc,
+      evidence: hasDoc ? 'Incident report generated — documentation complete.' : (metrics.evidenceByPhase.post_incident),
+      checklist: ['Documentation generated', 'Lessons learned captured', 'Regulatory check done'],
+      checklistMet: [hasDoc, hasDoc, false],
+    },
+  ];
 
   return {
     phases,
     overall_score: Math.round((phases.filter(p => p.completed).length / phases.length) * 100),
     phases_completed: phases.filter(p => p.completed).length,
     phases_total: phases.length,
-    recommendation: 'Add recovery validation steps to your remediation plan. Generate an incident report to complete the Post-Incident phase.',
+    recommendation: !hasRevoke
+      ? 'Add containment steps (revoke sessions, deactivate keys) to your remediation plan.'
+      : !hasDoc
+        ? 'Generate an incident report via the Documentation tab to complete Post-Incident phase.'
+        : 'IR protocol substantially complete. Review recovery validation checklist.',
   };
 }
 
@@ -180,14 +240,14 @@ const ProtocolAdherence: React.FC<ProtocolAdherenceProps> = ({
       try {
         const ok = await healthCheck();
         if (!ok || backendOffline) {
-          setResult(buildDemo(documentation, timeline));
+          setResult(buildDemo(documentation, timeline, remediationPlan));
           return;
         }
         const res = await protocolAPI.adherence(timeline, remediationPlan, documentation);
         if (!cancelled) setResult(res);
       } catch (e: any) {
         if (!cancelled) {
-          setResult(buildDemo(documentation, timeline));
+          setResult(buildDemo(documentation, timeline, remediationPlan));
           if (e?.response?.status !== 404) {
             setError(e?.response?.data?.detail || e?.message || 'Could not compute adherence from backend — showing analysis-based estimate.');
           }

@@ -19,6 +19,8 @@ class ThreatModelRequest(BaseModel):
     architecture_description: str
     visual_analysis_json: Optional[str] = None
     include_ai_threats: bool = True
+    account_id: Optional[str] = None          # real AWS account ID — injected into CLI commands
+    real_resources: Optional[str] = None       # JSON list of real resource names from CloudTrail
 
 
 @router.post("/analyze-diagram")
@@ -157,10 +159,19 @@ async def generate_threat_model(request: ThreatModelRequest) -> Dict[str, Any]:
                 visual_analysis = json.loads(request.visual_analysis_json)
             except json.JSONDecodeError:
                 logger.warning("Invalid visual_analysis_json, ignoring")
+        real_resources = None
+        if request.real_resources:
+            try:
+                real_resources = json.loads(request.real_resources)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         result = await threat_model_agent.generate_threat_model(
             architecture_description=request.architecture_description,
             visual_analysis=visual_analysis,
             include_ai_threats=request.include_ai_threats,
+            account_id=request.account_id,
+            real_resources=real_resources,
         )
         return result
     except Exception as e:

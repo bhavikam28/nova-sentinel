@@ -41,11 +41,16 @@ const SEVERITY_COLORS: Record<string, string> = {
 function formatTimestamp(ts: string): string {
   if (!ts) return '—';
   try {
-    const d = new Date(ts);
+    // Append 'Z' to force UTC parsing — ISO strings without timezone offset are parsed
+    // as LOCAL time in JavaScript, causing future-dated timestamps from UTC backends.
+    const tsUTC = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z';
+    const d = new Date(tsUTC);
     const now = new Date();
     const diff = (now.getTime() - d.getTime()) / 1000;
+    if (diff < 0) return 'just now'; // clock skew / very recent
     if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.round(diff / 3600)}h ago`;
+    if (diff < 86400 * 7) return `${Math.round(diff / 86400)}d ago`;
     return d.toLocaleDateString();
   } catch {
     return ts?.slice(0, 19) || '—';

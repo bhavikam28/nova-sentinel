@@ -122,6 +122,101 @@ async def shadow_ai(days_back: int = 7, max_results: int = 100) -> Dict[str, Any
     return await detect_shadow_ai(days_back=days_back, max_results=max_results)
 
 
+@router.get("/config-topology")
+async def get_config_topology() -> Dict[str, Any]:
+    """
+    Query AWS Config to discover real AI-related resources for the Security Graph.
+    Returns Bedrock, IAM, S3, and VPC resources discovered via Config advanced queries.
+    Requires config:SelectResourceConfig on the IAM policy.
+    """
+    import asyncio, json, boto3, logging
+    from utils.config import get_settings
+
+    logger = logging.getLogger(__name__)
+    settings = get_settings()
+    profile = settings.aws_profile if (settings.aws_profile and settings.aws_profile != "default") else None
+
+    try:
+        session = boto3.Session(profile_name=profile)
+        config_client = session.client("config", region_name=settings.aws_region)
+
+        nodes: list = []
+        edges: list = []
+
+        # Query AI-relevant resource types
+        queries = {
+            "bedrock_guardrails": "SELECT resourceId, resourceName, configuration WHERE resourceType = 'AWS::Bedrock::Guardrail'",
+            "iam_roles": "SELECT resourceId, resourceName, configuration WHERE resourceType = 'AWS::IAM::Role' AND configuration.roleName LIKE '%bedrock%' OR configuration.roleName LIKE '%nova%' OR configuration.roleName LIKE '%ai%'",
+            "s3_buckets": "SELECT resourceId, resourceName, configuration WHERE resourceType = 'AWS::S3::Bucket'",
+            "lambda_functions": "SELECT resourceId, resourceName, configuration WHERE resourceType = 'AWS::Lambda::Function'",
+        }
+
+        resource_summary: Dict[str, Any] = {}
+        for key, sql in queries.items():
+            try:
+                resp = await asyncio.to_thread(
+                    config_client.select_resource_config,
+                    Expression=sql,
+                    Limit=10,
+                )
+                results = [json.loads(r) for r in resp.get("Results", [])]
+                resource_summary[key] = results
+            except Exception as e:
+                resource_summary[key] = {"error": str(e)}
+
+        # Build simplified node list
+        guardrails = resource_summary.get("bedrock_guardrails", [])
+        iam_roles = resource_summary.get("iam_roles", [])
+        s3_buckets = resource_summary.get("s3_buckets", [])
+        lambdas = resource_summary.get("lambda_functions", [])
+
+        nodes.append({
+            "id": "bedrock",
+            "type": "bedrock",
+            "label": "Amazon Bedrock",
+            "sublabel": f"Guardrails: {len(guardrails) if isinstance(guardrails, list) else 0}",
+            "resource_count": len(guardrails) if isinstance(guardrails, list) else 0,
+        })
+        nodes.append({
+            "id": "iam",
+            "type": "iam",
+            "label": "IAM Roles",
+            "sublabel": f"{len(iam_roles) if isinstance(iam_roles, list) else 0} AI-related roles",
+            "roles": [r.get("resourceName") for r in (iam_roles if isinstance(iam_roles, list) else [])],
+        })
+        if s3_buckets and isinstance(s3_buckets, list):
+            nodes.append({
+                "id": "s3",
+                "type": "s3",
+                "label": "S3 Buckets",
+                "sublabel": f"{len(s3_buckets)} bucket(s)",
+            })
+        if lambdas and isinstance(lambdas, list) and len(lambdas) > 0:
+            nodes.append({
+                "id": "lambda",
+                "type": "lambda",
+                "label": "Lambda Functions",
+                "sublabel": f"{len(lambdas)} function(s)",
+            })
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "raw": resource_summary,
+            "config_enabled": True,
+        }
+
+    except Exception as e:
+        logger.warning(f"AWS Config topology query failed: {e}")
+        return {
+            "nodes": [],
+            "edges": [],
+            "config_enabled": False,
+            "error": str(e),
+            "hint": "Add config:SelectResourceConfig to your IAM policy to enable real resource discovery.",
+        }
+
+
 @router.get("/ai-bom")
 async def ai_bom() -> Dict[str, Any]:
     """AI Bill of Materials — models, agents, dependencies. Export for compliance."""

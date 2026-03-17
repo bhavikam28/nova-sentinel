@@ -154,6 +154,32 @@ function computeBlastRadius(identity: IdentityOption, _incidentType?: string): R
     });
   }
 
+  // PutUserPolicy / PutRolePolicy → direct privilege escalation
+  if (!hasAdmin && (identity.permissions.includes('iam:PutUserPolicy') || identity.permissions.includes('iam:PutRolePolicy') || identity.permissions.some(p => p === 'PutUserPolicy' || p === 'PutRolePolicy'))) {
+    resources.push({
+      service: 'IAM',
+      resource: 'iam:PutUserPolicy → AdministratorAccess inline policy',
+      action: 'Attach AdministratorAccess inline policy to self — instant privilege escalation',
+      riskZone: 'critical',
+      reason: 'PutUserPolicy allows attaching any inline policy to any user. Attacker can give themselves AdministratorAccess in one API call without creating new users.',
+      estimatedImpact: 'Full account takeover in <30 seconds — no additional credentials needed',
+      preventedBy: 'SCP to deny iam:PutUserPolicy for non-root principals; IAM Access Analyzer; permissions boundary',
+    });
+  }
+
+  // ListAccessKeys → key enumeration for credential theft targeting
+  if (!hasAdmin && identity.permissions.some(p => p === 'iam:ListAccessKeys' || p === 'ListAccessKeys')) {
+    resources.push({
+      service: 'IAM',
+      resource: 'iam:ListAccessKeys — all IAM users',
+      action: 'Enumerate all access key IDs across the account to identify targets for credential theft',
+      riskZone: 'medium',
+      reason: 'ListAccessKeys reveals which users have active credentials. Combined with social engineering or phishing, this maps the highest-value targets.',
+      estimatedImpact: 'Intelligence gathering phase — enables targeted credential theft against admin users',
+      preventedBy: 'Least-privilege: restrict to own user only (add Condition: aws:username == ${aws:username}); CloudTrail alert on cross-user key listing',
+    });
+  }
+
   if (hasAdmin || (hasEC2 && identity.permissions.includes('ec2:RunInstances'))) {
     resources.push({
       service: 'EC2',
@@ -274,14 +300,16 @@ function deriveRemediationPlan(resources: ReachableResource[], identity: Identit
     title: `Revoke active sessions for ${identity.label}`,
     description: `Immediately terminate all active sessions and tokens for the compromised identity. This cuts off the attacker's current access without requiring key deletion.`,
     awsCli: identity.type === 'role'
-      ? `aws iam delete-role-policy --role-name ${identity.id} --policy-name allow-all 2>/dev/null\naws sts get-caller-identity\n# Revoke all active sessions:\naws iam update-assume-role-policy --role-name ${identity.id} --policy-document '{"Version":"2012-10-17","Statement":[]}'`
-      : `aws iam update-access-key --user-name ${identity.id} --access-key-id <KEY_ID> --status Inactive\naws iam list-access-keys --user-name ${identity.id}`,
+      ? `# Revoke all active sessions by zeroing the trust policy\naws iam update-assume-role-policy --role-name ${identity.id} --policy-document '{"Version":"2012-10-17","Statement":[]}'\n# Verify:\naws iam get-role --role-name ${identity.id} --query 'Role.AssumeRolePolicyDocument'`
+      : `# Disable all active access keys for the user\nfor KEY_ID in $(aws iam list-access-keys --user-name ${identity.id} --query 'AccessKeyMetadata[*].AccessKeyId' --output text); do\n  aws iam update-access-key --user-name ${identity.id} --access-key-id $KEY_ID --status Inactive\ndone\n# Verify:\naws iam list-access-keys --user-name ${identity.id}`,
     approvalType: 'approval',
     riskZone: 'critical',
     service: 'IAM',
     estimatedTime: '30 seconds',
     reversible: true,
-    rollbackCli: `aws iam update-access-key --user-name ${identity.id} --access-key-id <KEY_ID> --status Active`,
+    rollbackCli: identity.type === 'role'
+      ? `# Restore the original trust policy (replace with your trust policy document)\naws iam update-assume-role-policy --role-name ${identity.id} --policy-document file://original-trust-policy.json`
+      : `# Re-enable access keys\nfor KEY_ID in $(aws iam list-access-keys --user-name ${identity.id} --query 'AccessKeyMetadata[*].AccessKeyId' --output text); do\n  aws iam update-access-key --user-name ${identity.id} --access-key-id $KEY_ID --status Active\ndone`,
     execState: 'idle',
   });
 
@@ -302,7 +330,7 @@ aws organizations create-policy \
       service: 'IAM',
       estimatedTime: '2 minutes',
       reversible: true,
-      rollbackCli: `aws organizations delete-policy --policy-id <POLICY_ID>`,
+      rollbackCli: `POLICY_ID=$(aws organizations list-policies --filter SERVICE_CONTROL_POLICY --query "Policies[?Name=='BlastRadiusBlock-${identity.id}'].Id" --output text)\naws organizations delete-policy --policy-id "$POLICY_ID"`,
       execState: 'idle',
     });
   }
@@ -354,9 +382,16 @@ aws iam put-role-permissions-boundary --role-name ${identity.id} --permissions-b
       id: 'fix-trust-policy',
       title: `Restrict trust policy: require ExternalId condition`,
       description: 'Add an ExternalId condition to the role\'s trust policy. This prevents the confused deputy problem and blocks role-chaining pivots from compromised identities.',
-      awsCli: `aws iam update-assume-role-policy \
+      awsCli: `# First, discover your account ID and choose an ExternalId secret
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+EXTERNAL_ID=$(uuidgen || python3 -c "import uuid; print(uuid.uuid4())")
+echo "ExternalId to share with trusted party: $EXTERNAL_ID"
+# Apply the updated trust policy with ExternalId condition
+aws iam update-assume-role-policy \
   --role-name ${identity.id} \
-  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::<ACCOUNT_ID>:root"},"Action":"sts:AssumeRole","Condition":{"StringEquals":{"sts:ExternalId":"<SECURE_EXTERNAL_ID>"}}}]}'`,
+  --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::$ACCOUNT_ID:root\"},\"Action\":\"sts:AssumeRole\",\"Condition\":{\"StringEquals\":{\"sts:ExternalId\":\"$EXTERNAL_ID\"}}}]}"
+# Store ExternalId in Secrets Manager for future use
+aws secretsmanager create-secret --name "wolfir/externalId/${identity.id}" --secret-string "$EXTERNAL_ID" 2>/dev/null || echo "ExternalId stored"`,
       approvalType: 'approval',
       riskZone: 'critical',
       service: 'IAM',
@@ -374,7 +409,11 @@ aws iam put-role-permissions-boundary --role-name ${identity.id} --permissions-b
       title: 'Enable CloudTrail log file validation + SNS alert',
       description: 'Ensure CloudTrail logs cannot be silently modified. Log file validation uses SHA-256 signing to detect tampering, and the SNS alert fires if logging is stopped.',
       awsCli: `TRAIL_ARN=$(aws cloudtrail describe-trails --query 'trailList[0].TrailARN' --output text)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
 aws cloudtrail update-trail --name "$TRAIL_ARN" --enable-log-file-validation
+# Create SNS topic for alerts (idempotent)
+SNS_ARN=$(aws sns create-topic --name wolfir-security-alerts --query TopicArn --output text)
 aws cloudwatch put-metric-alarm \
   --alarm-name "CloudTrailDisabled" \
   --alarm-description "wolfir: CloudTrail was stopped" \
@@ -383,7 +422,7 @@ aws cloudwatch put-metric-alarm \
   --statistic Sum --period 300 --threshold 1 \
   --comparison-operator GreaterThanOrEqualToThreshold \
   --evaluation-periods 1 \
-  --alarm-actions arn:aws:sns:<REGION>:<ACCOUNT_ID>:security-alerts`,
+  --alarm-actions "$SNS_ARN"`,
       approvalType: 'auto',
       riskZone: 'high',
       service: 'CloudTrail',
@@ -426,7 +465,7 @@ aws guardduty list-detectors`,
     service: 'GuardDuty',
     estimatedTime: '30 seconds',
     reversible: true,
-    rollbackCli: `aws guardduty delete-detector --detector-id <DETECTOR_ID>`,
+    rollbackCli: `DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text)\naws guardduty delete-detector --detector-id "$DETECTOR_ID"`,
     execState: 'idle',
   });
 
@@ -450,6 +489,76 @@ aws guardduty list-detectors`,
   }
 
   return steps;
+}
+
+/** Extract real IAM actors from the actual timeline events (live AWS mode) */
+function getRealIdentities(timeline?: Timeline): IdentityOption[] {
+  if (!timeline?.events?.length) return [];
+
+  const actorData = new Map<string, { count: number; actions: string[]; severity: string }>();
+  for (const e of timeline.events) {
+    const actor = e.actor || '';
+    // Skip noise: unknown actors, AWS service principals, and empty strings
+    if (!actor || actor === 'Unknown' || actor.includes('.amazonaws.com')) continue;
+    const existing = actorData.get(actor);
+    if (existing) {
+      existing.count++;
+      if (e.action) existing.actions.push(e.action);
+      const sev = (e.severity || 'LOW').toUpperCase();
+      if (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].indexOf(sev) < ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].indexOf(existing.severity)) {
+        existing.severity = sev;
+      }
+    } else {
+      actorData.set(actor, {
+        count: 1,
+        actions: e.action ? [e.action] : [],
+        severity: (e.severity || 'LOW').toUpperCase(),
+      });
+    }
+  }
+
+  if (actorData.size === 0) return [];
+
+  return [...actorData.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 3)
+    .map(([actor, info]) => {
+      // Normalize actor string — CloudTrail can return formats like:
+      //   "IAMUser:secops-lens-pro", "arn:aws:iam::123:user/secops-lens-pro",
+      //   "arn:aws:sts::123:assumed-role/RoleName/session", "root"
+      const shortName = actor.includes('assumed-role/')
+        ? actor.split('assumed-role/')[1].split('/')[0]
+        : actor.includes('/role/')
+          ? actor.split('/role/').pop()!
+          : actor.includes('role/')
+            ? actor.split('role/').pop()!
+            : actor.includes('/user/')
+              ? actor.split('/user/').pop()!
+              : actor.includes('user/')
+                ? actor.split('user/').pop()!
+                : actor.includes('IAMUser:')
+                  ? actor.split('IAMUser:')[1]
+                  : actor.includes(':')
+                    ? actor.split(':').pop()!
+                    : actor;
+      const isRole = actor.includes('role/') || actor.includes('assumed-role/');
+      const type = isRole ? 'role' as const : 'user' as const;
+      const label = type === 'role' ? `IAM Role: ${shortName}` : `IAM User: ${shortName}`;
+      const uniqueActions = [...new Set(info.actions)];
+      const riskScore =
+        info.severity === 'CRITICAL' ? 90 :
+        info.severity === 'HIGH' ? 75 :
+        info.severity === 'MEDIUM' ? 55 : 35;
+      return {
+        // Use the clean shortName as id so CLI commands get the correct --user-name / --role-name
+        id: shortName.replace(/[^a-zA-Z0-9@._+=:,/-]/g, '-').slice(0, 64),
+        label,
+        type,
+        riskScore,
+        permissions: uniqueActions.slice(0, 6),
+        compromiseVector: `${info.count} event${info.count !== 1 ? 's' : ''} from live CloudTrail analysis — actions: ${uniqueActions.slice(0, 3).join(', ')}`,
+      };
+    });
 }
 
 /** Demo identities extracted from incident context */
@@ -493,8 +602,15 @@ function getDemoIdentities(_timeline?: Timeline, incidentType?: string): Identit
   ];
 }
 
-export default function BlastRadiusSimulator({ timeline, incidentType, backendOffline: _backendOffline = true }: BlastRadiusSimulatorProps) {
-  const identities = useMemo(() => getDemoIdentities(timeline, incidentType), [incidentType]);
+export default function BlastRadiusSimulator({ timeline, incidentType, backendOffline = true }: BlastRadiusSimulatorProps) {
+  const identities = useMemo(() => {
+    // In live AWS mode, prefer real actors extracted from the actual timeline
+    if (!backendOffline && timeline?.events?.length) {
+      const real = getRealIdentities(timeline);
+      if (real.length > 0) return real;
+    }
+    return getDemoIdentities(timeline, incidentType);
+  }, [timeline, incidentType, backendOffline]);
   const [selectedId, setSelectedId] = useState(identities[0]?.id ?? '');
   const [simulated, setSimulated] = useState(false);
   const [simulating, setSimulating] = useState(false);

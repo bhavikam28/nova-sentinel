@@ -531,8 +531,14 @@ ${REPORT_MODEL_ATTRIBUTION}
     // Compute actual cost from Cost Impact logic — CISO-ready numbers
     const costs = estimateCosts(timeline, incidentType);
     const totalCost = costs.reduce((sum, c) => sum + c.amount, 0);
+    // Detect routine ops to avoid misleading "unauthorized compute" label
+    const allEventsLow = !timeline?.events?.some((e: any) => e.severity === 'CRITICAL' || e.severity === 'HIGH');
+    const noThreatKeywords = !/crypto|mining|exfil|priv.*esc|shadow.?ai|unauthorized|external|malicious|attack/i.test(incidentType || '');
+    const isRoutineOps = allEventsLow && noThreatKeywords;
     const costStr = totalCost > 0
-      ? `~$${totalCost.toLocaleString()} total exposure (unauthorized compute, downtime, remediation)`
+      ? isRoutineOps
+        ? `~$${totalCost.toLocaleString()} hypothetical worst-case (no active incident — routine administrative operations)`
+        : `~$${totalCost.toLocaleString()} total exposure (compute, downtime, remediation)`
       : 'See Cost Impact tab for breakdown';
     return {
       incident_type: incidentType,
@@ -1025,7 +1031,31 @@ ${REPORT_MODEL_ATTRIBUTION}
                         <div className="flex-1 rounded-lg px-3 py-2 bg-slate-800/40 border border-slate-600/40">
                           <p className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase mb-0.5">Board Recommendation</p>
                           <p className="text-[10px] text-slate-200 leading-tight">
-                            Review third-party and contractor IAM lifecycle. Implement time-bound access and quarterly privilege reviews.
+                            {(() => {
+                              // Derive board recommendation dynamically from incident type and root cause
+                              const type = (incidentType || '').toLowerCase();
+                              const rc = (timeline?.root_cause || '').toLowerCase();
+                              if (/routine|no.*threat|normal.*admin/i.test(type) ||
+                                  (!timeline?.events?.some((e: any) => e.severity === 'CRITICAL' || e.severity === 'HIGH') &&
+                                   !/crypto|exfil|attack|malicious|unauthorized/i.test(rc))) {
+                                return 'Reduce root account usage — create dedicated IAM users for daily operations. Enforce MFA on all accounts. No immediate action required.';
+                              }
+                              if (/crypto|mining/i.test(type) || /mining/i.test(rc)) {
+                                return 'Immediate termination of unauthorized EC2 instances. Review and restrict IAM policies to prevent future compute abuse. Enable GuardDuty.';
+                              }
+                              if (/shadow.?ai|llm|bedrock/i.test(type)) {
+                                return 'Enforce Bedrock Guardrails on all model invocations. Implement allowlist for approved AI principals. Review EU AI Act compliance posture.';
+                              }
+                              if (/priv|escalat|contractor|assume.?role/i.test(type) || /escalat/i.test(rc)) {
+                                return 'Review third-party and contractor IAM lifecycle. Implement time-bound access, permission boundaries, and quarterly privilege reviews.';
+                              }
+                              if (/exfil|data|s3/i.test(type)) {
+                                return 'Enable S3 access logging and CloudWatch alerts on bulk GetObject. Rotate any exposed credentials immediately.';
+                              }
+                              // Fallback: use top remediation step if available
+                              const topStep = getSteps()[0]?.action;
+                              return topStep || 'Review the full remediation plan and validate all access controls are operating as intended.';
+                            })()}
                           </p>
                         </div>
                         {(executiveBriefingData.severity === 'CRITICAL' || executiveBriefingData.severity === 'HIGH') && (

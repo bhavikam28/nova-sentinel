@@ -149,6 +149,7 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
   const [expandedNist, setExpandedNist] = useState<Set<string>>(new Set(['GOVERN']));
   const [expandedAtlas, setExpandedAtlas] = useState<Set<string>>(new Set(['AML.T0051']));
   const [activeTab, setActiveTab] = useState<'owasp' | 'nist' | 'mitre' | 'roadmap'>('owasp');
+  const [liveAtlasStatuses, setLiveAtlasStatuses] = useState<Record<string, { status: string; details?: string }>>({});
 
   useEffect(() => {
     api.get('/api/ai-security/owasp-llm')
@@ -157,11 +158,25 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
         setIsSimulated(!!(r.data as { is_simulated?: boolean })?.is_simulated);
       })
       .catch(() => {
-        // Use incident-type-aware demo data instead of always showing 100% CLEAN
         setOwasp(buildOwaspPosture(incidentType));
         setIsSimulated(true);
       })
       .finally(() => setLoading(false));
+
+    // Fetch real MITRE ATLAS technique statuses + live detail text from the backend
+    api.get('/api/ai-security/status')
+      .then((r) => {
+        const techniques: Array<{ id: string; status: string; details?: string }> = r.data?.techniques ?? [];
+        const statusMap: Record<string, { status: string; details?: string }> = {};
+        techniques.forEach(t => {
+          const displayStatus = (t.status === 'CLEAN') ? 'MONITORED'
+            : (t.status === 'WARNING' || t.status === 'ALERT') ? 'AT RISK'
+            : t.status;
+          statusMap[t.id] = { status: displayStatus, details: t.details };
+        });
+        setLiveAtlasStatuses(statusMap);
+      })
+      .catch(() => { /* keep hardcoded defaults */ });
   }, [incidentType]);
 
   const data = owasp ?? buildOwaspPosture(incidentType);
@@ -169,8 +184,15 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
   const totalCount = data.categories?.length ?? 10;
   const owaspPct = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
 
-  const mitreMonitored = MITRE_ATLAS_TECHNIQUES.filter(t => t.mitigated).length;
-  const mitreAtRisk = MITRE_ATLAS_TECHNIQUES.filter(t => !t.mitigated).length;
+  // Merge live backend statuses + live detail text into the MITRE technique list
+  const liveAtlasTechniques = MITRE_ATLAS_TECHNIQUES.map(t => {
+    const live = liveAtlasStatuses[t.id];
+    if (!live) return t;
+    return { ...t, status: live.status, mitigated: live.status === 'MONITORED', liveDetail: live.details };
+  });
+
+  const mitreMonitored = liveAtlasTechniques.filter(t => t.mitigated).length;
+  const mitreAtRisk = liveAtlasTechniques.filter(t => !t.mitigated).length;
 
   const kpiCards = useMemo(() => [
     {
@@ -184,7 +206,7 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
       bg: 'bg-indigo-50', iconBg: 'bg-indigo-100',
     },
     {
-      label: 'MITRE ATLAS', value: `${mitreMonitored}/${MITRE_ATLAS_TECHNIQUES.length}`, sub: `${mitreAtRisk} technique${mitreAtRisk !== 1 ? 's' : ''} at risk`,
+      label: 'MITRE ATLAS', value: `${mitreMonitored}/${liveAtlasTechniques.length}`, sub: `${mitreAtRisk} technique${mitreAtRisk !== 1 ? 's' : ''} at risk`,
       icon: Target, borderColor: mitreAtRisk > 0 ? 'border-l-amber-400' : 'border-l-emerald-400',
       textColor: mitreAtRisk > 0 ? 'text-amber-600' : 'text-emerald-600',
       bg: mitreAtRisk > 0 ? 'bg-amber-50' : 'bg-emerald-50', iconBg: 'bg-amber-100',
@@ -202,7 +224,7 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
       frameworks: {
         owasp_llm: { posture_percent: owaspPct, passed: passedCount, total: totalCount, categories: data.categories },
         nist_ai_rmf: NIST_QUADRANTS_FULL.map(q => ({ quadrant: q.key, status: 'aligned', evidence: q.evidence })),
-        mitre_atlas: MITRE_ATLAS_TECHNIQUES.map(t => ({ id: t.id, name: t.name, tactic: t.tactic, status: t.status })),
+        mitre_atlas: liveAtlasTechniques.map(t => ({ id: t.id, name: t.name, tactic: t.tactic, status: t.status })),
         iso_23894: { status: 'planned' },
         eu_ai_act: { status: 'planned' },
       },
@@ -219,7 +241,7 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
   const TABS = [
     { id: 'owasp' as const, label: 'OWASP LLM Top 10', count: `${owaspPct}%`, color: 'emerald' },
     { id: 'nist' as const, label: 'NIST AI RMF', count: '4/4', color: 'indigo' },
-    { id: 'mitre' as const, label: 'MITRE ATLAS', count: `${mitreMonitored}/${MITRE_ATLAS_TECHNIQUES.length}`, color: 'violet' },
+    { id: 'mitre' as const, label: 'MITRE ATLAS', count: `${mitreMonitored}/${liveAtlasTechniques.length}`, color: 'violet' },
     { id: 'roadmap' as const, label: 'ISO / EU AI Act', count: 'Soon', color: 'slate' },
   ];
 
@@ -245,6 +267,21 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
               <Download className="w-3.5 h-3.5" /> Export JSON
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ── SELF-ASSESSMENT DISCLAIMER ── */}
+      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 flex items-start gap-3">
+        <span className="text-indigo-500 text-base shrink-0 mt-0.5">ℹ</span>
+        <div className="text-xs text-indigo-800 leading-relaxed">
+          <span className="font-semibold">What these scores measure:</span>{' '}
+          This tab assesses <span className="font-semibold">wolfir's own AI security posture</span> — how safely wolfir
+          operates as an AI system running on your Bedrock account.
+          It is <span className="font-semibold">not</span> a general AWS account audit.
+          <span className="ml-1 text-indigo-600">
+            OWASP LLM scores are live (from your account's Bedrock invocation scan). NIST AI RMF reflects wolfir's architecture.
+            MITRE ATLAS statuses are fetched from your real analysis pipeline.
+          </span>
         </div>
       </div>
 
@@ -468,7 +505,7 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
                   <div>
                     <p className="text-xs font-bold text-slate-700">MITRE ATLAS — Adversarial Threat Landscape for AI Systems</p>
                     <p className="text-[11px] text-slate-500">
-                      Posture: <strong className={mitreAtRisk > 0 ? 'text-amber-600' : 'text-emerald-600'}>{mitreMonitored}/{MITRE_ATLAS_TECHNIQUES.length} monitored</strong>
+                      Posture: <strong className={mitreAtRisk > 0 ? 'text-amber-600' : 'text-emerald-600'}>{mitreMonitored}/{liveAtlasTechniques.length} monitored</strong>
                       {mitreAtRisk > 0 && <span className="text-red-500 ml-1">· {mitreAtRisk} at risk</span>}
                       {' · wolfir CloudTrail + Bedrock Guardrails analysis'}
                     </p>
@@ -479,10 +516,12 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
                   </a>
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {MITRE_ATLAS_TECHNIQUES.map((t, idx) => {
+                  {liveAtlasTechniques.map((t, idx) => {
                     const detail = MITRE_ATLAS_DETAILS[t.id];
                     const isExpanded = expandedAtlas.has(t.id);
                     const isClean = t.mitigated;
+                    // Use live backend detail text when available, fall back to static description
+                    const liveMonitorText = (t as { liveDetail?: string }).liveDetail;
                     return (
                       <motion.div key={t.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }} className="bg-white">
                         <button
@@ -520,8 +559,24 @@ const AICompliance: React.FC<AIComplianceProps> = ({ incidentType }) => {
                                   <p className="text-xs text-slate-600 leading-relaxed italic">{detail.example}</p>
                                 </div>
                                 <div className={`p-3 rounded-xl border ${isClean ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${isClean ? 'text-emerald-700' : 'text-amber-700'}`}>What wolfir monitors</p>
-                                  <p className="text-xs leading-relaxed text-slate-700">{detail.whatWeTested}</p>
+                                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${isClean ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                    What wolfir monitors
+                                    {liveMonitorText && (
+                                      <span className="ml-1.5 font-normal normal-case text-[9px] px-1.5 py-0.5 rounded bg-white/70 border border-current/20 opacity-70">live</span>
+                                    )}
+                                  </p>
+                                  {/* Live backend status text — shown first when available */}
+                                  {liveMonitorText && (
+                                    <p className={`text-xs font-medium leading-relaxed mb-2 ${isClean ? 'text-emerald-800' : 'text-amber-800'}`}>
+                                      {liveMonitorText}
+                                    </p>
+                                  )}
+                                  <p className="text-xs leading-relaxed text-slate-600">
+                                    {liveMonitorText
+                                      ? <span className="opacity-70">Method: {detail.whatWeTested}</span>
+                                      : detail.whatWeTested
+                                    }
+                                  </p>
                                 </div>
                               </div>
                             </motion.div>

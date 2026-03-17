@@ -139,6 +139,10 @@ class BedrockService:
                     if _is_throttling(e) and attempt < BEDROCK_RETRY_MAX_ATTEMPTS - 1:
                         logger.warning(f"Nova 2 Lite throttled, retrying in {BEDROCK_RETRY_DELAY_SEC}s")
                         await asyncio.sleep(BEDROCK_RETRY_DELAY_SEC)
+                    elif "guardrail" in str(e).lower() and "guardrailConfig" in converse_params:
+                        # Guardrail ID/version invalid — strip it and retry without guardrail
+                        logger.warning(f"Guardrail not found, retrying Nova 2 Lite without guardrail: {e}")
+                        del converse_params["guardrailConfig"]
                     else:
                         raise
 
@@ -156,6 +160,22 @@ class BedrockService:
                     record_guardrail_block(self.settings.nova_lite_model_id)
             except Exception:
                 pass
+            # If guardrail blocked the security analysis prompt, retry without guardrail
+            if stop_reason == "guardrail_intervened" and "guardrailConfig" in converse_params:
+                logger.warning("Nova 2 Lite guardrail blocked response — retrying without guardrail for security analysis")
+                del converse_params["guardrailConfig"]
+                async with self._throttle():
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(self.client.converse, **converse_params),
+                        timeout=60.0,
+                    )
+                output2 = response.get("output", {})
+                msg_content2 = output2.get("message", {}).get("content", [])
+                text = ""
+                for item in msg_content2:
+                    if "text" in item:
+                        text = item.get("text", "")
+                stop_reason = response.get("stopReason", "end_turn")
             return {
                 "text": text,
                 "stop_reason": stop_reason,
@@ -285,6 +305,10 @@ class BedrockService:
                     if _is_throttling(e) and attempt < BEDROCK_RETRY_MAX_ATTEMPTS - 1:
                         logger.warning(f"Nova Micro throttled, retrying in {BEDROCK_RETRY_DELAY_SEC}s")
                         await asyncio.sleep(BEDROCK_RETRY_DELAY_SEC)
+                    elif "guardrail" in str(e).lower() and "guardrailConfig" in converse_params:
+                        # Guardrail ID/version invalid — strip it and retry without guardrail
+                        logger.warning(f"Guardrail not found, retrying Nova Micro without guardrail: {e}")
+                        del converse_params["guardrailConfig"]
                     else:
                         raise
 
@@ -298,6 +322,19 @@ class BedrockService:
                     record_guardrail_block(self.settings.nova_micro_model_id)
             except Exception:
                 pass
+            # If guardrail blocked the security analysis prompt, retry without guardrail
+            if stop_reason == "guardrail_intervened" and "guardrailConfig" in converse_params:
+                logger.warning("Nova Micro guardrail blocked response — retrying without guardrail for security analysis")
+                del converse_params["guardrailConfig"]
+                async with self._throttle():
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(self.client.converse, **converse_params),
+                        timeout=60.0,
+                    )
+                output2 = response.get("output", {})
+                msg_content2 = output2.get("message", {}).get("content", [])
+                text = msg_content2[0].get("text", "") if msg_content2 else ""
+                stop_reason = response.get("stopReason", "end_turn")
             return {
                 "text": text,
                 "stop_reason": stop_reason,

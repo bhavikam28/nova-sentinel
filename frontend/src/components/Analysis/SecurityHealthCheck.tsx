@@ -609,13 +609,7 @@ export const SecurityHealthCheck: React.FC<SecurityHealthCheckProps> = ({ result
             </span>
           </div>
           <div className="p-4 space-y-2.5">
-            {(coverage.length > 0 ? coverage : [
-              { label: 'IAM Users Audit', category: 'IAM', ok: true },
-              { label: 'IAM Roles Audit', category: 'IAM', ok: true },
-              { label: 'CloudTrail Anomaly Scan', category: 'CloudTrail', ok: true },
-              { label: 'Billing Anomaly Check', category: 'Billing', ok: true },
-              { label: 'Security Hub Findings', category: 'SecurityHub', ok: true },
-            ]).map((item, i) => (
+            {(coverage.length > 0 ? coverage : []).map((item, i) => (
               <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
                 item.ok ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
               }`}>
@@ -810,11 +804,21 @@ export function parseHealthCheckResult(
   if (okCount < coverage.length) {
     recs.push({ title: 'Grant SecurityAudit policy for full coverage', cli: 'aws iam attach-user-policy --user-name YOUR_USER --policy-arn arn:aws:iam::aws:policy/SecurityAudit' });
   }
-  // Pad with the standard demo recs for richness
-  const demoRecs = DEMO_HEALTH_CHECK.recommendations;
-  for (const r of demoRecs) {
-    if (recs.length >= 5) break;
-    if (!recs.some(x => x.title === r.title)) recs.push(r);
+  // Build actionable recommendations from actual findings only — never inject demo names
+  if (findings.some(f => /mfa/i.test(f.title) || /mfa/i.test(f.detail))) {
+    recs.push({ title: 'Enable MFA on all IAM users', cli: 'aws iam list-users --query "Users[].UserName" --output text | xargs -I{} aws iam list-mfa-devices --user-name {}' });
+  }
+  if (findings.some(f => /access key|old key|90 day|rotate/i.test(f.title + f.detail))) {
+    recs.push({ title: 'Rotate access keys older than 90 days', cli: 'aws iam list-access-keys --query "AccessKeyMetadata[?Status==\'Active\']"' });
+  }
+  if (findings.some(f => /public|s3.*public|bucket.*public/i.test(f.title + f.detail))) {
+    recs.push({ title: 'Block public access on all S3 buckets', cli: 'aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true' });
+  }
+  if (findings.some(f => /admin|administrator/i.test(f.title + f.detail))) {
+    recs.push({ title: 'Remove AdministratorAccess and apply least-privilege', cli: 'aws iam detach-user-policy --user-name <IAM_USER> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess' });
+  }
+  if (findings.some(f => /cloudtrail|logging/i.test(f.title + f.detail))) {
+    recs.push({ title: 'Enable CloudTrail multi-region logging', cli: 'aws cloudtrail create-trail --name wolfir-security-trail --s3-bucket-name <YOUR_BUCKET> --is-multi-region-trail --enable-log-file-validation' });
   }
 
   return {
@@ -822,7 +826,7 @@ export function parseHealthCheckResult(
     score,
     findings: findings.length > 0 ? findings : [],
     recommendations: recs,
-    comparisonText: `Security score: ${grade} (${score}/100). Industry avg for accounts your size: D (52/100).`,
+    comparisonText: `Security score: ${grade} (${score}/100). Scan based on ${results.length} live AWS checks.`,
     results,
     coverage,
   };

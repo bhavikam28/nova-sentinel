@@ -48,17 +48,50 @@ function inferType(action: string, resource: string): ResourceType {
   if (r.includes('sg-') || r.includes('security-group') || a.includes('securitygroup')) return 'sg';
   if (r.includes('i-') || r.includes('instance') || a.includes('runinstances')) return 'ec2';
   if (r.includes('role') || a.includes('attachrole') || a.includes('assumerole')) return 'iam_role';
-  if (r.includes('user') || a.includes('createaccesskey') || a.includes('putuserpolicy')) return 'iam_user';
+  // IAM policy references: treat as iam_role for deduplication purposes
+  if (/^iam\s+policy\s/i.test(resource) || a.includes('createpolicyversion') || a.includes('deletepolicyversion') || a.includes('putgrouppolicy')) return 'iam_role';
+  if (r.includes('user') || a.includes('createaccesskey') || a.includes('putuserpolicy') || a.includes('listaccesskeys')) return 'iam_user';
   if (r.includes('bucket') || a.includes('putobject') || a.includes('getobject')) return 's3';
   if (r.includes('db-') || r.includes('database')) return 'rds';
   if (r.includes('cloudtrail') || r.includes('cloudwatch')) return 'monitoring';
   return 'other';
 }
 
-/** Humanize long/cryptic resource strings for display (like demo mode) */
+/** Extract canonical node key from resource string for deduplication */
+function canonicalKey(resource: string): string {
+  if (!resource?.trim()) return '';
+  const r = resource.trim();
+  // "IAM user <name> policy <policyName>" or "IAM users <name>, ..." → key = "iamuser-<name>"
+  const iamUserMatch = r.match(/^IAM\s+users?\s+([\w-]+)/i);
+  if (iamUserMatch) return `iamuser-${iamUserMatch[1].toLowerCase()}`;
+  // "IAM policy <policyName>" → key = "iampolicy-<policyName>"
+  const iamPolicy = r.match(/^IAM\s+policy\s+([\w-]+)/i);
+  if (iamPolicy) return `iampolicy-${iamPolicy[1].toLowerCase()}`;
+  // Bare UUID (Bedrock session) — deduplicate by UUID value
+  if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(r)) return `bedrocksession-${r.toLowerCase()}`;
+  // Short alphanumeric token
+  if (/^[a-z0-9]{6,20}$/i.test(r) && !/^\d+$/.test(r)) return `token-${r.toLowerCase()}`;
+  return r.toLowerCase().slice(0, 40);
+}
+
+/** Humanize long/cryptic resource strings for display */
 function parseResource(resource: string): string {
   if (!resource?.trim()) return 'Resource';
-  let r = resource.trim();
+  let r = resource.trim().replace(/^'+|'+$/g, ''); // strip surrounding quotes
+  if (!r || /^unknown$/i.test(r)) return 'Unknown Resource';
+  // "IAM user <name> policy <policyName>" → show just the username
+  const iamUserPolicyMatch = r.match(/^IAM\s+user\s+([\w-]+)\s+policy\s+/i);
+  if (iamUserPolicyMatch) return iamUserPolicyMatch[1];
+  // "IAM users X, Y, Z" → show first user + count
+  const iamUsersMatch = r.match(/^IAM\s+users?\s+([\w-]+)(?:,\s*([\w-]+(?:,[\s\w-]*)*))?/i);
+  if (iamUsersMatch && iamUsersMatch[2]) {
+    const rest = iamUsersMatch[2].split(',').filter(Boolean);
+    return `${iamUsersMatch[1]}${rest.length > 0 ? ` +${rest.length}` : ''}`;
+  }
+  if (iamUsersMatch) return iamUsersMatch[1];
+  // "IAM policy <policyName>" → show just the policy name
+  const iamPolicyMatch = r.match(/^IAM\s+policy\s+([\w-]+)/i);
+  if (iamPolicyMatch) return iamPolicyMatch[1];
   // Bedrock Environment + Session UUID → friendly label
   if (/Environment\s+[a-f0-9-]{36}/i.test(r) || /Session\s+[\d-]+[a-z0-9]+/i.test(r)) {
     if (r.toLowerCase().includes('policy') || r.toLowerCase().includes('iam')) {
@@ -68,9 +101,30 @@ function parseResource(resource: string): string {
     return 'Bedrock Session';
   }
   if (/^Environment\s+/i.test(r) && r.length > 30) return 'Bedrock Environment';
+  // Bare full UUID → Bedrock Resource
+  if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(r)) return 'Bedrock Resource';
+  // Short alphanumeric token (like Bedrock session keys)
+  if (/^[a-z0-9]{6,20}$/i.test(r) && !/^[0-9]+$/.test(r)) return 'Bedrock Session';
+  // clientRequest ID
+  if (/^clientReq/i.test(r)) return 'Client Request';
+  // Long numeric/mixed IDs (Bedrock request IDs)
+  if (/^\d{15,}-[a-z0-9]+/i.test(r) || /^[a-f0-9]{8}-/.test(r)) return 'Bedrock Resource';
   // IAM Policy name
   const policyMatch = r.match(/IAM\s*Policy[:\s]+([\w-]+)/i) || r.match(/([A-Za-z][\w-]*BedrockAccess)/);
   if (policyMatch) return policyMatch[1];
+  // ARN: extract service + resource name, mask account
+  if (r.startsWith('arn:')) {
+    const parts = r.split(':');
+    const service = (parts[2] || '').toUpperCase();
+    const resourcePart = parts.slice(5).join(':');
+    const name = resourcePart.split('/').pop() || resourcePart;
+    // Mask account number in the label
+    const maskedName = name.replace(/\b\d{12}\b/g, '••••');
+    if (maskedName && maskedName.length > 3) return maskedName.length > 28 ? maskedName.slice(0, 26) + '…' : maskedName;
+    return service || 'AWS Resource';
+  }
+  // Mask bare 12-digit account numbers
+  r = r.replace(/\b\d{12}\b/g, '••••');
   const colon = r.indexOf(':');
   if (colon > 0) r = r.slice(colon + 1).trim();
   const slash = r.lastIndexOf('/');
@@ -87,20 +141,29 @@ function getSeverity(ev: TimelineEvent, action: string, type: ResourceType): Sev
   const s = (ev.severity || '').toUpperCase();
   const a = action.toLowerCase();
   const resource = ev.resource || '';
+  const isLowByAgent = s === 'LOW';
 
   // AWS service-linked roles performing AssumeRole are normal activity, not compromised
   if (a.includes('assumerole') && isServiceLinkedRole(resource)) {
     return 'low';
   }
 
-  if ((type === 'iam_role' || type === 'iam_user') && (
+  // Only escalate to critical for truly high-risk IAM changes — not for routine admin ops
+  // If the temporal agent already rated the event LOW, trust that rating for policy operations
+  if (!isLowByAgent && (type === 'iam_role' || type === 'iam_user') && (
     a.includes('attachrole') || a.includes('administrator') ||
-    a.includes('attachentitypolicy') || a.includes('putuserp') || a.includes('putrolep') ||
+    a.includes('attachentitypolicy') ||
     ev.significance?.toLowerCase().includes('administrator')
   )) return 'critical';
 
-  // Non-service-linked AssumeRole on IAM roles is still suspicious
-  if ((type === 'iam_role' || type === 'iam_user') && a.includes('assumerole')) return 'high';
+  // PutUserPolicy/PutRolePolicy: only critical when the event is CRITICAL or HIGH from agent
+  // For LOW events it means routine permission management, not a compromise
+  if (!isLowByAgent && (type === 'iam_role' || type === 'iam_user') && (
+    a.includes('putuserp') || a.includes('putrolep')
+  )) return 'high';
+
+  // Non-service-linked AssumeRole on IAM roles is suspicious only if not already LOW
+  if (!isLowByAgent && (type === 'iam_role' || type === 'iam_user') && a.includes('assumerole')) return 'high';
 
   if (s === 'CRITICAL') return 'critical';
   if (s === 'HIGH') return 'high';
@@ -125,10 +188,13 @@ function extractNodes(events: TimelineEvent[]): ResourceNode[] {
     const action = ev.action?.trim();
     if (!resource && !action) continue;
 
-    const displayName = parseResource(resource);
+    const displayName = parseResource(resource || '');
     const type = inferType(action || '', resource || '');
     const severity = getSeverity(ev, action || '', type);
-    const id = type === 'other' ? `res-${seen.size}` : `${type}-${displayName.replace(/[^a-zA-Z0-9-_]/g, '_')}`;
+
+    // Use canonical key for deduplication: ensures "IAM user X policy Y" and "X" map to same node
+    const ck = canonicalKey(resource || '');
+    const id = ck ? `${type}-${ck.replace(/[^a-zA-Z0-9-_]/g, '_')}` : `res-${seen.size}`;
     const detail = ev.significance || `${action || 'Accessed'} — ${resource || displayName}`;
 
     if (!seen.has(id)) {
