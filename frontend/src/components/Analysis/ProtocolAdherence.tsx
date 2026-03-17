@@ -85,14 +85,6 @@ const PHASE_COLORS: Record<string, { bg: string; icon: string; border: string }>
   post_incident:{ bg: 'bg-slate-100',  icon: 'text-slate-600',   border: 'border-slate-200'  },
 };
 
-const _DEMO_PHASES: Phase[] = [
-  { id: 'preparation', label: 'Preparation', description: 'IR team, playbooks, tooling in place', completed: true, evidence: 'CloudTrail enabled; remediation playbook referenced in incident data', checklist: ['CloudTrail enabled', 'Playbook exists', 'Runbook attached', 'Contact list ready'], checklistMet: [true, true, false, true] },
-  { id: 'detection', label: 'Detection & Analysis', description: 'Event detection, initial triage', completed: true, evidence: '6 events classified with severity labels and actor attribution', checklist: ['Event detection', 'Initial triage', 'Severity assessment', 'Actor attribution'], checklistMet: [true, true, true, true] },
-  { id: 'containment', label: 'Containment', description: 'Short-term and long-term containment', completed: true, evidence: 'Remediation steps include session revocation and network isolation', checklist: ['Short-term containment', 'Evidence preservation', 'Network isolation'], checklistMet: [true, true, false] },
-  { id: 'eradication', label: 'Eradication', description: 'Remove threat, patch vulnerabilities', completed: true, evidence: 'Policy detachment and credential rotation steps detected', checklist: ['Threat removed', 'Credentials rotated', 'Vulnerabilities patched'], checklistMet: [true, true, false] },
-  { id: 'recovery', label: 'Recovery', description: 'Restore systems, validate', completed: false, evidence: 'No recovery validation steps detected in plan', checklist: ['Systems restored', 'Validation complete', 'Monitoring re-enabled'], checklistMet: [false, false, false] },
-  { id: 'post_incident', label: 'Post-Incident', description: 'Documentation, lessons learned', completed: false, evidence: 'Incident report not yet generated', checklist: ['Documentation generated', 'Lessons learned captured', 'Regulatory check done'], checklistMet: [false, false, false] },
-];
 
 /** Derive MTTR metrics and evidence strings from actual timeline data */
 function deriveTimelineMetrics(timeline: any): {
