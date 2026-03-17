@@ -85,7 +85,7 @@ const PHASE_COLORS: Record<string, { bg: string; icon: string; border: string }>
   post_incident:{ bg: 'bg-slate-100',  icon: 'text-slate-600',   border: 'border-slate-200'  },
 };
 
-const DEMO_PHASES: Phase[] = [
+const _DEMO_PHASES: Phase[] = [
   { id: 'preparation', label: 'Preparation', description: 'IR team, playbooks, tooling in place', completed: true, evidence: 'CloudTrail enabled; remediation playbook referenced in incident data', checklist: ['CloudTrail enabled', 'Playbook exists', 'Runbook attached', 'Contact list ready'], checklistMet: [true, true, false, true] },
   { id: 'detection', label: 'Detection & Analysis', description: 'Event detection, initial triage', completed: true, evidence: '6 events classified with severity labels and actor attribution', checklist: ['Event detection', 'Initial triage', 'Severity assessment', 'Actor attribution'], checklistMet: [true, true, true, true] },
   { id: 'containment', label: 'Containment', description: 'Short-term and long-term containment', completed: true, evidence: 'Remediation steps include session revocation and network isolation', checklist: ['Short-term containment', 'Evidence preservation', 'Network isolation'], checklistMet: [true, true, false] },

@@ -805,19 +805,19 @@ export function parseHealthCheckResult(
     recs.push({ title: 'Grant SecurityAudit policy for full coverage', cli: 'aws iam attach-user-policy --user-name YOUR_USER --policy-arn arn:aws:iam::aws:policy/SecurityAudit' });
   }
   // Build actionable recommendations from actual findings only — never inject demo names
-  if (findings.some(f => /mfa/i.test(f.title) || /mfa/i.test(f.detail))) {
+  if (findings.some(f => /mfa/i.test(f.title) || /mfa/i.test(f.description))) {
     recs.push({ title: 'Enable MFA on all IAM users', cli: 'aws iam list-users --query "Users[].UserName" --output text | xargs -I{} aws iam list-mfa-devices --user-name {}' });
   }
-  if (findings.some(f => /access key|old key|90 day|rotate/i.test(f.title + f.detail))) {
+  if (findings.some(f => /access key|old key|90 day|rotate/i.test(f.title + f.description))) {
     recs.push({ title: 'Rotate access keys older than 90 days', cli: 'aws iam list-access-keys --query "AccessKeyMetadata[?Status==\'Active\']"' });
   }
-  if (findings.some(f => /public|s3.*public|bucket.*public/i.test(f.title + f.detail))) {
+  if (findings.some(f => /public|s3.*public|bucket.*public/i.test(f.title + f.description))) {
     recs.push({ title: 'Block public access on all S3 buckets', cli: 'aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true' });
   }
-  if (findings.some(f => /admin|administrator/i.test(f.title + f.detail))) {
+  if (findings.some(f => /admin|administrator/i.test(f.title + f.description))) {
     recs.push({ title: 'Remove AdministratorAccess and apply least-privilege', cli: 'aws iam detach-user-policy --user-name <IAM_USER> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess' });
   }
-  if (findings.some(f => /cloudtrail|logging/i.test(f.title + f.detail))) {
+  if (findings.some(f => /cloudtrail|logging/i.test(f.title + f.description))) {
     recs.push({ title: 'Enable CloudTrail multi-region logging', cli: 'aws cloudtrail create-trail --name wolfir-security-trail --s3-bucket-name <YOUR_BUCKET> --is-multi-region-trail --enable-log-file-validation' });
   }
 

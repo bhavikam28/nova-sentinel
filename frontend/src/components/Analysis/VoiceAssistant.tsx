@@ -51,7 +51,7 @@ function buildBriefMeNarrative(ctx: any): string {
   };
 
   /** Extract friendly name from resource string (e.g. "contractor-temp" from "IAM Role: contractor-temp") */
-  const friendlyName = (r: string): string => {
+  const _friendlyName = (r: string): string => {
     const match = r.match(/:?\s*([a-zA-Z0-9_-]+)$/);
     return match ? match[1] : r;
   };
